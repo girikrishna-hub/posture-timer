@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import {
   BarChart,
   Bar,
@@ -14,9 +14,13 @@ import {
   useGetMetricsSummary,
   useGetDailyMetrics,
   useListSessions,
+  type SummaryMetrics,
+  type DailyMetricsResponse,
 } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import html2canvas from "html2canvas";
 
 // ─── Color constants ────────────────────────────────────────────────────────
 const MODE_COLORS = {
@@ -158,15 +162,194 @@ function WeeklyChart({
   );
 }
 
+// ─── Share card (offscreen, captured by html2canvas) ────────────────────────
+function ShareCard({
+  cardRef,
+  summary,
+  weeklyData,
+  weekStart,
+  weekEnd,
+}: {
+  cardRef: React.RefObject<HTMLDivElement | null>;
+  summary: SummaryMetrics;
+  weeklyData: DailyMetricsResponse;
+  weekStart: string;
+  weekEnd: string;
+}) {
+  const score = summary.healthScore ?? 0;
+  const scoreColor =
+    score >= 70 ? "#16a34a" : score >= 40 ? "#d97706" : "#ef4444";
+
+  const maxMinutes = Math.max(
+    ...weeklyData.days.map((d) => d.sittingMinutes + d.standingMinutes),
+    weeklyData.goalMinutes,
+    1,
+  );
+
+  return (
+    <div
+      ref={cardRef}
+      style={{
+        position: "fixed",
+        left: "-9999px",
+        top: 0,
+        width: 360,
+        background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
+        borderRadius: 24,
+        padding: 24,
+        fontFamily: "system-ui, -apple-system, sans-serif",
+        color: "#f8fafc",
+        boxSizing: "border-box",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+        <div>
+          <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: -0.5 }}>Weekly Summary</div>
+          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>
+            {weekStart} → {weekEnd}
+          </div>
+        </div>
+        <div style={{ fontSize: 22, fontWeight: 800, color: "#3b82f6" }}>sit/stand</div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 18 }}>
+        <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: 16, padding: "12px 14px" }}>
+          <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 4 }}>Current Streak</div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: "#3b82f6" }}>
+            {summary.currentStreak ?? 0}d
+          </div>
+          <div style={{ fontSize: 10, color: "#64748b" }}>Longest: {summary.longestStreak ?? 0}d</div>
+        </div>
+        <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: 16, padding: "12px 14px" }}>
+          <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 4 }}>Health Score</div>
+          <div style={{ fontSize: 28, fontWeight: 800, color: scoreColor }}>
+            {score}/100
+          </div>
+          <div style={{ fontSize: 10, color: "#64748b" }}>{summary.healthLabel ?? ""}</div>
+        </div>
+        <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: 16, padding: "12px 14px" }}>
+          <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 4 }}>Avg Standing</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: "#22c55e" }}>
+            {formatMinutes(summary.weeklyAverageStandingMinutes ?? 0)}
+          </div>
+          <div style={{ fontSize: 10, color: "#64748b" }}>per day</div>
+        </div>
+        <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: 16, padding: "12px 14px" }}>
+          <div style={{ fontSize: 10, color: "#94a3b8", marginBottom: 4 }}>Best Day</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: "#22c55e" }}>
+            {summary.bestDayMinutes ? formatMinutes(summary.bestDayMinutes) : "—"}
+          </div>
+          <div style={{ fontSize: 10, color: "#64748b" }}>
+            {summary.bestDayDate ? shortWeekday(summary.bestDayDate) : ""}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: 16, padding: "14px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10, alignItems: "center" }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "#e2e8f0" }}>This week</span>
+          <span style={{ fontSize: 10, color: "#64748b" }}>Goal: {formatMinutes(weeklyData.goalMinutes)}/day</span>
+        </div>
+        <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 90 }}>
+          {weeklyData.days.map((d) => {
+            const total = d.sittingMinutes + d.standingMinutes;
+            const sitH = (d.sittingMinutes / maxMinutes) * 80;
+            const standH = (d.standingMinutes / maxMinutes) * 80;
+            const goalH = (weeklyData.goalMinutes / maxMinutes) * 80;
+            return (
+              <div key={d.date} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                <div style={{ position: "relative", width: "100%", display: "flex", flexDirection: "column", alignItems: "center" }}>
+                  <div style={{ position: "absolute", bottom: goalH, left: 0, right: 0, height: 1, background: "#ef4444", opacity: 0.6 }} />
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
+                    <div style={{ width: "70%", height: standH, background: "#22c55e", borderRadius: "3px 3px 0 0", minHeight: total > 0 ? 2 : 0 }} />
+                    <div style={{ width: "70%", height: sitH, background: "#3b82f6", minHeight: total > 0 ? 2 : 0 }} />
+                  </div>
+                </div>
+                <span style={{ fontSize: 9, color: "#64748b" }}>{shortWeekday(d.date)}</span>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ display: "flex", gap: 12, marginTop: 8, justifyContent: "center" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <div style={{ width: 8, height: 8, borderRadius: 2, background: "#22c55e" }} />
+            <span style={{ fontSize: 9, color: "#94a3b8" }}>Standing</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <div style={{ width: 8, height: 8, borderRadius: 2, background: "#3b82f6" }} />
+            <span style={{ fontSize: 9, color: "#94a3b8" }}>Sitting</span>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 14, textAlign: "center", fontSize: 10, color: "#475569" }}>
+        Generated with Sit/Stand Timer
+      </div>
+    </div>
+  );
+}
+
 // ─── Overview tab ───────────────────────────────────────────────────────────
 function OverviewTab() {
   const { data: summary, isLoading: sumLoading } = useGetMetricsSummary();
+  const [sharing, setSharing] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
 
   const weekStart = toDateStr(addDays(today(), -6));
   const weekEnd = toDateStr(today());
   const { data: weeklyData, isLoading: weekLoading } = useGetDailyMetrics(
     { from: weekStart, to: weekEnd },
   );
+
+  const handleShare = useCallback(async () => {
+    if (!cardRef.current) return;
+    setSharing(true);
+    try {
+      const canvas = await html2canvas(cardRef.current, {
+        backgroundColor: null,
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      });
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((b) => {
+          if (b) resolve(b);
+          else reject(new Error("Failed to create blob"));
+        }, "image/png");
+      });
+
+      const file = new File([blob], "weekly-summary.png", { type: "image/png" });
+      const canFileShare =
+        typeof navigator.share === "function" &&
+        typeof navigator.canShare === "function" &&
+        navigator.canShare({ files: [file] });
+
+      if (canFileShare) {
+        await navigator.share({
+          title: "My Weekly Sit/Stand Summary",
+          files: [file],
+        });
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "weekly-summary.png";
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name !== "AbortError") {
+        toast({
+          title: "Could not generate image",
+          description: "Please try again.",
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setSharing(false);
+    }
+  }, [toast]);
 
   if (sumLoading || weekLoading) {
     return (
@@ -185,6 +368,15 @@ function OverviewTab() {
 
   return (
     <div className="p-4 space-y-4 pb-24">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-foreground">Overview</h2>
+        {summary && weeklyData && (
+          <Button size="sm" onClick={handleShare} disabled={sharing}>
+            {sharing ? "Generating…" : "Share week"}
+          </Button>
+        )}
+      </div>
+
       <div className="grid grid-cols-2 gap-3">
         <StatCard
           label="Current Streak"
@@ -254,6 +446,16 @@ function OverviewTab() {
             </div>
           )}
         </div>
+      )}
+
+      {summary && weeklyData && (
+        <ShareCard
+          cardRef={cardRef}
+          summary={summary}
+          weeklyData={weeklyData}
+          weekStart={weekStart}
+          weekEnd={weekEnd}
+        />
       )}
     </div>
   );
