@@ -516,13 +516,17 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     if (!goalMinutes || goalMinutes <= 0) return;
 
     const completedStandingMinutes = todayStatsData?.standingMinutes ?? 0;
+    const completedWalkingMinutes = todayStatsData?.walkingMinutes ?? 0;
     // Cap in-progress contribution to minutes elapsed since local midnight so a
     // session spanning midnight doesn't inflate today's count with yesterday's time.
-    const inProgressStandingMinutes =
-      modeRef.current === "standing"
-        ? Math.min(elapsedSeconds, secondsSinceLocalMidnight()) / 60
-        : 0;
-    const totalStandingMinutes = completedStandingMinutes + inProgressStandingMinutes;
+    const cappedElapsed = Math.min(elapsedSeconds, secondsSinceLocalMidnight()) / 60;
+    const inProgressStandingMinutes = modeRef.current === "standing" ? cappedElapsed : 0;
+    const inProgressWalkingMinutes = modeRef.current === "walking" ? cappedElapsed : 0;
+    const totalActiveMinutes =
+      completedStandingMinutes +
+      completedWalkingMinutes +
+      inProgressStandingMinutes +
+      inProgressWalkingMinutes;
 
     const today = todayDateString();
     const state = goalNotifStateRef.current;
@@ -536,21 +540,21 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
 
     const current = goalNotifStateRef.current;
 
-    if (!current.full && totalStandingMinutes >= goalMinutes) {
+    if (!current.full && totalActiveMinutes >= goalMinutes) {
       const next = { ...current, full: true };
       goalNotifStateRef.current = next;
       saveGoalNotifState(next);
       notify(
         "Daily standing goal reached!",
-        `You've stood for ${Math.round(totalStandingMinutes)} min — goal of ${goalMinutes} min achieved.`
+        `You've been active for ${Math.round(totalActiveMinutes)} min — goal of ${goalMinutes} min achieved.`
       );
-    } else if (!current.half && totalStandingMinutes >= goalMinutes * 0.5) {
+    } else if (!current.half && totalActiveMinutes >= goalMinutes * 0.5) {
       const next = { ...current, half: true };
       goalNotifStateRef.current = next;
       saveGoalNotifState(next);
       notify(
         "Halfway to your standing goal!",
-        `${Math.round(totalStandingMinutes)} of ${goalMinutes} min done — keep it up!`
+        `${Math.round(totalActiveMinutes)} of ${goalMinutes} min done — keep it up!`
       );
     }
   }, [todayStatsData, elapsedSeconds, mode]);
