@@ -20,7 +20,17 @@ function toDateString(d: Date): string {
   return d.toISOString().split("T")[0]!;
 }
 
-async function getSettings() {
+type Settings = {
+  id: number;
+  dailyStandingGoalMinutes: number;
+  sittingAlertMinutes: number;
+  standingMinMinutes: number;
+  standingMaxMinutes: number;
+  reminderIntervalMinutes: number;
+  remindersCount: number;
+};
+
+async function getSettings(): Promise<Settings> {
   const [s] = await db.select().from(settingsTable).limit(1);
   return s ?? {
     id: 0,
@@ -47,9 +57,33 @@ function getMinutes(
     .reduce((sum, s) => sum + Math.round((s.durationSeconds ?? 0) / 60), 0);
 }
 
-function healthScore(standingMinutes: number, goalMinutes: number): number {
+/**
+ * Health score formula (0–100):
+ *   70% weight → standing progress vs daily goal
+ *   30% weight → session regularity (standing sessions started vs expected)
+ *
+ * Expected standing sessions per day is derived from settings:
+ *   expectedCount = floor(480 / (sittingAlertMinutes + standingMaxMinutes))
+ *   (assumes an 8-hour active window)
+ *
+ * reminders_acknowledged / reminders_fired is proxied by session regularity
+ * because a standing session starting = user responding to a sitting reminder.
+ */
+function computeHealthScore(
+  standingMinutes: number,
+  standingSessionCount: number,
+  settings: Settings,
+): number {
+  const goalMinutes = settings.dailyStandingGoalMinutes;
   if (goalMinutes === 0) return 0;
-  return Math.min(100, Math.round((standingMinutes / goalMinutes) * 100));
+
+  const cycleMinutes = settings.sittingAlertMinutes + settings.standingMaxMinutes;
+  const expectedCount = Math.max(1, Math.floor(480 / cycleMinutes));
+
+  const standingScore = Math.min(70, Math.round((standingMinutes / goalMinutes) * 70));
+  const regularityScore = Math.min(30, Math.round((standingSessionCount / expectedCount) * 30));
+
+  return standingScore + regularityScore;
 }
 
 function healthLabel(score: number): string {
@@ -60,18 +94,16 @@ function healthLabel(score: number): string {
   return "Needs work";
 }
 
-async function computeStreakFrom(
-  date: Date,
-  goalMinutes: number,
-): Promise<number> {
+async function computeStreakFrom(date: Date, goalMinutes: number, settings: Settings): Promise<number> {
   let streak = 0;
-  let checkDate = new Date(date);
+  const checkDate = new Date(date);
+  checkDate.setHours(0, 0, 0, 0);
 
   for (let i = 0; i < 365; i++) {
     const dayStart = startOfDay(checkDate);
     const dayEnd = endOfDay(checkDate);
 
-    const sessions = await db
+    const daySessions = await db
       .select()
       .from(sessionsTable)
       .where(
@@ -83,12 +115,14 @@ async function computeStreakFrom(
         ),
       );
 
-    const standMin = sessions.reduce(
+    const standMin = daySessions.reduce(
       (sum, s) => sum + Math.round((s.durationSeconds ?? 0) / 60),
       0,
     );
 
-    if (standMin >= goalMinutes) {
+    const score = computeHealthScore(standMin, daySessions.length, settings);
+
+    if (score > 0 && standMin >= Math.round(goalMinutes * 0.5)) {
       streak++;
       checkDate.setDate(checkDate.getDate() - 1);
     } else if (i === 0) {
@@ -101,7 +135,7 @@ async function computeStreakFrom(
   return streak;
 }
 
-async function computeLongestStreak(goalMinutes: number): Promise<number> {
+async function computeLongestStreak(goalMinutes: number, settings: Settings): Promise<number> {
   const sessions = await db
     .select()
     .from(sessionsTable)
@@ -110,36 +144,40 @@ async function computeLongestStreak(goalMinutes: number): Promise<number> {
 
   if (sessions.length === 0) return 0;
 
-  const dailyMap = new Map<string, number>();
+  const dailyStanding = new Map<string, { minutes: number; count: number }>();
   for (const s of sessions) {
     const key = toDateString(s.startedAt);
-    const existing = dailyMap.get(key) ?? 0;
-    dailyMap.set(key, existing + Math.round((s.durationSeconds ?? 0) / 60));
+    const existing = dailyStanding.get(key) ?? { minutes: 0, count: 0 };
+    existing.minutes += Math.round((s.durationSeconds ?? 0) / 60);
+    existing.count += 1;
+    dailyStanding.set(key, existing);
   }
 
-  const dates = Array.from(dailyMap.keys()).sort();
+  // Iterate every calendar day from first session date to today
+  const firstDate = new Date(sessions[0]!.startedAt);
+  firstDate.setHours(0, 0, 0, 0);
+  const todayDate = new Date();
+  todayDate.setHours(0, 0, 0, 0);
+
   let longest = 0;
   let current = 0;
+  const d = new Date(firstDate);
 
-  for (let i = 0; i < dates.length; i++) {
-    const mins = dailyMap.get(dates[i]!) ?? 0;
-    if (mins >= goalMinutes) {
+  while (d <= todayDate) {
+    const dateStr = toDateString(d);
+    const day = dailyStanding.get(dateStr);
+    const mins = day?.minutes ?? 0;
+    const count = day?.count ?? 0;
+    const score = computeHealthScore(mins, count, settings);
+
+    if (score > 0 && mins >= Math.round(goalMinutes * 0.5)) {
       current++;
       longest = Math.max(longest, current);
     } else {
-      const prev = dates[i - 1];
-      if (i > 0 && prev) {
-        const d1 = new Date(prev);
-        const d2 = new Date(dates[i]!);
-        const diffDays = Math.round(
-          (d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24),
-        );
-        if (diffDays > 1) current = 0;
-        else current = 0;
-      } else {
-        current = 0;
-      }
+      current = 0;
     }
+
+    d.setDate(d.getDate() + 1);
   }
 
   return longest;
@@ -191,6 +229,7 @@ router.get("/metrics/daily", async (req, res) => {
       (s) => toDateString(s.startedAt) === dateStr,
     );
 
+    const standingSessions = daySessions.filter((s) => s.mode === "standing");
     const sittingMinutes = getMinutes(daySessions, "sitting");
     const standingMinutes = getMinutes(daySessions, "standing");
     const napMinutes = getMinutes(daySessions, "resting", "nap");
@@ -200,7 +239,7 @@ router.get("/metrics/daily", async (req, res) => {
       goalMinutes > 0
         ? Math.min(100, Math.round((standingMinutes / goalMinutes) * 100))
         : 0;
-    const score = healthScore(standingMinutes, goalMinutes);
+    const score = computeHealthScore(standingMinutes, standingSessions.length, settings);
 
     days.push({
       date: dateStr,
@@ -228,32 +267,36 @@ router.get("/metrics/summary", async (_req, res) => {
   thirtyDaysAgo.setDate(today.getDate() - 30);
 
   const [currentStreak, longest] = await Promise.all([
-    computeStreakFrom(today, goalMinutes),
-    computeLongestStreak(goalMinutes),
+    computeStreakFrom(today, goalMinutes, settings),
+    computeLongestStreak(goalMinutes, settings),
   ]);
 
-  const last7Days: { date: string; standingMinutes: number }[] = [];
+  type DayStat = { date: string; standingMinutes: number; standingCount: number };
+  const last7Days: DayStat[] = [];
   let weeklyTotal = 0;
+
+  const weekSessions = await db
+    .select()
+    .from(sessionsTable)
+    .where(
+      and(
+        gte(sessionsTable.startedAt, startOfDay(new Date(new Date().setDate(today.getDate() - 6)))),
+        lte(sessionsTable.startedAt, endOfDay(today)),
+        isNotNull(sessionsTable.endedAt),
+        eq(sessionsTable.mode, "standing"),
+      ),
+    );
 
   for (let i = 6; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
-    const daySessions = await db
-      .select()
-      .from(sessionsTable)
-      .where(
-        and(
-          gte(sessionsTable.startedAt, startOfDay(d)),
-          lte(sessionsTable.startedAt, endOfDay(d)),
-          isNotNull(sessionsTable.endedAt),
-          eq(sessionsTable.mode, "standing"),
-        ),
-      );
+    const dateStr = toDateString(d);
+    const daySessions = weekSessions.filter((s) => toDateString(s.startedAt) === dateStr);
     const mins = daySessions.reduce(
       (sum, s) => sum + Math.round((s.durationSeconds ?? 0) / 60),
       0,
     );
-    last7Days.push({ date: toDateString(d), standingMinutes: mins });
+    last7Days.push({ date: dateStr, standingMinutes: mins, standingCount: daySessions.length });
     weeklyTotal += mins;
   }
 
@@ -268,7 +311,10 @@ router.get("/metrics/summary", async (_req, res) => {
     last7Days[0]!,
   );
 
-  const weekScore = healthScore(weeklyAverageStandingMinutes, goalMinutes);
+  const weekAvgCount = Math.round(
+    last7Days.reduce((s, d) => s + d.standingCount, 0) / 7,
+  );
+  const weekScore = computeHealthScore(weeklyAverageStandingMinutes, weekAvgCount, settings);
 
   const recentSessions = await db
     .select()
@@ -287,10 +333,7 @@ router.get("/metrics/summary", async (_req, res) => {
   const avgNapDurationMinutes =
     napSessions.length > 0
       ? Math.round(
-          napSessions.reduce(
-            (sum, s) => sum + (s.durationSeconds ?? 0),
-            0,
-          ) /
+          napSessions.reduce((sum, s) => sum + (s.durationSeconds ?? 0), 0) /
             napSessions.length /
             60,
         )
@@ -299,10 +342,7 @@ router.get("/metrics/summary", async (_req, res) => {
   const avgSleepDurationMinutes =
     sleepSessions.length > 0
       ? Math.round(
-          sleepSessions.reduce(
-            (sum, s) => sum + (s.durationSeconds ?? 0),
-            0,
-          ) /
+          sleepSessions.reduce((sum, s) => sum + (s.durationSeconds ?? 0), 0) /
             sleepSessions.length /
             60,
         )

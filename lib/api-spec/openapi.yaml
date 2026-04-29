@@ -84,6 +84,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/SessionList"
 
+  /sessions/export:
+    get:
+      operationId: exportSessions
+      tags: [sessions]
+      summary: Export all completed sessions as CSV
+      responses:
+        "200":
+          description: CSV file download of all completed sessions
+          content:
+            text/csv:
+              schema:
+                type: string
+
   /sessions/active:
     get:
       operationId: getActiveSession

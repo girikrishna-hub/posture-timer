@@ -299,6 +299,81 @@ export function useListSessions<
 }
 
 /**
+ * @summary Export all completed sessions as CSV
+ */
+export const getExportSessionsUrl = () => {
+  return `/api/sessions/export`;
+};
+
+export const exportSessions = async (
+  options?: RequestInit,
+): Promise<string> => {
+  return customFetch<string>(getExportSessionsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getExportSessionsQueryKey = () => {
+  return [`/api/sessions/export`] as const;
+};
+
+export const getExportSessionsQueryOptions = <
+  TData = Awaited<ReturnType<typeof exportSessions>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof exportSessions>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getExportSessionsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof exportSessions>>> = ({
+    signal,
+  }) => exportSessions({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof exportSessions>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ExportSessionsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof exportSessions>>
+>;
+export type ExportSessionsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Export all completed sessions as CSV
+ */
+
+export function useExportSessions<
+  TData = Awaited<ReturnType<typeof exportSessions>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof exportSessions>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getExportSessionsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * @summary Get the currently active (in-progress) session
  */
 export const getGetActiveSessionUrl = () => {

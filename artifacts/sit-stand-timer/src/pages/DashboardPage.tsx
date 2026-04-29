@@ -205,6 +205,12 @@ function OverviewTab() {
           sub={summary?.bestDayDate ? shortWeekday(summary.bestDayDate) : undefined}
           color="text-green-600"
         />
+        <StatCard
+          label="Worst Day This Week"
+          value={summary?.worstDayMinutes ? formatMinutes(summary.worstDayMinutes) : "—"}
+          sub={summary?.worstDayDate ? shortWeekday(summary.worstDayDate) : undefined}
+          color="text-red-500"
+        />
       </div>
 
       {weeklyData && (
@@ -644,6 +650,46 @@ export default function DashboardPage() {
   );
 }
 
+// ─── Daily stat grid (sitting / standing / active / nap / sleep) ─────────────
+type DayDataShape = {
+  sittingMinutes: number;
+  standingMinutes: number;
+  activeMinutes: number;
+  napMinutes: number;
+  sleepMinutes: number;
+};
+
+function DailyStatGrid({ dayData }: { dayData: DayDataShape }) {
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      <div className="bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 text-center">
+        <p className="text-xs text-blue-600">Sitting</p>
+        <p className="text-base font-semibold text-blue-700">{formatMinutes(dayData.sittingMinutes)}</p>
+      </div>
+      <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-center">
+        <p className="text-xs text-green-600">Standing</p>
+        <p className="text-base font-semibold text-green-700">{formatMinutes(dayData.standingMinutes)}</p>
+      </div>
+      <div className="bg-purple-50 border border-purple-200 rounded-xl px-3 py-2 text-center">
+        <p className="text-xs text-purple-600">Active</p>
+        <p className="text-base font-semibold text-purple-700">{formatMinutes(dayData.activeMinutes)}</p>
+      </div>
+      {dayData.napMinutes > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-center">
+          <p className="text-xs text-amber-600">Nap</p>
+          <p className="text-base font-semibold text-amber-700">{formatMinutes(dayData.napMinutes)}</p>
+        </div>
+      )}
+      {dayData.sleepMinutes > 0 && (
+        <div className="bg-indigo-50 border border-indigo-200 rounded-xl px-3 py-2 text-center">
+          <p className="text-xs text-indigo-600">Sleep</p>
+          <p className="text-base font-semibold text-indigo-700">{formatMinutes(dayData.sleepMinutes)}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Wrapper so DailyTab accepts external date state
 function DailyTabWithDate({
   date,
@@ -675,22 +721,7 @@ function DailyTabWithDate({
         >→</Button>
       </div>
 
-      {dayData && (
-        <div className="grid grid-cols-3 gap-2">
-          <div className="bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 text-center">
-            <p className="text-xs text-blue-600">Sitting</p>
-            <p className="text-base font-semibold text-blue-700">{formatMinutes(dayData.sittingMinutes)}</p>
-          </div>
-          <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-center">
-            <p className="text-xs text-green-600">Standing</p>
-            <p className="text-base font-semibold text-green-700">{formatMinutes(dayData.standingMinutes)}</p>
-          </div>
-          <div className="bg-purple-50 border border-purple-200 rounded-xl px-3 py-2 text-center">
-            <p className="text-xs text-purple-600">Active</p>
-            <p className="text-base font-semibold text-purple-700">{formatMinutes(dayData.activeMinutes)}</p>
-          </div>
-        </div>
-      )}
+      {dayData && <DailyStatGrid dayData={dayData} />}
 
       <div className="bg-card border border-border rounded-2xl py-4">
         <h3 className="px-4 text-sm font-semibold text-foreground mb-2">Timeline</h3>
