@@ -146,6 +146,7 @@ export default function TimerPage() {
     inReminderPhase,
     isLoading,
     switchMode,
+    endCurrentSession,
     requestNotificationPermission,
     notificationPermission,
   } = useTimer();
@@ -172,6 +173,7 @@ export default function TimerPage() {
     enabled: autoDetectWalking,
     currentMode: mode,
     switchMode,
+    endCurrentSession,
   });
 
   const nextActionSeconds =

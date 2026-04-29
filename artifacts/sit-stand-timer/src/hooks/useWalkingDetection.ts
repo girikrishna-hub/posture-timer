@@ -5,6 +5,7 @@ const WALKING_MIN_SPEED = 0.3;
 const WALKING_MAX_SPEED = 3.5;
 const CONFIRM_DURATION_MS = 15_000;
 const STOP_DURATION_MS = 15_000;
+const LS_KEY = "autoDetectWalking";
 
 export type GpsStatus = "idle" | "requesting" | "active" | "denied" | "unsupported";
 
@@ -12,6 +13,7 @@ interface UseWalkingDetectionOptions {
   enabled: boolean;
   currentMode: TimerMode;
   switchMode: (mode: "sitting" | "standing" | "resting" | "walking") => Promise<void>;
+  endCurrentSession: () => Promise<void>;
 }
 
 function deriveSpeed(
@@ -38,6 +40,7 @@ export function useWalkingDetection({
   enabled,
   currentMode,
   switchMode,
+  endCurrentSession,
 }: UseWalkingDetectionOptions): GpsStatus {
   const [gpsStatus, setGpsStatus] = useState<GpsStatus>("idle");
 
@@ -47,9 +50,11 @@ export function useWalkingDetection({
   const prevPositionRef = useRef<GeolocationPosition | null>(null);
   const currentModeRef = useRef(currentMode);
   const switchModeRef = useRef(switchMode);
+  const endCurrentSessionRef = useRef(endCurrentSession);
 
   useEffect(() => { currentModeRef.current = currentMode; }, [currentMode]);
   useEffect(() => { switchModeRef.current = switchMode; }, [switchMode]);
+  useEffect(() => { endCurrentSessionRef.current = endCurrentSession; }, [endCurrentSession]);
 
   const handlePosition = useCallback((position: GeolocationPosition) => {
     let speed = position.coords.speed;
@@ -74,7 +79,6 @@ export function useWalkingDetection({
         } else if (now - walkingStartRef.current >= CONFIRM_DURATION_MS) {
           walkingStartRef.current = null;
           if (mode === "idle" || mode === "sitting") {
-            setGpsStatus("active");
             void switchModeRef.current("walking");
           }
         }
@@ -87,11 +91,8 @@ export function useWalkingDetection({
           belowThresholdSinceRef.current = now;
         } else if (now - belowThresholdSinceRef.current >= STOP_DURATION_MS) {
           belowThresholdSinceRef.current = null;
-          setGpsStatus("active");
-          void switchModeRef.current("sitting");
+          void endCurrentSessionRef.current();
         }
-      } else {
-        setGpsStatus("active");
       }
     }
   }, []);
@@ -112,6 +113,7 @@ export function useWalkingDetection({
         timeout: 15000,
       },
     );
+    setGpsStatus("active");
   }, [handlePosition]);
 
   const stopWatching = useCallback(() => {
@@ -128,8 +130,11 @@ export function useWalkingDetection({
     if (!enabled) {
       stopWatching();
       setGpsStatus("idle");
+      try { localStorage.removeItem(LS_KEY); } catch { /* ignore */ }
       return;
     }
+
+    try { localStorage.setItem(LS_KEY, "true"); } catch { /* ignore */ }
 
     if (!("geolocation" in navigator)) {
       setGpsStatus("unsupported");
@@ -138,48 +143,50 @@ export function useWalkingDetection({
 
     setGpsStatus("requesting");
 
-    navigator.permissions
-      .query({ name: "geolocation" })
-      .then((result) => {
+    const tryPermissionsApi = async () => {
+      if (!("permissions" in navigator)) {
+        return false;
+      }
+      try {
+        const result = await navigator.permissions.query({ name: "geolocation" });
         if (result.state === "denied") {
           setGpsStatus("denied");
-          return;
+          return true;
         }
         if (result.state === "granted") {
-          setGpsStatus("active");
           startWatching();
-        } else {
-          navigator.geolocation.getCurrentPosition(
-            () => {
-              setGpsStatus("active");
-              startWatching();
-            },
-            (err) => {
-              if (err.code === GeolocationPositionError.PERMISSION_DENIED) {
-                setGpsStatus("denied");
-              } else {
-                setGpsStatus("active");
-                startWatching();
-              }
-            },
-            { timeout: 10000 },
-          );
+          return true;
         }
-
         result.addEventListener("change", () => {
           if (result.state === "denied") {
             stopWatching();
             setGpsStatus("denied");
-          } else if (result.state === "granted" && enabled) {
-            setGpsStatus("active");
+          } else if (result.state === "granted" && watchIdRef.current === null) {
             startWatching();
           }
         });
-      })
-      .catch(() => {
-        setGpsStatus("active");
-        startWatching();
-      });
+        return false;
+      } catch {
+        return false;
+      }
+    };
+
+    void (async () => {
+      const handled = await tryPermissionsApi();
+      if (!handled) {
+        navigator.geolocation.getCurrentPosition(
+          () => { startWatching(); },
+          (err) => {
+            if (err.code === GeolocationPositionError.PERMISSION_DENIED) {
+              setGpsStatus("denied");
+            } else {
+              startWatching();
+            }
+          },
+          { timeout: 10000 },
+        );
+      }
+    })();
 
     return stopWatching;
   }, [enabled, startWatching, stopWatching]);

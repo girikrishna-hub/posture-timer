@@ -109,6 +109,7 @@ interface TimerContextValue {
   notificationPermission: NotificationPermission;
   requestNotificationPermission: () => Promise<void>;
   switchMode: (newMode: "sitting" | "standing" | "resting" | "walking") => Promise<void>;
+  endCurrentSession: () => Promise<void>;
   isLoading: boolean;
 }
 
@@ -302,6 +303,39 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   const switchModeRef = useRef(switchMode);
   useEffect(() => { switchModeRef.current = switchMode; }, [switchMode]);
 
+  const endCurrentSession = useCallback(async () => {
+    const currentId = activeSessionIdRef.current;
+    const currentMode = modeRef.current;
+    if (currentMode === "idle") return;
+
+    const endedAt = new Date().toISOString();
+    const localQueueId = pendingLocalQueueIdRef.current;
+    if (localQueueId !== null) {
+      markQueueStartEnd(localQueueId, endedAt);
+      pendingLocalQueueIdRef.current = null;
+    } else if (currentId !== null && currentId > 0) {
+      if (navigator.onLine) {
+        try {
+          await doEndSession(currentId, endedAt);
+        } catch {
+          enqueueEndOp(currentId, endedAt);
+        }
+      } else {
+        enqueueEndOp(currentId, endedAt);
+      }
+    }
+
+    setMode("idle");
+    setActiveSessionId(null);
+    setElapsedSeconds(0);
+    setReminderCount(0);
+    setInReminderPhase(false);
+    finalReminderFiredRef.current = false;
+
+    void queryClient.invalidateQueries({ queryKey: getGetTodayStatsQueryKey() });
+    void queryClient.invalidateQueries({ queryKey: getGetActiveSessionQueryKey() });
+  }, [doEndSession, queryClient]);
+
   // Main 1-second tick: reminder logic + idle auto-pause
   useEffect(() => {
     if (!initialized) return;
@@ -437,6 +471,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
         notificationPermission,
         requestNotificationPermission,
         switchMode,
+        endCurrentSession,
         isLoading: startSessionMutation.isPending || endSessionMutation.isPending,
       }}
     >

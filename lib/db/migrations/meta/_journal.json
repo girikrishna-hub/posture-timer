@@ -8,6 +8,13 @@
       "when": 1777458971607,
       "tag": "0000_foamy_jazinda",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1777506000000,
+      "tag": "0001_add_walking_auto_detect",
+      "breakpoints": true
     }
   ]
 }
