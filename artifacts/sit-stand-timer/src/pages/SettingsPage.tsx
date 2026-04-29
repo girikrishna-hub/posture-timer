@@ -1,8 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useGetSettings, useUpdateSettings, getGetSettingsQueryKey } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { useQueryClient } from "@tanstack/react-query";
+
+type GeoPermissionStatus = "unknown" | "requesting" | "granted" | "denied" | "unsupported";
 
 function SettingRow({
   label,
@@ -67,6 +69,9 @@ export default function SettingsPage() {
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>(
     typeof Notification !== "undefined" ? Notification.permission : "default"
   );
+  const [geoPermission, setGeoPermission] = useState<GeoPermissionStatus>(
+    "geolocation" in navigator ? "unknown" : "unsupported"
+  );
 
   useEffect(() => {
     if (settings) {
@@ -95,6 +100,46 @@ export default function SettingsPage() {
       setNotifPermission(permission);
     }
   };
+
+  const checkGeoPermission = useCallback(async () => {
+    if (!("geolocation" in navigator)) {
+      setGeoPermission("unsupported");
+      return;
+    }
+    try {
+      const result = await navigator.permissions.query({ name: "geolocation" });
+      setGeoPermission(result.state as GeoPermissionStatus);
+      result.addEventListener("change", () => {
+        setGeoPermission(result.state as GeoPermissionStatus);
+      });
+    } catch {
+      setGeoPermission("unknown");
+    }
+  }, []);
+
+  useEffect(() => {
+    void checkGeoPermission();
+  }, [checkGeoPermission]);
+
+  const handleToggleWalking = useCallback(async () => {
+    const next = !localSettings.autoDetectWalking;
+    setLocalSettings((s) => ({ ...s, autoDetectWalking: next }));
+
+    if (next && geoPermission !== "granted") {
+      setGeoPermission("requesting");
+      navigator.geolocation.getCurrentPosition(
+        () => setGeoPermission("granted"),
+        (err) => {
+          if (err.code === GeolocationPositionError.PERMISSION_DENIED) {
+            setGeoPermission("denied");
+          } else {
+            setGeoPermission("granted");
+          }
+        },
+        { timeout: 10000 },
+      );
+    }
+  }, [localSettings.autoDetectWalking, geoPermission]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -203,20 +248,43 @@ export default function SettingsPage() {
           </div>
 
           <div className="border-t border-border pt-4 flex items-start justify-between gap-4">
-            <div>
+            <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-foreground">Auto-detect walking</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Uses GPS speed to automatically log walking sessions (0.5–3.5 m/s). No location is stored — only speed is read.
+                Uses GPS speed to automatically log walking sessions. No location is stored — only speed is read.
               </p>
+              {geoPermission === "unsupported" && (
+                <p className="text-xs text-muted-foreground mt-1 italic">GPS not available on this device</p>
+              )}
+              {geoPermission === "requesting" && (
+                <p className="text-xs text-teal-600 dark:text-teal-400 mt-1">Requesting location permission…</p>
+              )}
+              {geoPermission === "granted" && localSettings.autoDetectWalking && (
+                <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">Location permission granted</p>
+              )}
+              {geoPermission === "denied" && (
+                <p className="text-xs text-destructive mt-1">
+                  Location blocked — enable in your{" "}
+                  <a
+                    href="#"
+                    className="underline"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      alert("To enable location: open your browser settings → Site permissions → Location → allow this site.");
+                    }}
+                  >
+                    browser settings
+                  </a>
+                </p>
+              )}
             </div>
             <button
               type="button"
               role="switch"
               aria-checked={localSettings.autoDetectWalking}
-              onClick={() =>
-                setLocalSettings((s) => ({ ...s, autoDetectWalking: !s.autoDetectWalking }))
-              }
-              className={`relative shrink-0 mt-0.5 inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              disabled={geoPermission === "unsupported"}
+              onClick={() => void handleToggleWalking()}
+              className={`relative shrink-0 mt-0.5 inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40 ${
                 localSettings.autoDetectWalking ? "bg-teal-500" : "bg-muted-foreground/30"
               }`}
             >

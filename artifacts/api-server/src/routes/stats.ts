@@ -109,7 +109,7 @@ router.get("/stats/today", async (_req, res) => {
   const goalMinutes = settings.dailyStandingGoalMinutes;
   const goalProgressPercent =
     goalMinutes > 0
-      ? Math.min(100, Math.round(((standingMinutes + walkingMinutes) / goalMinutes) * 100))
+      ? Math.min(100, Math.round((standingMinutes / goalMinutes) * 100))
       : 0;
 
   const currentStreak = await computeStreak(goalMinutes);
@@ -160,10 +160,10 @@ router.get("/stats/weekly", async (_req, res) => {
     const activeMinutes = sittingMinutes + standingMinutes + walkingMinutes;
     const goalProgressPercent =
       goalMinutes > 0
-        ? Math.min(100, Math.round(((standingMinutes + walkingMinutes) / goalMinutes) * 100))
+        ? Math.min(100, Math.round((standingMinutes / goalMinutes) * 100))
         : 0;
 
-    weeklyStandingMinutes += standingMinutes + walkingMinutes;
+    weeklyStandingMinutes += standingMinutes;
 
     days.push({
       date: toDateString(date),

@@ -256,9 +256,9 @@ router.get("/metrics/daily", async (req, res) => {
     const activeMinutes = sittingMinutes + standingMinutes + walkingMinutes;
     const goalProgressPercent =
       goalMinutes > 0
-        ? Math.min(100, Math.round(((standingMinutes + walkingMinutes) / goalMinutes) * 100))
+        ? Math.min(100, Math.round((standingMinutes / goalMinutes) * 100))
         : 0;
-    const score = computeHealthScore(standingMinutes + walkingMinutes, sittingSessions, settings);
+    const score = computeHealthScore(standingMinutes, sittingSessions, settings);
 
     days.push({
       date: dateStr,

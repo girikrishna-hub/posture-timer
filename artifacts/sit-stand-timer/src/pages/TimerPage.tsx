@@ -203,7 +203,16 @@ export default function TimerPage() {
           <h1 className="text-xl font-semibold tracking-tight text-foreground">Sit + Stand</h1>
           <p className="text-xs text-muted-foreground flex items-center gap-1.5">
             Your daily movement tracker
-            {gpsStatus === "monitoring" && (
+            {gpsStatus === "requesting" && (
+              <span className="inline-flex items-center gap-1 text-muted-foreground">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-muted-foreground opacity-50" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-muted-foreground" />
+                </span>
+                GPS…
+              </span>
+            )}
+            {gpsStatus === "active" && mode !== "walking" && (
               <span className="inline-flex items-center gap-1 text-teal-600 dark:text-teal-400">
                 <span className="relative flex h-2 w-2">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75" />
@@ -212,12 +221,17 @@ export default function TimerPage() {
                 GPS
               </span>
             )}
-            {gpsStatus === "walking" && (
+            {gpsStatus === "active" && mode === "walking" && (
               <span className="inline-flex items-center gap-1 text-teal-600 dark:text-teal-400 font-medium">
                 <span className="relative flex h-2 w-2">
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-500" />
                 </span>
                 Walking detected
+              </span>
+            )}
+            {gpsStatus === "denied" && autoDetectWalking && (
+              <span className="text-destructive" title="Location permission denied — enable in browser settings">
+                GPS blocked
               </span>
             )}
           </p>
