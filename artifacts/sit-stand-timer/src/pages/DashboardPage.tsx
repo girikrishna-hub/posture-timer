@@ -19,6 +19,13 @@ import {
 } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import html2canvas from "html2canvas";
 
@@ -292,7 +299,11 @@ function ShareCard({
 // ─── Overview tab ───────────────────────────────────────────────────────────
 function OverviewTab() {
   const { data: summary, isLoading: sumLoading } = useGetMetricsSummary();
+  const [previewing, setPreviewing] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [previewImgUrl, setPreviewImgUrl] = useState<string | null>(null);
+  const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -302,9 +313,9 @@ function OverviewTab() {
     { from: weekStart, to: weekEnd },
   );
 
-  const handleShare = useCallback(async () => {
+  const handleOpenPreview = useCallback(async () => {
     if (!cardRef.current) return;
-    setSharing(true);
+    setPreviewing(true);
     try {
       const canvas = await html2canvas(cardRef.current, {
         backgroundColor: null,
@@ -318,8 +329,35 @@ function OverviewTab() {
           else reject(new Error("Failed to create blob"));
         }, "image/png");
       });
+      const url = URL.createObjectURL(blob);
+      setPreviewBlob(blob);
+      setPreviewImgUrl(url);
+      setPreviewOpen(true);
+    } catch {
+      toast({
+        title: "Could not generate preview",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setPreviewing(false);
+    }
+  }, [toast]);
 
-      const file = new File([blob], "weekly-summary.png", { type: "image/png" });
+  const handleClosePreview = useCallback(() => {
+    setPreviewOpen(false);
+    if (previewImgUrl) {
+      URL.revokeObjectURL(previewImgUrl);
+      setPreviewImgUrl(null);
+    }
+    setPreviewBlob(null);
+  }, [previewImgUrl]);
+
+  const handleShare = useCallback(async () => {
+    if (!previewBlob) return;
+    setSharing(true);
+    try {
+      const file = new File([previewBlob], "weekly-summary.png", { type: "image/png" });
       const canFileShare =
         typeof navigator.share === "function" &&
         typeof navigator.canShare === "function" &&
@@ -331,17 +369,18 @@ function OverviewTab() {
           files: [file],
         });
       } else {
-        const url = URL.createObjectURL(blob);
+        const url = URL.createObjectURL(previewBlob);
         const a = document.createElement("a");
         a.href = url;
         a.download = "weekly-summary.png";
         a.click();
         setTimeout(() => URL.revokeObjectURL(url), 60_000);
       }
+      handleClosePreview();
     } catch (err) {
       if (err instanceof Error && err.name !== "AbortError") {
         toast({
-          title: "Could not generate image",
+          title: "Could not share image",
           description: "Please try again.",
           variant: "destructive",
         });
@@ -349,7 +388,7 @@ function OverviewTab() {
     } finally {
       setSharing(false);
     }
-  }, [toast]);
+  }, [previewBlob, handleClosePreview, toast]);
 
   if (sumLoading || weekLoading) {
     return (
@@ -371,8 +410,8 @@ function OverviewTab() {
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-foreground">Overview</h2>
         {summary && weeklyData && (
-          <Button size="sm" onClick={handleShare} disabled={sharing}>
-            {sharing ? "Generating…" : "Share week"}
+          <Button size="sm" onClick={handleOpenPreview} disabled={previewing}>
+            {previewing ? "Generating…" : "Share week"}
           </Button>
         )}
       </div>
@@ -457,6 +496,32 @@ function OverviewTab() {
           weekEnd={weekEnd}
         />
       )}
+
+      <Dialog open={previewOpen} onOpenChange={(open) => { if (!open) handleClosePreview(); }}>
+        <DialogContent className="max-w-sm w-full p-4">
+          <DialogHeader>
+            <DialogTitle className="text-base">Summary card preview</DialogTitle>
+          </DialogHeader>
+          <div className="flex justify-center py-2">
+            {previewImgUrl && (
+              <img
+                src={previewImgUrl}
+                alt="Weekly summary card preview"
+                className="rounded-2xl w-full object-contain"
+                style={{ maxHeight: "65vh" }}
+              />
+            )}
+          </div>
+          <DialogFooter className="flex flex-row gap-2 sm:flex-row">
+            <Button variant="outline" className="flex-1" onClick={handleClosePreview} disabled={sharing}>
+              Cancel
+            </Button>
+            <Button className="flex-1" onClick={handleShare} disabled={sharing}>
+              {sharing ? "Sharing…" : typeof navigator.share === "function" ? "Share" : "Download"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
