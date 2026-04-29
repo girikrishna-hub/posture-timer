@@ -19,6 +19,80 @@ import { playStandTone, playSitTone, playConfirmTone, playRestTone } from "@/uti
 
 export type TimerMode = "idle" | "sitting" | "standing" | "resting";
 
+interface OfflineOp {
+  id: string;
+  type: "endSession" | "startSession";
+  payload: Record<string, unknown>;
+  createdAt: number;
+}
+
+const OFFLINE_QUEUE_KEY = "sit-stand-offline-queue";
+const IDLE_TIMEOUT_SECONDS = 60 * 60;
+
+function loadQueue(): OfflineOp[] {
+  try {
+    const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
+    return raw ? (JSON.parse(raw) as OfflineOp[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveQueue(ops: OfflineOp[]): void {
+  try {
+    localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(ops));
+  } catch {
+    // Storage might be full; silent
+  }
+}
+
+function enqueueOp(op: Omit<OfflineOp, "id" | "createdAt">): void {
+  const queue = loadQueue();
+  queue.push({ ...op, id: crypto.randomUUID(), createdAt: Date.now() });
+  saveQueue(queue);
+}
+
+async function drainQueue(
+  endFn: (id: number) => Promise<unknown>,
+  startFn: (mode: string) => Promise<{ id: number }>
+): Promise<void> {
+  const queue = loadQueue();
+  if (queue.length === 0) return;
+  const remaining: OfflineOp[] = [];
+  for (const op of queue) {
+    try {
+      if (op.type === "endSession") {
+        await endFn(op.payload.id as number);
+      } else if (op.type === "startSession") {
+        await startFn(op.payload.mode as string);
+      }
+    } catch {
+      remaining.push(op);
+    }
+  }
+  saveQueue(remaining);
+}
+
+function sendSWNotification(title: string, body: string): void {
+  if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+    navigator.serviceWorker.controller.postMessage({
+      type: "SHOW_NOTIFICATION",
+      title,
+      body,
+      icon: "/favicon.svg",
+    });
+  }
+}
+
+function notify(title: string, body: string): void {
+  if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+  if (document.visibilityState === "visible") {
+    new Notification(title, { body, icon: "/favicon.svg" });
+  } else {
+    sendSWNotification(title, body);
+  }
+}
+
 interface TimerContextValue {
   mode: TimerMode;
   elapsedSeconds: number;
@@ -32,12 +106,6 @@ interface TimerContextValue {
 }
 
 const TimerContext = createContext<TimerContextValue | null>(null);
-
-function sendNotification(title: string, body: string): void {
-  if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-    new Notification(title, { body, icon: "/favicon.svg" });
-  }
-}
 
 export function TimerProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
@@ -57,6 +125,8 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   const reminderCountRef = useRef(reminderCount);
   const inReminderPhaseRef = useRef(inReminderPhase);
   const activeSessionIdRef = useRef(activeSessionId);
+  const lastActivityRef = useRef(Date.now());
+  const finalReminderFiredRef = useRef(false);
 
   useEffect(() => { modeRef.current = mode; }, [mode]);
   useEffect(() => { elapsedRef.current = elapsedSeconds; }, [elapsedSeconds]);
@@ -83,6 +153,20 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   const startSessionMutation = useStartSession();
   const endSessionMutation = useEndSession();
 
+  const doEndSession = useCallback(
+    async (id: number) => {
+      await endSessionMutation.mutateAsync({ id });
+    },
+    [endSessionMutation]
+  );
+
+  const doStartSession = useCallback(
+    async (sessionMode: string) => {
+      return startSessionMutation.mutateAsync({ data: { mode: sessionMode as "sitting" | "standing" | "resting" } });
+    },
+    [startSessionMutation]
+  );
+
   useEffect(() => {
     if (!initialized && activeSessionData !== undefined) {
       const active = activeSessionData.session;
@@ -98,12 +182,26 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     }
   }, [activeSessionData, initialized]);
 
+  useEffect(() => {
+    function handleOnline() {
+      drainQueue(
+        (id) => doEndSession(id),
+        (m) => doStartSession(m)
+      );
+    }
+    window.addEventListener("online", handleOnline);
+    if (navigator.onLine) handleOnline();
+    return () => window.removeEventListener("online", handleOnline);
+  }, [doEndSession, doStartSession]);
+
   const switchMode = useCallback(
     async (newMode: "sitting" | "standing" | "resting") => {
       const currentId = activeSessionIdRef.current;
       const currentMode = modeRef.current;
 
       if (currentMode !== "idle" && currentMode === newMode) return;
+
+      lastActivityRef.current = Date.now();
 
       if (newMode === "resting") {
         playRestTone();
@@ -112,26 +210,37 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (currentId !== null) {
-        try {
-          await endSessionMutation.mutateAsync({ id: currentId });
-        } catch {
-          // Queue for retry later
+        if (navigator.onLine) {
+          try {
+            await endSessionMutation.mutateAsync({ id: currentId });
+          } catch {
+            enqueueOp({ type: "endSession", payload: { id: currentId } });
+          }
+        } else {
+          enqueueOp({ type: "endSession", payload: { id: currentId } });
         }
       }
 
-      try {
-        const newSession = await startSessionMutation.mutateAsync({
-          data: { mode: newMode },
-        });
-        setActiveSessionId(newSession.id);
-      } catch {
-        setActiveSessionId(null);
+      let newId: number | null = null;
+      if (navigator.onLine) {
+        try {
+          const newSession = await startSessionMutation.mutateAsync({
+            data: { mode: newMode },
+          });
+          newId = newSession.id;
+        } catch {
+          enqueueOp({ type: "startSession", payload: { mode: newMode } });
+        }
+      } else {
+        enqueueOp({ type: "startSession", payload: { mode: newMode } });
       }
 
+      setActiveSessionId(newId);
       setMode(newMode);
       setElapsedSeconds(0);
       setReminderCount(0);
       setInReminderPhase(false);
+      finalReminderFiredRef.current = false;
 
       await queryClient.invalidateQueries({ queryKey: getGetTodayStatsQueryKey() });
       await queryClient.invalidateQueries({ queryKey: getGetActiveSessionQueryKey() });
@@ -139,9 +248,15 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     [endSessionMutation, startSessionMutation, queryClient]
   );
 
+  const switchModeRef = useRef(switchMode);
+  useEffect(() => { switchModeRef.current = switchMode; }, [switchMode]);
+
+  const settingsRef = useRef(settings);
+  useEffect(() => { settingsRef.current = settings; }, [settings]);
+
   useEffect(() => {
     if (!initialized) return;
-    if (mode === "idle") return;
+    if (mode === "idle" || mode === "resting") return;
 
     const interval = setInterval(() => {
       const currentMode = modeRef.current;
@@ -150,52 +265,75 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       setElapsedSeconds((prev) => {
         const next = prev + 1;
         const elapsedMinutes = next / 60;
+        const s = settingsRef.current;
+
+        const inactiveSecs = (Date.now() - lastActivityRef.current) / 1000;
+        if (inactiveSecs >= IDLE_TIMEOUT_SECONDS) {
+          switchModeRef.current("resting");
+          notify("Auto-paused", "No activity detected for an hour. Timer paused.");
+          return next;
+        }
 
         if (currentMode === "sitting") {
-          const alertMin = settings.sittingAlertMinutes;
-          const reminderInterval = settings.reminderIntervalMinutes;
-          const maxReminders = settings.remindersCount;
+          const alertMin = s.sittingAlertMinutes;
+          const reminderInterval = s.reminderIntervalMinutes;
+          const maxReminders = s.remindersCount;
 
           if (elapsedMinutes >= alertMin && !inReminderPhaseRef.current) {
             setInReminderPhase(true);
             setReminderCount(1);
             playStandTone();
-            sendNotification("Time to stand!", "You've been sitting for " + alertMin + " minutes. Stand up!");
+            notify(
+              "Time to stand!",
+              `You've been sitting for ${alertMin} minutes. Stand up!`
+            );
           } else if (inReminderPhaseRef.current) {
             const remindersSoFar = reminderCountRef.current;
             const nextReminderAt = alertMin + remindersSoFar * reminderInterval;
             if (elapsedMinutes >= nextReminderAt && remindersSoFar < maxReminders) {
               setReminderCount((r) => r + 1);
               playStandTone();
-              sendNotification(
-                "Stand up reminder " + (remindersSoFar + 1) + "/" + maxReminders,
-                "You've been sitting for " + Math.round(elapsedMinutes) + " minutes. Time to stand!"
+              notify(
+                `Stand up — reminder ${remindersSoFar + 1}/${maxReminders}`,
+                `You've been sitting for ${Math.round(elapsedMinutes)} minutes. Time to stand!`
               );
             }
           }
         } else if (currentMode === "standing") {
-          const minMin = settings.standingMinMinutes;
-          const maxMin = settings.standingMaxMinutes;
-          const reminderInterval = settings.reminderIntervalMinutes;
-          const maxReminders = settings.remindersCount;
+          const minMin = s.standingMinMinutes;
+          const maxMin = s.standingMaxMinutes;
+          const reminderInterval = s.reminderIntervalMinutes;
+          const maxReminders = s.remindersCount;
 
           if (elapsedMinutes >= minMin && !inReminderPhaseRef.current) {
             setInReminderPhase(true);
             setReminderCount(1);
             playSitTone();
-            sendNotification("Time to sit!", "You've been standing for " + minMin + " minutes. Sit down!");
+            notify(
+              "Time to sit!",
+              `You've been standing for ${minMin} minutes. Sit down!`
+            );
           } else if (inReminderPhaseRef.current) {
             const remindersSoFar = reminderCountRef.current;
-            const nextReminderAt = minMin + remindersSoFar * reminderInterval;
-            if (elapsedMinutes >= nextReminderAt && remindersSoFar < maxReminders) {
+
+            if (elapsedMinutes >= maxMin && !finalReminderFiredRef.current) {
+              finalReminderFiredRef.current = true;
               setReminderCount((r) => r + 1);
               playSitTone();
-              const isLast = remindersSoFar + 1 >= maxReminders;
-              sendNotification(
-                isLast ? "Final reminder — please sit" : "Sit down reminder " + (remindersSoFar + 1) + "/" + maxReminders,
-                "You've been standing for " + Math.round(elapsedMinutes) + " minutes." +
-                (elapsedMinutes >= maxMin ? " Maximum standing time reached." : "")
+              notify(
+                "Final reminder — please sit down",
+                `You've been standing for ${Math.round(elapsedMinutes)} minutes. Maximum standing time reached.`
               );
+            } else if (elapsedMinutes < maxMin) {
+              const nextReminderAt = minMin + remindersSoFar * reminderInterval;
+              if (elapsedMinutes >= nextReminderAt && remindersSoFar < maxReminders) {
+                setReminderCount((r) => r + 1);
+                playSitTone();
+                notify(
+                  `Sit down — reminder ${remindersSoFar + 1}/${maxReminders}`,
+                  `You've been standing for ${Math.round(elapsedMinutes)} minutes.`
+                );
+              }
             }
           }
         }
@@ -205,7 +343,44 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [initialized, mode, settings]);
+  }, [initialized, mode]);
+
+  useEffect(() => {
+    function resetActivity() {
+      lastActivityRef.current = Date.now();
+    }
+    document.addEventListener("mousemove", resetActivity, { passive: true });
+    document.addEventListener("keydown", resetActivity, { passive: true });
+    document.addEventListener("touchstart", resetActivity, { passive: true });
+    document.addEventListener("click", resetActivity, { passive: true });
+    return () => {
+      document.removeEventListener("mousemove", resetActivity);
+      document.removeEventListener("keydown", resetActivity);
+      document.removeEventListener("touchstart", resetActivity);
+      document.removeEventListener("click", resetActivity);
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        const currentMode = modeRef.current;
+        if (currentMode === "idle" || currentMode === "resting") return;
+
+        const sessionStartEl = activeSessionData?.session;
+        if (!sessionStartEl?.startedAt) return;
+        const elapsed = Math.floor(
+          (Date.now() - new Date(sessionStartEl.startedAt).getTime()) / 1000
+        );
+        if (elapsed >= IDLE_TIMEOUT_SECONDS) {
+          switchModeRef.current("resting");
+          notify("Auto-paused", "You were away for over an hour. Timer paused.");
+        }
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [activeSessionData]);
 
   const requestNotificationPermission = useCallback(async () => {
     if (typeof Notification !== "undefined" && Notification.permission === "default") {
