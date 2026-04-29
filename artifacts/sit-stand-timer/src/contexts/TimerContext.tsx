@@ -12,6 +12,7 @@ import {
   useEndSession,
   useGetActiveSession,
   useGetSettings,
+  useGetTodayStats,
   getGetTodayStatsQueryKey,
   getGetActiveSessionQueryKey,
 } from "@workspace/api-client-react";
@@ -99,6 +100,44 @@ function notify(title: string, body: string): void {
   }
 }
 
+// ─── Goal milestone notification state ─────────────────────────────────────
+
+const GOAL_NOTIF_KEY = "sit-stand-goal-notif";
+
+interface GoalNotifState {
+  date: string;
+  half: boolean;
+  full: boolean;
+}
+
+function getGoalNotifState(): GoalNotifState {
+  try {
+    const raw = localStorage.getItem(GOAL_NOTIF_KEY);
+    if (raw) return JSON.parse(raw) as GoalNotifState;
+  } catch { /* ignore */ }
+  return { date: "", half: false, full: false };
+}
+
+function saveGoalNotifState(state: GoalNotifState): void {
+  try {
+    localStorage.setItem(GOAL_NOTIF_KEY, JSON.stringify(state));
+  } catch { /* ignore */ }
+}
+
+function todayDateString(): string {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function secondsSinceLocalMidnight(): number {
+  const now = new Date();
+  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return (now.getTime() - midnight.getTime()) / 1000;
+}
+
 // ─── Context types ─────────────────────────────────────────────────────────
 
 interface TimerContextValue {
@@ -144,6 +183,9 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   const finalReminderFiredRef = useRef(false);
   const pendingLocalQueueIdRef = useRef<string | null>(null);
 
+  // Goal milestone notification refs (half / full goal)
+  const goalNotifStateRef = useRef<GoalNotifState>(getGoalNotifState());
+
   useEffect(() => { modeRef.current = mode; }, [mode]);
   useEffect(() => { reminderCountRef.current = reminderCount; }, [reminderCount]);
   useEffect(() => { inReminderPhaseRef.current = inReminderPhase; }, [inReminderPhase]);
@@ -151,6 +193,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
 
   const { data: activeSessionData } = useGetActiveSession();
   const { data: settingsData } = useGetSettings();
+  const { data: todayStatsData } = useGetTodayStats();
 
   const settings = settingsData ?? {
     id: 1,
@@ -466,6 +509,51 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, []);
+
+  // ─── Goal milestone notifications ────────────────────────────────────────
+  useEffect(() => {
+    const goalMinutes = settingsRef.current.dailyStandingGoalMinutes;
+    if (!goalMinutes || goalMinutes <= 0) return;
+
+    const completedStandingMinutes = todayStatsData?.standingMinutes ?? 0;
+    // Cap in-progress contribution to minutes elapsed since local midnight so a
+    // session spanning midnight doesn't inflate today's count with yesterday's time.
+    const inProgressStandingMinutes =
+      modeRef.current === "standing"
+        ? Math.min(elapsedSeconds, secondsSinceLocalMidnight()) / 60
+        : 0;
+    const totalStandingMinutes = completedStandingMinutes + inProgressStandingMinutes;
+
+    const today = todayDateString();
+    const state = goalNotifStateRef.current;
+
+    // Reset state if it's a new day
+    if (state.date !== today) {
+      const fresh: GoalNotifState = { date: today, half: false, full: false };
+      goalNotifStateRef.current = fresh;
+      saveGoalNotifState(fresh);
+    }
+
+    const current = goalNotifStateRef.current;
+
+    if (!current.full && totalStandingMinutes >= goalMinutes) {
+      const next = { ...current, full: true };
+      goalNotifStateRef.current = next;
+      saveGoalNotifState(next);
+      notify(
+        "Daily standing goal reached!",
+        `You've stood for ${Math.round(totalStandingMinutes)} min — goal of ${goalMinutes} min achieved.`
+      );
+    } else if (!current.half && totalStandingMinutes >= goalMinutes * 0.5) {
+      const next = { ...current, half: true };
+      goalNotifStateRef.current = next;
+      saveGoalNotifState(next);
+      notify(
+        "Halfway to your standing goal!",
+        `${Math.round(totalStandingMinutes)} of ${goalMinutes} min done — keep it up!`
+      );
+    }
+  }, [todayStatsData, elapsedSeconds, mode]);
 
   const requestNotificationPermission = useCallback(async () => {
     if (typeof Notification !== "undefined" && Notification.permission === "default") {
