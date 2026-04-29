@@ -5,7 +5,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { TimerProvider } from "@/contexts/TimerContext";
 import TimerPage from "@/pages/TimerPage";
 import SettingsPage from "@/pages/SettingsPage";
+import DashboardPage from "@/pages/DashboardPage";
 import NotFound from "@/pages/not-found";
+import { BottomNav } from "@/components/BottomNav";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -18,11 +20,15 @@ const queryClient = new QueryClient({
 
 function Router() {
   return (
-    <Switch>
-      <Route path="/" component={TimerPage} />
-      <Route path="/settings" component={SettingsPage} />
-      <Route component={NotFound} />
-    </Switch>
+    <>
+      <Switch>
+        <Route path="/" component={TimerPage} />
+        <Route path="/settings" component={SettingsPage} />
+        <Route path="/dashboard" component={DashboardPage} />
+        <Route component={NotFound} />
+      </Switch>
+      <BottomNav />
+    </>
   );
 }
 

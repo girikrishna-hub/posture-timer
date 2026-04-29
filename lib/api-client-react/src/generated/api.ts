@@ -18,13 +18,16 @@ import type {
 
 import type {
   ActiveSessionResponse,
+  DailyMetricsResponse,
   EndSessionBody,
+  GetDailyMetricsParams,
   HealthStatus,
   ListSessionsParams,
   Session,
   SessionList,
   Settings,
   StartSessionBody,
+  SummaryMetrics,
   TodayStats,
   UpdateSettingsBody,
   WeeklyStats,
@@ -758,6 +761,175 @@ export function useGetWeeklyStats<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetWeeklyStatsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get per-day metrics for a date range
+ */
+export const getGetDailyMetricsUrl = (params: GetDailyMetricsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/metrics/daily?${stringifiedParams}`
+    : `/api/metrics/daily`;
+};
+
+export const getDailyMetrics = async (
+  params: GetDailyMetricsParams,
+  options?: RequestInit,
+): Promise<DailyMetricsResponse> => {
+  return customFetch<DailyMetricsResponse>(getGetDailyMetricsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDailyMetricsQueryKey = (params?: GetDailyMetricsParams) => {
+  return [`/api/metrics/daily`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetDailyMetricsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDailyMetrics>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetDailyMetricsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDailyMetrics>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetDailyMetricsQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getDailyMetrics>>> = ({
+    signal,
+  }) => getDailyMetrics(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDailyMetrics>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDailyMetricsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDailyMetrics>>
+>;
+export type GetDailyMetricsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get per-day metrics for a date range
+ */
+
+export function useGetDailyMetrics<
+  TData = Awaited<ReturnType<typeof getDailyMetrics>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetDailyMetricsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDailyMetrics>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDailyMetricsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get analytics summary (streaks, health score, sleep stats)
+ */
+export const getGetMetricsSummaryUrl = () => {
+  return `/api/metrics/summary`;
+};
+
+export const getMetricsSummary = async (
+  options?: RequestInit,
+): Promise<SummaryMetrics> => {
+  return customFetch<SummaryMetrics>(getGetMetricsSummaryUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMetricsSummaryQueryKey = () => {
+  return [`/api/metrics/summary`] as const;
+};
+
+export const getGetMetricsSummaryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMetricsSummary>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMetricsSummary>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMetricsSummaryQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMetricsSummary>>
+  > = ({ signal }) => getMetricsSummary({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMetricsSummary>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMetricsSummaryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMetricsSummary>>
+>;
+export type GetMetricsSummaryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get analytics summary (streaks, health score, sleep stats)
+ */
+
+export function useGetMetricsSummary<
+  TData = Awaited<ReturnType<typeof getMetricsSummary>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMetricsSummary>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMetricsSummaryQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

@@ -100,6 +100,43 @@ export interface WeeklyStats {
   currentStreak: number;
 }
 
+export interface DailyMetric {
+  date: string;
+  sittingMinutes: number;
+  standingMinutes: number;
+  napMinutes: number;
+  sleepMinutes: number;
+  activeMinutes: number;
+  goalProgressPercent: number;
+  healthScore: number;
+}
+
+export interface DailyMetricsResponse {
+  days: DailyMetric[];
+  goalMinutes: number;
+}
+
+export interface SleepConsistency {
+  avgSleepStartFormatted: string;
+  stddevMinutes: number;
+  sampleCount: number;
+}
+
+export interface SummaryMetrics {
+  currentStreak: number;
+  longestStreak: number;
+  weeklyAverageStandingMinutes: number;
+  bestDayDate: string | null;
+  bestDayMinutes: number;
+  worstDayDate: string | null;
+  worstDayMinutes: number;
+  healthScore: number;
+  healthLabel: string;
+  sleepConsistency: SleepConsistency | null;
+  avgNapDurationMinutes: number;
+  avgSleepDurationMinutes: number;
+}
+
 export type ListSessionsParams = {
   /**
    * Filter sessions from this date (YYYY-MM-DD)
@@ -111,4 +148,15 @@ export type ListSessionsParams = {
   to?: string;
   limit?: number;
   offset?: number;
+};
+
+export type GetDailyMetricsParams = {
+  /**
+   * Start date (YYYY-MM-DD)
+   */
+  from: string;
+  /**
+   * End date (YYYY-MM-DD, inclusive)
+   */
+  to: string;
 };

@@ -178,6 +178,47 @@ paths:
               schema:
                 $ref: "#/components/schemas/WeeklyStats"
 
+  /metrics/daily:
+    get:
+      operationId: getDailyMetrics
+      tags: [stats]
+      summary: Get per-day metrics for a date range
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Start date (YYYY-MM-DD)
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: End date (YYYY-MM-DD, inclusive)
+      responses:
+        "200":
+          description: Daily metrics for each day in range
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailyMetricsResponse"
+
+  /metrics/summary:
+    get:
+      operationId: getMetricsSummary
+      tags: [stats]
+      summary: Get analytics summary (streaks, health score, sleep stats)
+      responses:
+        "200":
+          description: Summary metrics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SummaryMetrics"
+
 components:
   schemas:
     HealthStatus:
@@ -389,3 +430,105 @@ components:
         - weeklyStandingMinutes
         - weeklyGoalMinutes
         - currentStreak
+
+    DailyMetric:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        sittingMinutes:
+          type: integer
+        standingMinutes:
+          type: integer
+        napMinutes:
+          type: integer
+        sleepMinutes:
+          type: integer
+        activeMinutes:
+          type: integer
+        goalProgressPercent:
+          type: number
+        healthScore:
+          type: integer
+      required:
+        - date
+        - sittingMinutes
+        - standingMinutes
+        - napMinutes
+        - sleepMinutes
+        - activeMinutes
+        - goalProgressPercent
+        - healthScore
+
+    DailyMetricsResponse:
+      type: object
+      properties:
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/DailyMetric"
+        goalMinutes:
+          type: integer
+      required:
+        - days
+        - goalMinutes
+
+    SleepConsistency:
+      type: object
+      properties:
+        avgSleepStartFormatted:
+          type: string
+        stddevMinutes:
+          type: integer
+        sampleCount:
+          type: integer
+      required:
+        - avgSleepStartFormatted
+        - stddevMinutes
+        - sampleCount
+
+    SummaryMetrics:
+      type: object
+      properties:
+        currentStreak:
+          type: integer
+        longestStreak:
+          type: integer
+        weeklyAverageStandingMinutes:
+          type: integer
+        bestDayDate:
+          type: string
+          nullable: true
+        bestDayMinutes:
+          type: integer
+        worstDayDate:
+          type: string
+          nullable: true
+        worstDayMinutes:
+          type: integer
+        healthScore:
+          type: integer
+        healthLabel:
+          type: string
+        sleepConsistency:
+          oneOf:
+            - $ref: "#/components/schemas/SleepConsistency"
+            - type: "null"
+        avgNapDurationMinutes:
+          type: integer
+        avgSleepDurationMinutes:
+          type: integer
+      required:
+        - currentStreak
+        - longestStreak
+        - weeklyAverageStandingMinutes
+        - bestDayDate
+        - bestDayMinutes
+        - worstDayDate
+        - worstDayMinutes
+        - healthScore
+        - healthLabel
+        - sleepConsistency
+        - avgNapDurationMinutes
+        - avgSleepDurationMinutes

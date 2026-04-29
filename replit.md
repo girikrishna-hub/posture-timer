@@ -40,20 +40,25 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
   - Daily stats + weekly stats + streak tracking
   - Settings page with sliders for all timer thresholds
   - PWA manifest (`public/manifest.json`) for installability
+  - **Dashboard**: Overview (summary cards + weekly Recharts bar chart), Daily timeline, Monthly heatmap calendar, Sessions log with pagination and CSV export
+  - Bottom nav: Timer ↔ Dashboard tabs
 
 ### Key Files
-- `lib/api-spec/openapi.yaml` — OpenAPI contract (sessions, settings, stats)
+- `lib/api-spec/openapi.yaml` — OpenAPI contract (sessions, settings, stats, metrics)
 - `lib/api-zod/src/index.ts` — Zod schema exports + selective type re-exports
 - `lib/api-client-react/src/generated/api.ts` — generated TanStack Query hooks
 - `lib/db/src/schema/sessions.ts` — sessionsTable: id, mode, startedAt, endedAt, durationSeconds, restType
 - `lib/db/src/schema/settings.ts` — settingsTable: id, dailyStandingGoalMinutes, sittingAlertMinutes, standingMinMinutes, standingMaxMinutes, reminderIntervalMinutes, remindersCount
-- `artifacts/api-server/src/routes/sessions.ts` — POST/GET list/GET active/PATCH end
+- `artifacts/api-server/src/routes/sessions.ts` — POST/GET list/GET active/PATCH end/GET export (CSV)
 - `artifacts/api-server/src/routes/settings.ts` — GET/PATCH with auto-create defaults
 - `artifacts/api-server/src/routes/stats.ts` — today + weekly aggregation + streak
+- `artifacts/api-server/src/routes/metrics.ts` — GET /metrics/daily (per-day breakdown) + GET /metrics/summary (streak, health score, sleep stats)
 - `artifacts/sit-stand-timer/src/contexts/TimerContext.tsx` — timer state machine, reminder logic, audio, notifications
 - `artifacts/sit-stand-timer/src/utils/audio.ts` — Web Audio API tone generation
 - `artifacts/sit-stand-timer/src/pages/TimerPage.tsx` — main timer UI
 - `artifacts/sit-stand-timer/src/pages/SettingsPage.tsx` — settings sliders UI
+- `artifacts/sit-stand-timer/src/pages/DashboardPage.tsx` — analytics dashboard (Overview/Daily/Monthly/Sessions tabs)
+- `artifacts/sit-stand-timer/src/components/BottomNav.tsx` — Timer/Dashboard bottom navigation
 
 ### Rest Classification Logic
 Rest sessions are auto-classified on end:

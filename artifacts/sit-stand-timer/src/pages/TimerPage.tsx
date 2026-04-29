@@ -274,7 +274,7 @@ export default function TimerPage() {
         </div>
       </main>
 
-      <footer className="px-6 pb-8 space-y-4">
+      <footer className="px-6 pb-24 space-y-4">
         {todayStats && (
           <div className="space-y-2">
             <div className="flex justify-between text-xs text-muted-foreground">

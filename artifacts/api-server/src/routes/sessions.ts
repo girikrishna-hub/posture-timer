@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, desc, and, gte, lte, isNull } from "drizzle-orm";
+import { eq, desc, and, gte, lte, isNull, isNotNull } from "drizzle-orm";
 import { db, sessionsTable } from "@workspace/db";
 import {
   StartSessionBody,
@@ -51,6 +51,34 @@ router.post("/sessions", async (req, res) => {
     .returning();
 
   res.status(201).json(formatSession(session));
+});
+
+router.get("/sessions/export", async (_req, res) => {
+  const sessions = await db
+    .select()
+    .from(sessionsTable)
+    .where(isNotNull(sessionsTable.endedAt))
+    .orderBy(desc(sessionsTable.startedAt));
+
+  const header = "date,mode,rest_type,started_at,ended_at,duration_minutes\n";
+  const rows = sessions
+    .map((s) => {
+      const date = s.startedAt.toISOString().split("T")[0] ?? "";
+      const restType = s.restType ?? "";
+      const endedAt = s.endedAt ? s.endedAt.toISOString() : "";
+      const durationMinutes = s.durationSeconds
+        ? (s.durationSeconds / 60).toFixed(2)
+        : "";
+      return `${date},${s.mode},${restType},${s.startedAt.toISOString()},${endedAt},${durationMinutes}`;
+    })
+    .join("\n");
+
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader(
+    "Content-Disposition",
+    'attachment; filename="sit-stand-sessions.csv"',
+  );
+  res.send(header + rows);
 });
 
 router.get("/sessions/active", async (req, res) => {

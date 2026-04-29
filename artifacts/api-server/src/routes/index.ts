@@ -3,6 +3,7 @@ import healthRouter from "./health";
 import sessionsRouter from "./sessions";
 import settingsRouter from "./settings";
 import statsRouter from "./stats";
+import metricsRouter from "./metrics";
 
 const router: IRouter = Router();
 
@@ -10,5 +11,6 @@ router.use(healthRouter);
 router.use(sessionsRouter);
 router.use(settingsRouter);
 router.use(statsRouter);
+router.use(metricsRouter);
 
 export default router;

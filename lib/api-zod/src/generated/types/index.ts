@@ -7,8 +7,11 @@
  */
 
 export * from "./activeSessionResponse";
+export * from "./dailyMetric";
+export * from "./dailyMetricsResponse";
 export * from "./dayStats";
 export * from "./endSessionBody";
+export * from "./getDailyMetricsParams";
 export * from "./healthStatus";
 export * from "./listSessionsParams";
 export * from "./restType";
@@ -16,7 +19,9 @@ export * from "./session";
 export * from "./sessionList";
 export * from "./sessionMode";
 export * from "./settings";
+export * from "./sleepConsistency";
 export * from "./startSessionBody";
+export * from "./summaryMetrics";
 export * from "./todayStats";
 export * from "./updateSettingsBody";
 export * from "./weeklyStats";

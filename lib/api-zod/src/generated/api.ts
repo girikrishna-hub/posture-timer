@@ -206,3 +206,52 @@ export const GetWeeklyStatsResponse = zod.object({
   weeklyGoalMinutes: zod.number(),
   currentStreak: zod.number(),
 });
+
+/**
+ * @summary Get per-day metrics for a date range
+ */
+export const GetDailyMetricsQueryParams = zod.object({
+  from: zod.date().describe("Start date (YYYY-MM-DD)"),
+  to: zod.date().describe("End date (YYYY-MM-DD, inclusive)"),
+});
+
+export const GetDailyMetricsResponse = zod.object({
+  days: zod.array(
+    zod.object({
+      date: zod.coerce.date(),
+      sittingMinutes: zod.number(),
+      standingMinutes: zod.number(),
+      napMinutes: zod.number(),
+      sleepMinutes: zod.number(),
+      activeMinutes: zod.number(),
+      goalProgressPercent: zod.number(),
+      healthScore: zod.number(),
+    }),
+  ),
+  goalMinutes: zod.number(),
+});
+
+/**
+ * @summary Get analytics summary (streaks, health score, sleep stats)
+ */
+export const GetMetricsSummaryResponse = zod.object({
+  currentStreak: zod.number(),
+  longestStreak: zod.number(),
+  weeklyAverageStandingMinutes: zod.number(),
+  bestDayDate: zod.string().nullable(),
+  bestDayMinutes: zod.number(),
+  worstDayDate: zod.string().nullable(),
+  worstDayMinutes: zod.number(),
+  healthScore: zod.number(),
+  healthLabel: zod.string(),
+  sleepConsistency: zod.union([
+    zod.object({
+      avgSleepStartFormatted: zod.string(),
+      stddevMinutes: zod.number(),
+      sampleCount: zod.number(),
+    }),
+    zod.null(),
+  ]),
+  avgNapDurationMinutes: zod.number(),
+  avgSleepDurationMinutes: zod.number(),
+});
