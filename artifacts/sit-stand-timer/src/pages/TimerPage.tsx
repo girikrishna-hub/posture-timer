@@ -330,15 +330,27 @@ export default function TimerPage() {
   const remindersCount = settingsData?.remindersCount ?? 3;
   const autoDetectWalking = settingsData?.autoDetectWalking ?? false;
 
-  // Live goal percent: add current session's elapsed standing time so the ring
-  // moves in real time (every second) instead of only on API refetch (every 30s).
+  // Live goal percent: add current session's elapsed standing/walking time so
+  // the ring moves in real time (every second) instead of only on API refetch
+  // (every 30s). Walking counts toward the goal just like standing.
   const completedStandingMinutes = todayStats?.standingMinutes ?? 0;
+  const completedWalkingMinutes = todayStats?.walkingMinutes ?? 0;
   const goalMinutes = todayStats?.goalMinutes ?? 120;
   const isActiveStanding = mode === "standing" || mode === "walking";
   const liveElapsedStandingMinutes = isActiveStanding ? elapsedSeconds / 60 : 0;
   const liveStandingTotalSeconds = completedStandingMinutes * 60 + (isActiveStanding ? elapsedSeconds : 0);
+  // Cap in-progress minutes to time elapsed since local midnight so a session
+  // spanning midnight doesn't inflate today's count — same guard used for
+  // milestone notifications in TimerContext.
+  const secondsSinceLocalMidnight = (): number => {
+    const now = new Date();
+    return now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+  };
+  const cappedElapsedMinutes = isActiveStanding
+    ? Math.min(elapsedSeconds, secondsSinceLocalMidnight()) / 60
+    : 0;
   const liveGoalPercent = goalMinutes > 0
-    ? Math.min(100, ((completedStandingMinutes + liveElapsedStandingMinutes) / goalMinutes) * 100)
+    ? Math.min(100, ((completedStandingMinutes + completedWalkingMinutes + cappedElapsedMinutes) / goalMinutes) * 100)
     : todayStats?.goalProgressPercent ?? 0;
 
   // Celebration: fire once per day when goal crosses from <100 to >=100
