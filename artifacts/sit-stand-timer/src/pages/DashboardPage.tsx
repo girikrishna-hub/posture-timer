@@ -576,9 +576,16 @@ function SessionsTab() {
                     }}
                   />
                   <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-medium ${modeColor(s.mode, s.restType)}`}>
-                      {modeLabel(s.mode, s.restType)}
-                    </p>
+                    <div className="flex items-center gap-1.5">
+                      <p className={`text-sm font-medium capitalize ${modeColor(s.mode, s.restType)}`}>
+                        {s.mode}
+                      </p>
+                      {s.mode === "resting" && s.restType && (
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground capitalize">
+                          {s.restType}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-muted-foreground">
                       {new Date(s.startedAt).toLocaleDateString("en-US", {
                         month: "short",
@@ -663,35 +670,61 @@ type DayDataShape = {
   activeMinutes: number;
   napMinutes: number;
   sleepMinutes: number;
+  healthScore: number;
 };
 
 function DailyStatGrid({ dayData }: { dayData: DayDataShape }) {
+  const scoreLabel =
+    dayData.healthScore >= 90
+      ? "Excellent"
+      : dayData.healthScore >= 70
+      ? "Great"
+      : dayData.healthScore >= 50
+      ? "Good"
+      : dayData.healthScore >= 30
+      ? "Fair"
+      : "Needs work";
+  const scoreColor =
+    dayData.healthScore >= 70
+      ? "text-green-600"
+      : dayData.healthScore >= 40
+      ? "text-amber-600"
+      : "text-red-500";
+
   return (
-    <div className="grid grid-cols-3 gap-2">
-      <div className="bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 text-center">
-        <p className="text-xs text-blue-600">Sitting</p>
-        <p className="text-base font-semibold text-blue-700">{formatMinutes(dayData.sittingMinutes)}</p>
-      </div>
-      <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-center">
-        <p className="text-xs text-green-600">Standing</p>
-        <p className="text-base font-semibold text-green-700">{formatMinutes(dayData.standingMinutes)}</p>
-      </div>
-      <div className="bg-purple-50 border border-purple-200 rounded-xl px-3 py-2 text-center">
-        <p className="text-xs text-purple-600">Active</p>
-        <p className="text-base font-semibold text-purple-700">{formatMinutes(dayData.activeMinutes)}</p>
-      </div>
-      {dayData.napMinutes > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-center">
-          <p className="text-xs text-amber-600">Nap</p>
-          <p className="text-base font-semibold text-amber-700">{formatMinutes(dayData.napMinutes)}</p>
+    <div className="space-y-2">
+      <div className="grid grid-cols-3 gap-2">
+        <div className="bg-blue-50 border border-blue-200 rounded-xl px-3 py-2 text-center">
+          <p className="text-xs text-blue-600">Sitting</p>
+          <p className="text-base font-semibold text-blue-700">{formatMinutes(dayData.sittingMinutes)}</p>
         </div>
-      )}
-      {dayData.sleepMinutes > 0 && (
-        <div className="bg-indigo-50 border border-indigo-200 rounded-xl px-3 py-2 text-center">
-          <p className="text-xs text-indigo-600">Sleep</p>
-          <p className="text-base font-semibold text-indigo-700">{formatMinutes(dayData.sleepMinutes)}</p>
+        <div className="bg-green-50 border border-green-200 rounded-xl px-3 py-2 text-center">
+          <p className="text-xs text-green-600">Standing</p>
+          <p className="text-base font-semibold text-green-700">{formatMinutes(dayData.standingMinutes)}</p>
         </div>
-      )}
+        <div className="bg-purple-50 border border-purple-200 rounded-xl px-3 py-2 text-center">
+          <p className="text-xs text-purple-600">Active</p>
+          <p className="text-base font-semibold text-purple-700">{formatMinutes(dayData.activeMinutes)}</p>
+        </div>
+        {dayData.napMinutes > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-center">
+            <p className="text-xs text-amber-600">Nap</p>
+            <p className="text-base font-semibold text-amber-700">{formatMinutes(dayData.napMinutes)}</p>
+          </div>
+        )}
+        {dayData.sleepMinutes > 0 && (
+          <div className="bg-indigo-50 border border-indigo-200 rounded-xl px-3 py-2 text-center">
+            <p className="text-xs text-indigo-600">Sleep</p>
+            <p className="text-base font-semibold text-indigo-700">{formatMinutes(dayData.sleepMinutes)}</p>
+          </div>
+        )}
+      </div>
+      <div className="flex items-center justify-between bg-card border border-border rounded-xl px-4 py-2">
+        <span className="text-xs text-muted-foreground">Day health score</span>
+        <span className={`text-sm font-semibold ${scoreColor}`}>
+          {dayData.healthScore}/100 · {scoreLabel}
+        </span>
+      </div>
     </div>
   );
 }
