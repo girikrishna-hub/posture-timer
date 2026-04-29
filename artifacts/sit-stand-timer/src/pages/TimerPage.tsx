@@ -231,6 +231,15 @@ export default function TimerPage() {
   const remindersCount = settingsData?.remindersCount ?? 3;
   const autoDetectWalking = settingsData?.autoDetectWalking ?? false;
 
+  // Live goal percent: add current session's elapsed standing time so the ring
+  // moves in real time (every second) instead of only on API refetch (every 30s).
+  const completedStandingMinutes = todayStats?.standingMinutes ?? 0;
+  const goalMinutes = todayStats?.goalMinutes ?? 120;
+  const liveElapsedStandingMinutes = mode === "standing" ? elapsedSeconds / 60 : 0;
+  const liveGoalPercent = goalMinutes > 0
+    ? Math.min(100, ((completedStandingMinutes + liveElapsedStandingMinutes) / goalMinutes) * 100)
+    : todayStats?.goalProgressPercent ?? 0;
+
   const nextActionSeconds =
     mode === "sitting"
       ? sittingAlertMinutes * 60 - elapsedSeconds
@@ -311,7 +320,7 @@ export default function TimerPage() {
       <main className="flex-1 flex flex-col items-center justify-center px-6 gap-8">
         <GoalProgressRing
           mode={mode}
-          goalPercent={todayStats?.goalProgressPercent ?? 0}
+          goalPercent={liveGoalPercent}
         />
 
         <div className="text-center space-y-1">
