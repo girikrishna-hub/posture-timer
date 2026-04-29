@@ -145,7 +145,8 @@ export default function SettingsPage() {
           if (err.code === GeolocationPositionError.PERMISSION_DENIED) {
             setGeoPermission("denied");
           } else {
-            setGeoPermission("granted");
+            // timeout or unavailable — permission may still be prompt/unknown
+            setGeoPermission("prompt");
           }
         },
         { timeout: 10000 },

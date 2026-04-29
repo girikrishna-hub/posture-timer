@@ -145,12 +145,25 @@ export function useWalkingDetection({
 
     setGpsStatus("requesting");
 
+    let permissionResult: PermissionStatus | null = null;
+
+    const handlePermissionChange = () => {
+      if (!permissionResult) return;
+      if (permissionResult.state === "denied") {
+        stopWatching();
+        setGpsStatus("denied");
+      } else if (permissionResult.state === "granted" && watchIdRef.current === null) {
+        startWatching();
+      }
+    };
+
     const tryPermissionsApi = async () => {
       if (!("permissions" in navigator)) {
         return false;
       }
       try {
         const result = await navigator.permissions.query({ name: "geolocation" });
+        permissionResult = result;
         if (result.state === "denied") {
           setGpsStatus("denied");
           return true;
@@ -159,14 +172,7 @@ export function useWalkingDetection({
           startWatching();
           return true;
         }
-        result.addEventListener("change", () => {
-          if (result.state === "denied") {
-            stopWatching();
-            setGpsStatus("denied");
-          } else if (result.state === "granted" && watchIdRef.current === null) {
-            startWatching();
-          }
-        });
+        result.addEventListener("change", handlePermissionChange);
         return false;
       } catch {
         return false;
@@ -190,7 +196,12 @@ export function useWalkingDetection({
       }
     })();
 
-    return stopWatching;
+    return () => {
+      stopWatching();
+      if (permissionResult) {
+        permissionResult.removeEventListener("change", handlePermissionChange);
+      }
+    };
   }, [enabled, startWatching, stopWatching]);
 
   return gpsStatus;
