@@ -19,6 +19,8 @@ import { playStandTone, playSitTone, playConfirmTone, playRestTone } from "@/uti
 
 export type TimerMode = "idle" | "sitting" | "standing" | "resting";
 
+// ─── Offline queue types ───────────────────────────────────────────────────
+
 interface OfflineEndOp {
   id: string;
   type: "endSession";
@@ -31,12 +33,14 @@ interface OfflineStartOp {
   type: "startSession";
   mode: "sitting" | "standing" | "resting";
   startedAt: string;
+  endedAt?: string;
 }
 
 type OfflineOp = OfflineEndOp | OfflineStartOp;
 
 const OFFLINE_QUEUE_KEY = "sit-stand-offline-queue";
 const IDLE_TIMEOUT_SECONDS = 60 * 60;
+const OFFLINE_SESSION_SENTINEL = -1;
 
 function loadQueue(): OfflineOp[] {
   try {
@@ -50,39 +54,29 @@ function loadQueue(): OfflineOp[] {
 function saveQueue(ops: OfflineOp[]): void {
   try {
     localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(ops));
-  } catch {
-    // Storage might be full; silent
-  }
+  } catch { /* silent */ }
 }
 
-type EnqueueArg = Omit<OfflineEndOp, "id"> | Omit<OfflineStartOp, "id">;
-
-function enqueueOp(op: EnqueueArg): void {
+function saveQueueOp(op: OfflineOp): void {
   const queue = loadQueue();
-  queue.push({ ...op, id: crypto.randomUUID() } as OfflineOp);
+  queue.push(op);
   saveQueue(queue);
 }
 
-async function drainQueue(
-  endFn: (id: number, endedAt: string) => Promise<unknown>,
-  startFn: (mode: string, startedAt: string) => Promise<{ id: number }>
-): Promise<void> {
+function markQueueStartEnd(opId: string, endedAt: string): void {
   const queue = loadQueue();
-  if (queue.length === 0) return;
-  const remaining: OfflineOp[] = [];
-  for (const op of queue) {
-    try {
-      if (op.type === "endSession") {
-        await endFn(op.sessionId, op.endedAt);
-      } else if (op.type === "startSession") {
-        await startFn(op.mode, op.startedAt);
-      }
-    } catch {
-      remaining.push(op);
-    }
-  }
-  saveQueue(remaining);
+  saveQueue(
+    queue.map((op) =>
+      op.id === opId && op.type === "startSession" ? { ...op, endedAt } : op
+    )
+  );
 }
+
+function enqueueEndOp(sessionId: number, endedAt: string): void {
+  saveQueueOp({ id: crypto.randomUUID(), type: "endSession", sessionId, endedAt });
+}
+
+// ─── Notifications ─────────────────────────────────────────────────────────
 
 function sendSWNotification(title: string, body: string): void {
   if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
@@ -104,6 +98,8 @@ function notify(title: string, body: string): void {
   }
 }
 
+// ─── Context types ─────────────────────────────────────────────────────────
+
 interface TimerContextValue {
   mode: TimerMode;
   elapsedSeconds: number;
@@ -118,8 +114,11 @@ interface TimerContextValue {
 
 const TimerContext = createContext<TimerContextValue | null>(null);
 
+// ─── Provider ──────────────────────────────────────────────────────────────
+
 export function TimerProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
+
   const [mode, setMode] = useState<TimerMode>("idle");
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [reminderCount, setReminderCount] = useState(0);
@@ -131,24 +130,21 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     );
   const [initialized, setInitialized] = useState(false);
 
+  // Refs used inside intervals/event handlers to avoid stale closures
   const modeRef = useRef(mode);
-  const elapsedRef = useRef(elapsedSeconds);
   const reminderCountRef = useRef(reminderCount);
   const inReminderPhaseRef = useRef(inReminderPhase);
   const activeSessionIdRef = useRef(activeSessionId);
   const lastActivityRef = useRef(Date.now());
   const finalReminderFiredRef = useRef(false);
+  const pendingLocalQueueIdRef = useRef<string | null>(null);
 
   useEffect(() => { modeRef.current = mode; }, [mode]);
-  useEffect(() => { elapsedRef.current = elapsedSeconds; }, [elapsedSeconds]);
   useEffect(() => { reminderCountRef.current = reminderCount; }, [reminderCount]);
   useEffect(() => { inReminderPhaseRef.current = inReminderPhase; }, [inReminderPhase]);
   useEffect(() => { activeSessionIdRef.current = activeSessionId; }, [activeSessionId]);
 
-  const { data: activeSessionData } = useGetActiveSession({
-    query: { queryKey: getGetActiveSessionQueryKey() },
-  });
-
+  const { data: activeSessionData } = useGetActiveSession();
   const { data: settingsData } = useGetSettings();
 
   const settings = settingsData ?? {
@@ -160,32 +156,36 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     reminderIntervalMinutes: 1,
     remindersCount: 3,
   };
+  const settingsRef = useRef(settings);
+  useEffect(() => { settingsRef.current = settings; }, [settings]);
 
   const startSessionMutation = useStartSession();
   const endSessionMutation = useEndSession();
 
-  const doEndSession = useCallback(
-    async (id: number, endedAt?: string) => {
-      await endSessionMutation.mutateAsync({
-        id,
-        data: endedAt ? { endedAt } : {},
-      });
-    },
-    [endSessionMutation]
-  );
+  // Keep mutation refs stable so effects don't need them as deps
+  const startMutationRef = useRef(startSessionMutation);
+  const endMutationRef = useRef(endSessionMutation);
+  useEffect(() => { startMutationRef.current = startSessionMutation; }, [startSessionMutation]);
+  useEffect(() => { endMutationRef.current = endSessionMutation; }, [endSessionMutation]);
+
+  // Stable helpers via refs — never trigger re-renders or effect re-runs
+  const doEndSession = useCallback(async (id: number, endedAt?: string) => {
+    await endMutationRef.current.mutateAsync({ id, data: endedAt ? { endedAt } : {} });
+  }, []);
 
   const doStartSession = useCallback(
-    async (sessionMode: string, startedAt?: string) => {
-      return startSessionMutation.mutateAsync({
+    async (sessionMode: string, startedAt?: string): Promise<{ id: number }> => {
+      return startMutationRef.current.mutateAsync({
         data: {
           mode: sessionMode as "sitting" | "standing" | "resting",
           ...(startedAt ? { startedAt } : {}),
         },
       });
     },
-    [startSessionMutation]
+    []
   );
 
+  // Restore active session from server on first load
   useEffect(() => {
     if (!initialized && activeSessionData !== undefined) {
       const active = activeSessionData.session;
@@ -201,17 +201,38 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     }
   }, [activeSessionData, initialized]);
 
+  // Drain offline queue on reconnect
   useEffect(() => {
-    function handleOnline() {
-      drainQueue(
-        (id, endedAt) => doEndSession(id, endedAt),
-        (m, startedAt) => doStartSession(m, startedAt)
-      );
+    async function drain() {
+      const queue = loadQueue();
+      if (queue.length === 0) return;
+      const remaining: OfflineOp[] = [];
+      for (const op of queue) {
+        try {
+          if (op.type === "endSession") {
+            await doEndSession(op.sessionId, op.endedAt);
+          } else {
+            const session = await doStartSession(op.mode, op.startedAt);
+            if (op.endedAt) {
+              await doEndSession(session.id, op.endedAt);
+            }
+          }
+        } catch {
+          remaining.push(op);
+        }
+      }
+      saveQueue(remaining);
+      pendingLocalQueueIdRef.current = null;
+      queryClient.invalidateQueries({ queryKey: getGetActiveSessionQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetTodayStatsQueryKey() });
     }
+
+    function handleOnline() { void drain(); }
+
     window.addEventListener("online", handleOnline);
-    if (navigator.onLine) handleOnline();
+    if (navigator.onLine) void drain();
     return () => window.removeEventListener("online", handleOnline);
-  }, [doEndSession, doStartSession]);
+  }, [doEndSession, doStartSession, queryClient]);
 
   const switchMode = useCallback(
     async (newMode: "sitting" | "standing" | "resting") => {
@@ -229,39 +250,50 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
         playConfirmTone();
       }
 
-      if (currentId !== null) {
+      // End current session
+      const localQueueId = pendingLocalQueueIdRef.current;
+      if (localQueueId !== null) {
+        markQueueStartEnd(localQueueId, transitionTime);
+        pendingLocalQueueIdRef.current = null;
+      } else if (currentId !== null && currentId > 0) {
         if (navigator.onLine) {
           try {
             await doEndSession(currentId, transitionTime);
           } catch {
-            enqueueOp({ type: "endSession", sessionId: currentId, endedAt: transitionTime });
+            enqueueEndOp(currentId, transitionTime);
           }
         } else {
-          enqueueOp({ type: "endSession", sessionId: currentId, endedAt: transitionTime });
+          enqueueEndOp(currentId, transitionTime);
         }
       }
 
-      let newId: number | null = null;
+      // Start new session
       if (navigator.onLine) {
         try {
           const newSession = await doStartSession(newMode, transitionTime);
-          newId = newSession.id;
+          setActiveSessionId(newSession.id);
+          pendingLocalQueueIdRef.current = null;
         } catch {
-          enqueueOp({ type: "startSession", mode: newMode, startedAt: transitionTime });
+          const opId = crypto.randomUUID();
+          saveQueueOp({ id: opId, type: "startSession", mode: newMode, startedAt: transitionTime });
+          pendingLocalQueueIdRef.current = opId;
+          setActiveSessionId(OFFLINE_SESSION_SENTINEL);
         }
       } else {
-        enqueueOp({ type: "startSession", mode: newMode, startedAt: transitionTime });
+        const opId = crypto.randomUUID();
+        saveQueueOp({ id: opId, type: "startSession", mode: newMode, startedAt: transitionTime });
+        pendingLocalQueueIdRef.current = opId;
+        setActiveSessionId(OFFLINE_SESSION_SENTINEL);
       }
 
-      setActiveSessionId(newId);
       setMode(newMode);
       setElapsedSeconds(0);
       setReminderCount(0);
       setInReminderPhase(false);
       finalReminderFiredRef.current = false;
 
-      await queryClient.invalidateQueries({ queryKey: getGetTodayStatsQueryKey() });
-      await queryClient.invalidateQueries({ queryKey: getGetActiveSessionQueryKey() });
+      void queryClient.invalidateQueries({ queryKey: getGetTodayStatsQueryKey() });
+      void queryClient.invalidateQueries({ queryKey: getGetActiveSessionQueryKey() });
     },
     [doEndSession, doStartSession, queryClient]
   );
@@ -269,9 +301,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   const switchModeRef = useRef(switchMode);
   useEffect(() => { switchModeRef.current = switchMode; }, [switchMode]);
 
-  const settingsRef = useRef(settings);
-  useEffect(() => { settingsRef.current = settings; }, [settings]);
-
+  // Main 1-second tick: reminder logic + idle auto-pause
   useEffect(() => {
     if (!initialized) return;
     if (mode === "idle" || mode === "resting") return;
@@ -287,7 +317,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
 
         const inactiveSecs = (Date.now() - lastActivityRef.current) / 1000;
         if (inactiveSecs >= IDLE_TIMEOUT_SECONDS) {
-          switchModeRef.current("resting");
+          void switchModeRef.current("resting");
           notify("Auto-paused", "No activity detected for an hour. Timer paused.");
           return next;
         }
@@ -301,19 +331,16 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
             setInReminderPhase(true);
             setReminderCount(1);
             playStandTone();
-            notify(
-              "Time to stand!",
-              `You've been sitting for ${alertMin} minutes. Stand up!`
-            );
+            notify("Time to stand!", `You've been sitting for ${alertMin} minutes.`);
           } else if (inReminderPhaseRef.current) {
-            const remindersSoFar = reminderCountRef.current;
-            const nextReminderAt = alertMin + remindersSoFar * reminderInterval;
-            if (elapsedMinutes >= nextReminderAt && remindersSoFar < maxReminders) {
+            const soFar = reminderCountRef.current;
+            const nextAt = alertMin + soFar * reminderInterval;
+            if (elapsedMinutes >= nextAt && soFar < maxReminders) {
               setReminderCount((r) => r + 1);
               playStandTone();
               notify(
-                `Stand up — reminder ${remindersSoFar + 1}/${maxReminders}`,
-                `You've been sitting for ${Math.round(elapsedMinutes)} minutes. Time to stand!`
+                `Stand up — reminder ${soFar + 1}/${maxReminders}`,
+                `You've been sitting for ${Math.round(elapsedMinutes)} minutes.`
               );
             }
           }
@@ -327,12 +354,9 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
             setInReminderPhase(true);
             setReminderCount(1);
             playSitTone();
-            notify(
-              "Time to sit!",
-              `You've been standing for ${minMin} minutes. Sit down!`
-            );
+            notify("Time to sit!", `You've been standing for ${minMin} minutes.`);
           } else if (inReminderPhaseRef.current) {
-            const remindersSoFar = reminderCountRef.current;
+            const soFar = reminderCountRef.current;
 
             if (elapsedMinutes >= maxMin && !finalReminderFiredRef.current) {
               finalReminderFiredRef.current = true;
@@ -340,15 +364,15 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
               playSitTone();
               notify(
                 "Final reminder — please sit down",
-                `You've been standing for ${Math.round(elapsedMinutes)} minutes. Maximum standing time reached.`
+                `Maximum standing time of ${maxMin} minutes reached.`
               );
             } else if (elapsedMinutes < maxMin) {
-              const nextReminderAt = minMin + remindersSoFar * reminderInterval;
-              if (elapsedMinutes >= nextReminderAt && remindersSoFar < maxReminders) {
+              const nextAt = minMin + soFar * reminderInterval;
+              if (elapsedMinutes >= nextAt && soFar < maxReminders) {
                 setReminderCount((r) => r + 1);
                 playSitTone();
                 notify(
-                  `Sit down — reminder ${remindersSoFar + 1}/${maxReminders}`,
+                  `Sit down — reminder ${soFar + 1}/${maxReminders}`,
                   `You've been standing for ${Math.round(elapsedMinutes)} minutes.`
                 );
               }
@@ -363,10 +387,9 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(interval);
   }, [initialized, mode]);
 
+  // Track user activity for idle detection
   useEffect(() => {
-    function resetActivity() {
-      lastActivityRef.current = Date.now();
-    }
+    function resetActivity() { lastActivityRef.current = Date.now(); }
     document.addEventListener("mousemove", resetActivity, { passive: true });
     document.addEventListener("keydown", resetActivity, { passive: true });
     document.addEventListener("touchstart", resetActivity, { passive: true });
@@ -379,26 +402,21 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  // On visibility restore, check if we've been away long enough to auto-pause
   useEffect(() => {
     function handleVisibilityChange() {
-      if (document.visibilityState === "visible") {
-        const currentMode = modeRef.current;
-        if (currentMode === "idle" || currentMode === "resting") return;
-
-        const sessionStartEl = activeSessionData?.session;
-        if (!sessionStartEl?.startedAt) return;
-        const elapsed = Math.floor(
-          (Date.now() - new Date(sessionStartEl.startedAt).getTime()) / 1000
-        );
-        if (elapsed >= IDLE_TIMEOUT_SECONDS) {
-          switchModeRef.current("resting");
-          notify("Auto-paused", "You were away for over an hour. Timer paused.");
-        }
+      if (document.visibilityState !== "visible") return;
+      const currentMode = modeRef.current;
+      if (currentMode === "idle" || currentMode === "resting") return;
+      const inactiveSecs = (Date.now() - lastActivityRef.current) / 1000;
+      if (inactiveSecs >= IDLE_TIMEOUT_SECONDS) {
+        void switchModeRef.current("resting");
+        notify("Auto-paused", "You were away for over an hour.");
       }
     }
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [activeSessionData]);
+  }, []);
 
   const requestNotificationPermission = useCallback(async () => {
     if (typeof Notification !== "undefined" && Notification.permission === "default") {

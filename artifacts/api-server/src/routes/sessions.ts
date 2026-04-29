@@ -120,7 +120,11 @@ router.patch("/sessions/:id", async (req, res) => {
   }
 
   const bodyResult = EndSessionBody.safeParse(req.body ?? {});
-  const providedEndedAt = bodyResult.success ? bodyResult.data.endedAt : undefined;
+  if (!bodyResult.success) {
+    res.status(400).json({ error: "Invalid request body", details: bodyResult.error.issues });
+    return;
+  }
+  const providedEndedAt = bodyResult.data.endedAt;
 
   const { id } = paramsResult.data;
 
