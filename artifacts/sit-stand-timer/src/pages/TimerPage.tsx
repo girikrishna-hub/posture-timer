@@ -148,7 +148,32 @@ const STROKE_WIDTH = 10;
 const RADIUS = (RING_SIZE - STROKE_WIDTH) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
-function GoalProgressRing({ mode, goalPercent, celebrating }: { mode: TimerMode; goalPercent: number; celebrating: boolean }) {
+function TrophyBadge({ delayed, onReplay }: { delayed: boolean; onReplay: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onReplay}
+      className="absolute left-1/2 flex items-center justify-center w-7 h-7 rounded-full bg-emerald-500 dark:bg-emerald-600 shadow-md ring-2 ring-background hover:bg-emerald-400 dark:hover:bg-emerald-500 active:scale-90 transition-transform cursor-pointer"
+      style={{
+        top: "-10px",
+        animation: `badge-pop-in 0.5s ${delayed ? "2.1s" : "0s"} cubic-bezier(0.34,1.56,0.64,1) both`,
+      }}
+      title="Tap to replay celebration"
+      aria-label="Replay goal celebration"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        className="w-4 h-4 text-white"
+      >
+        <path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+      </svg>
+    </button>
+  );
+}
+
+function GoalProgressRing({ mode, goalPercent, celebrating, goalAchieved, badgeDelayed, onReplayCelebration }: { mode: TimerMode; goalPercent: number; celebrating: boolean; goalAchieved: boolean; badgeDelayed: boolean; onReplayCelebration: () => void }) {
   const clampedPercent = Math.max(0, Math.min(goalPercent, 100));
   const dashOffset = CIRCUMFERENCE * (1 - clampedPercent / 100);
   const goalMet = goalPercent >= 100;
@@ -168,6 +193,7 @@ function GoalProgressRing({ mode, goalPercent, celebrating }: { mode: TimerMode;
 
   return (
     <div className="relative w-56 h-56">
+      {goalAchieved && !celebrating && <TrophyBadge delayed={badgeDelayed} onReplay={onReplayCelebration} />}
       {celebrating && (
         <>
           <span
@@ -304,6 +330,10 @@ export default function TimerPage() {
 
   // Celebration: fire once per day when goal crosses from <100 to >=100
   const [celebrating, setCelebrating] = useState(false);
+  const [goalAchieved, setGoalAchieved] = useState(() => getCelebratedDate() === todayStr());
+  // true = badge was just earned this session (animate in after celebration delay)
+  // false = badge loaded from localStorage (animate in immediately on mount)
+  const freshAchievementRef = useRef(false);
   const celebrationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevGoalPercentRef = useRef<number | null>(null);
 
@@ -317,6 +347,8 @@ export default function TimerPage() {
     const today = todayStr();
     if (getCelebratedDate() === today) return;
     saveCelebratedDate(today);
+    freshAchievementRef.current = true;
+    setGoalAchieved(true);
     setCelebrating(true);
     celebrationTimerRef.current = setTimeout(() => {
       setCelebrating(false);
@@ -327,6 +359,48 @@ export default function TimerPage() {
     return () => {
       if (celebrationTimerRef.current) clearTimeout(celebrationTimerRef.current);
     };
+  }, []);
+
+  function replayCelebration() {
+    if (!goalAchieved || celebrating) return;
+    // After first display the badge should pop back in immediately (no delay)
+    freshAchievementRef.current = false;
+    if (celebrationTimerRef.current) clearTimeout(celebrationTimerRef.current);
+    setCelebrating(true);
+    celebrationTimerRef.current = setTimeout(() => {
+      setCelebrating(false);
+    }, 2000);
+  }
+
+  // Reset celebration/badge state at midnight so a new day starts clean
+  useEffect(() => {
+    function msUntilMidnight(): number {
+      const now = new Date();
+      const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
+      return midnight.getTime() - now.getTime();
+    }
+
+    let dayTimer: ReturnType<typeof setTimeout>;
+
+    function scheduleMidnightReset() {
+      dayTimer = setTimeout(() => {
+        // Clear state for the new day
+        setCelebrating(false);
+        setGoalAchieved(false);
+        freshAchievementRef.current = false;
+        if (celebrationTimerRef.current) {
+          clearTimeout(celebrationTimerRef.current);
+          celebrationTimerRef.current = null;
+        }
+        // Also reset the prev-goal ref so the crossing logic works fresh
+        prevGoalPercentRef.current = null;
+        // Schedule the next midnight reset
+        scheduleMidnightReset();
+      }, msUntilMidnight());
+    }
+
+    scheduleMidnightReset();
+    return () => clearTimeout(dayTimer);
   }, []);
 
   const nextActionSeconds =
@@ -411,6 +485,9 @@ export default function TimerPage() {
           mode={mode}
           goalPercent={liveGoalPercent}
           celebrating={celebrating}
+          goalAchieved={goalAchieved}
+          badgeDelayed={freshAchievementRef.current}
+          onReplayCelebration={replayCelebration}
         />
 
         <div className="text-center space-y-1">
