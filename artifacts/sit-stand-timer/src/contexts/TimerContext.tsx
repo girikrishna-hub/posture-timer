@@ -16,6 +16,7 @@ import {
   getGetActiveSessionQueryKey,
 } from "@workspace/api-client-react";
 import { playStandTone, playSitTone, playConfirmTone, playRestTone } from "@/utils/audio";
+import { useWalkingDetection, type GpsStatus } from "@/hooks/useWalkingDetection";
 
 export type TimerMode = "idle" | "sitting" | "standing" | "resting" | "walking";
 
@@ -110,8 +111,11 @@ interface TimerContextValue {
   requestNotificationPermission: () => Promise<void>;
   switchMode: (newMode: "sitting" | "standing" | "resting" | "walking") => Promise<void>;
   endCurrentSession: () => Promise<void>;
+  gpsStatus: GpsStatus;
   isLoading: boolean;
 }
+
+export type { GpsStatus };
 
 const TimerContext = createContext<TimerContextValue | null>(null);
 
@@ -303,6 +307,9 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   const switchModeRef = useRef(switchMode);
   useEffect(() => { switchModeRef.current = switchMode; }, [switchMode]);
 
+  const autoDetectWalking = settingsData?.autoDetectWalking ??
+    (() => { try { return localStorage.getItem("autoDetectWalking") === "true"; } catch { return false; } })();
+
   const endCurrentSession = useCallback(async () => {
     const currentId = activeSessionIdRef.current;
     const currentMode = modeRef.current;
@@ -335,6 +342,13 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     void queryClient.invalidateQueries({ queryKey: getGetTodayStatsQueryKey() });
     void queryClient.invalidateQueries({ queryKey: getGetActiveSessionQueryKey() });
   }, [doEndSession, queryClient]);
+
+  const gpsStatus = useWalkingDetection({
+    enabled: autoDetectWalking,
+    currentMode: mode,
+    switchMode,
+    endCurrentSession,
+  });
 
   // Main 1-second tick: reminder logic + idle auto-pause
   useEffect(() => {
@@ -472,6 +486,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
         requestNotificationPermission,
         switchMode,
         endCurrentSession,
+        gpsStatus,
         isLoading: startSessionMutation.isPending || endSessionMutation.isPending,
       }}
     >

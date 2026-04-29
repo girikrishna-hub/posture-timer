@@ -3,7 +3,6 @@ import { useGetTodayStats, useGetSettings, getGetTodayStatsQueryKey } from "@wor
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useEffect, useState } from "react";
-import { useWalkingDetection } from "@/hooks/useWalkingDetection";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -146,7 +145,7 @@ export default function TimerPage() {
     inReminderPhase,
     isLoading,
     switchMode,
-    endCurrentSession,
+    gpsStatus,
     requestNotificationPermission,
     notificationPermission,
   } = useTimer();
@@ -167,15 +166,7 @@ export default function TimerPage() {
   const sittingAlertMinutes = settingsData?.sittingAlertMinutes ?? 45;
   const standingMinMinutes = settingsData?.standingMinMinutes ?? 10;
   const remindersCount = settingsData?.remindersCount ?? 3;
-  const autoDetectWalking = settingsData?.autoDetectWalking ??
-    (() => { try { return localStorage.getItem("autoDetectWalking") === "true"; } catch { return false; } })();
-
-  const gpsStatus = useWalkingDetection({
-    enabled: autoDetectWalking,
-    currentMode: mode,
-    switchMode,
-    endCurrentSession,
-  });
+  const autoDetectWalking = settingsData?.autoDetectWalking ?? false;
 
   const nextActionSeconds =
     mode === "sitting"
