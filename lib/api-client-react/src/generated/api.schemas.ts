@@ -132,6 +132,8 @@ export interface SummaryMetrics {
   currentStreak: number;
   longestStreak: number;
   weeklyAverageStandingMinutes: number;
+  weeklyWalkingMinutes: number;
+  weeklyAverageWalkingMinutes: number;
   bestDayDate: string | null;
   bestDayMinutes: number;
   worstDayDate: string | null;

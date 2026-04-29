@@ -167,7 +167,8 @@ export default function TimerPage() {
   const sittingAlertMinutes = settingsData?.sittingAlertMinutes ?? 45;
   const standingMinMinutes = settingsData?.standingMinMinutes ?? 10;
   const remindersCount = settingsData?.remindersCount ?? 3;
-  const autoDetectWalking = settingsData?.autoDetectWalking ?? false;
+  const autoDetectWalking = settingsData?.autoDetectWalking ??
+    (() => { try { return localStorage.getItem("autoDetectWalking") === "true"; } catch { return false; } })();
 
   const gpsStatus = useWalkingDetection({
     enabled: autoDetectWalking,

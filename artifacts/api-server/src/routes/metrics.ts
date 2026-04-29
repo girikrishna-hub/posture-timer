@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, gte, lte, isNotNull, eq } from "drizzle-orm";
+import { and, gte, lte, isNotNull, eq, inArray } from "drizzle-orm";
 import { db, sessionsTable, settingsTable } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -305,28 +305,33 @@ router.get("/metrics/summary", async (_req, res) => {
         gte(sessionsTable.startedAt, weekAgo),
         lte(sessionsTable.startedAt, endOfDay(today)),
         isNotNull(sessionsTable.endedAt),
-        eq(sessionsTable.mode, "standing"),
+        inArray(sessionsTable.mode, ["standing", "walking"]),
       ),
     );
 
-  type DayStat = { date: string; standingMinutes: number };
+  type DayStat = { date: string; standingMinutes: number; walkingMinutes: number };
   const last7Days: DayStat[] = [];
-  let weeklyTotal = 0;
+  let weeklyStandingTotal = 0;
+  let weeklyWalkingTotal = 0;
 
   for (let i = 6; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
     const dateStr = toDateString(d);
     const daySessions = weekSessions.filter((s) => toDateString(s.startedAt) === dateStr);
-    const mins = daySessions.reduce(
-      (sum, s) => sum + Math.round((s.durationSeconds ?? 0) / 60),
-      0,
-    );
-    last7Days.push({ date: dateStr, standingMinutes: mins });
-    weeklyTotal += mins;
+    const standingMins = daySessions
+      .filter((s) => s.mode === "standing")
+      .reduce((sum, s) => sum + Math.round((s.durationSeconds ?? 0) / 60), 0);
+    const walkingMins = daySessions
+      .filter((s) => s.mode === "walking")
+      .reduce((sum, s) => sum + Math.round((s.durationSeconds ?? 0) / 60), 0);
+    last7Days.push({ date: dateStr, standingMinutes: standingMins, walkingMinutes: walkingMins });
+    weeklyStandingTotal += standingMins;
+    weeklyWalkingTotal += walkingMins;
   }
 
-  const weeklyAverageStandingMinutes = Math.round(weeklyTotal / 7);
+  const weeklyAverageStandingMinutes = Math.round(weeklyStandingTotal / 7);
+  const weeklyAverageWalkingMinutes = Math.round(weeklyWalkingTotal / 7);
 
   const bestDay = last7Days.reduce(
     (a, b) => (b.standingMinutes > a.standingMinutes ? b : a),
@@ -417,6 +422,8 @@ router.get("/metrics/summary", async (_req, res) => {
     currentStreak,
     longestStreak: longest,
     weeklyAverageStandingMinutes,
+    weeklyWalkingMinutes: weeklyWalkingTotal,
+    weeklyAverageWalkingMinutes,
     bestDayDate: bestDay?.date ?? null,
     bestDayMinutes: bestDay?.standingMinutes ?? 0,
     worstDayDate: worstDay?.date ?? null,

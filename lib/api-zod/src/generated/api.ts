@@ -250,6 +250,8 @@ export const GetMetricsSummaryResponse = zod.object({
   currentStreak: zod.number(),
   longestStreak: zod.number(),
   weeklyAverageStandingMinutes: zod.number(),
+  weeklyWalkingMinutes: zod.number(),
+  weeklyAverageWalkingMinutes: zod.number(),
   bestDayDate: zod.string().nullable(),
   bestDayMinutes: zod.number(),
   worstDayDate: zod.string().nullable(),

@@ -123,7 +123,19 @@ export default function SettingsPage() {
 
   const handleToggleWalking = useCallback(async () => {
     const next = !localSettings.autoDetectWalking;
-    setLocalSettings((s) => ({ ...s, autoDetectWalking: next }));
+    const updated = { ...localSettings, autoDetectWalking: next };
+    setLocalSettings(updated);
+
+    try {
+      localStorage.setItem("autoDetectWalking", String(next));
+    } catch { /* ignore */ }
+
+    try {
+      await updateMutation.mutateAsync({ data: updated });
+      await queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
+    } catch {
+      // save will be retried via main Save button
+    }
 
     if (next && geoPermission !== "granted") {
       setGeoPermission("requesting");
@@ -139,7 +151,7 @@ export default function SettingsPage() {
         { timeout: 10000 },
       );
     }
-  }, [localSettings.autoDetectWalking, geoPermission]);
+  }, [localSettings, geoPermission, updateMutation, queryClient]);
 
   return (
     <div className="min-h-screen bg-background">
