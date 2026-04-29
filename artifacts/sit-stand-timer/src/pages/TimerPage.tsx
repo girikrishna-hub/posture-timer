@@ -75,6 +75,16 @@ function formatMinutes(minutes: number): string {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
+function formatLiveStanding(totalSeconds: number): string {
+  const totalSecsInt = Math.floor(totalSeconds);
+  const mins = Math.floor(totalSecsInt / 60);
+  const secs = totalSecsInt % 60;
+  if (mins < 60) return `${mins}m ${String(secs).padStart(2, "0")}s`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m > 0 ? `${h}h ${m}m ${String(secs).padStart(2, "0")}s` : `${h}h ${String(secs).padStart(2, "0")}s`;
+}
+
 function ModeIcon({ mode }: { mode: TimerMode }) {
   if (mode === "sitting") {
     return (
@@ -324,7 +334,9 @@ export default function TimerPage() {
   // moves in real time (every second) instead of only on API refetch (every 30s).
   const completedStandingMinutes = todayStats?.standingMinutes ?? 0;
   const goalMinutes = todayStats?.goalMinutes ?? 120;
-  const liveElapsedStandingMinutes = (mode === "standing" || mode === "walking") ? elapsedSeconds / 60 : 0;
+  const isActiveStanding = mode === "standing" || mode === "walking";
+  const liveElapsedStandingMinutes = isActiveStanding ? elapsedSeconds / 60 : 0;
+  const liveStandingTotalSeconds = completedStandingMinutes * 60 + (isActiveStanding ? elapsedSeconds : 0);
   const liveGoalPercent = goalMinutes > 0
     ? Math.min(100, ((completedStandingMinutes + liveElapsedStandingMinutes) / goalMinutes) * 100)
     : todayStats?.goalProgressPercent ?? 0;
@@ -598,10 +610,10 @@ export default function TimerPage() {
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>Standing goal</span>
               <span className="font-medium text-foreground">
-                {formatMinutes(todayStats.standingMinutes)} / {formatMinutes(todayStats.goalMinutes)}
+                {isActiveStanding ? formatLiveStanding(liveStandingTotalSeconds) : formatMinutes(completedStandingMinutes)} / {formatMinutes(todayStats.goalMinutes)}
               </span>
             </div>
-            <Progress value={todayStats.goalProgressPercent} className="h-2" />
+            <Progress value={liveGoalPercent} className="h-2" />
           </div>
         )}
 
@@ -614,7 +626,7 @@ export default function TimerPage() {
             />
             <StatCard
               label="Standing"
-              value={formatMinutes(todayStats.standingMinutes)}
+              value={isActiveStanding ? formatLiveStanding(liveStandingTotalSeconds) : formatMinutes(completedStandingMinutes)}
               color="text-emerald-700 dark:text-emerald-400"
             />
             {todayStats.walkingMinutes > 0 && (
