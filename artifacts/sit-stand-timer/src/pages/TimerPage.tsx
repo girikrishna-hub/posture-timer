@@ -297,7 +297,7 @@ export default function TimerPage() {
   // moves in real time (every second) instead of only on API refetch (every 30s).
   const completedStandingMinutes = todayStats?.standingMinutes ?? 0;
   const goalMinutes = todayStats?.goalMinutes ?? 120;
-  const liveElapsedStandingMinutes = mode === "standing" ? elapsedSeconds / 60 : 0;
+  const liveElapsedStandingMinutes = (mode === "standing" || mode === "walking") ? elapsedSeconds / 60 : 0;
   const liveGoalPercent = goalMinutes > 0
     ? Math.min(100, ((completedStandingMinutes + liveElapsedStandingMinutes) / goalMinutes) * 100)
     : todayStats?.goalProgressPercent ?? 0;
