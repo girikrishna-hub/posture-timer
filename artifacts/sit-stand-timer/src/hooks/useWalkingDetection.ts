@@ -78,7 +78,7 @@ export function useWalkingDetection({
           walkingStartRef.current = now;
         } else if (now - walkingStartRef.current >= CONFIRM_DURATION_MS) {
           walkingStartRef.current = null;
-          if (mode === "idle" || mode === "sitting") {
+          if (mode === "idle" || mode === "sitting" || mode === "standing") {
             void switchModeRef.current("walking");
           }
         }
