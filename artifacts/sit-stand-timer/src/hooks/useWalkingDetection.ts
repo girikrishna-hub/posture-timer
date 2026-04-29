@@ -5,7 +5,6 @@ const WALKING_MIN_SPEED = 0.3;
 const WALKING_MAX_SPEED = 3.5;
 const CONFIRM_DURATION_MS = 15_000;
 const STOP_DURATION_MS = 15_000;
-const LS_KEY = "autoDetectWalking";
 
 export type GpsStatus = "idle" | "requesting" | "active" | "denied" | "unsupported";
 
@@ -130,11 +129,8 @@ export function useWalkingDetection({
     if (!enabled) {
       stopWatching();
       setGpsStatus("idle");
-      try { localStorage.removeItem(LS_KEY); } catch { /* ignore */ }
       return;
     }
-
-    try { localStorage.setItem(LS_KEY, "true"); } catch { /* ignore */ }
 
     if (!("geolocation" in navigator)) {
       setGpsStatus("unsupported");

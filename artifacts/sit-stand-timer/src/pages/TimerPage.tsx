@@ -232,9 +232,13 @@ export default function TimerPage() {
               </span>
             )}
             {gpsStatus === "denied" && autoDetectWalking && (
-              <span className="text-destructive" title="Location permission denied — enable in browser settings">
+              <a
+                href="/settings"
+                className="text-destructive underline-offset-2 hover:underline"
+                title="Location permission denied — tap to go to Settings"
+              >
                 GPS blocked
-              </span>
+              </a>
             )}
           </p>
         </div>
