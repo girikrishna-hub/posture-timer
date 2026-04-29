@@ -2,7 +2,22 @@ import { useTimer, type TimerMode } from "@/contexts/TimerContext";
 import { useGetTodayStats, useGetSettings, getGetTodayStatsQueryKey } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+
+const CELEBRATION_KEY = "sit-stand-goal-celebrated";
+
+function getCelebratedDate(): string {
+  try { return localStorage.getItem(CELEBRATION_KEY) ?? ""; } catch { return ""; }
+}
+
+function saveCelebratedDate(date: string): void {
+  try { localStorage.setItem(CELEBRATION_KEY, date); } catch { /* ignore */ }
+}
+
+function todayStr(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -133,7 +148,7 @@ const STROKE_WIDTH = 10;
 const RADIUS = (RING_SIZE - STROKE_WIDTH) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
-function GoalProgressRing({ mode, goalPercent }: { mode: TimerMode; goalPercent: number }) {
+function GoalProgressRing({ mode, goalPercent, celebrating }: { mode: TimerMode; goalPercent: number; celebrating: boolean }) {
   const clampedPercent = Math.max(0, Math.min(goalPercent, 100));
   const dashOffset = CIRCUMFERENCE * (1 - clampedPercent / 100);
   const goalMet = goalPercent >= 100;
@@ -153,12 +168,48 @@ function GoalProgressRing({ mode, goalPercent }: { mode: TimerMode; goalPercent:
 
   return (
     <div className="relative w-56 h-56">
+      {celebrating && (
+        <>
+          <span
+            className="absolute inset-0 rounded-full"
+            style={{
+              animation: "goal-pulse 0.7s ease-out forwards",
+              background: "transparent",
+              border: "3px solid #10b981",
+              borderRadius: "50%",
+            }}
+          />
+          <span
+            className="absolute inset-0 rounded-full"
+            style={{
+              animation: "goal-pulse 0.7s 0.25s ease-out forwards",
+              background: "transparent",
+              border: "3px solid #10b981",
+              borderRadius: "50%",
+              opacity: 0,
+            }}
+          />
+          <span
+            className="absolute inset-0 rounded-full"
+            style={{
+              animation: "goal-pulse 0.7s 0.5s ease-out forwards",
+              background: "transparent",
+              border: "3px solid #10b981",
+              borderRadius: "50%",
+              opacity: 0,
+            }}
+          />
+        </>
+      )}
       <svg
         width={RING_SIZE}
         height={RING_SIZE}
         viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}
         className="absolute inset-0"
-        style={{ transform: "rotate(-90deg)" }}
+        style={{
+          transform: "rotate(-90deg)",
+          animation: celebrating ? "goal-ring-pulse 1.2s ease-in-out" : undefined,
+        }}
       >
         <circle
           cx={RING_SIZE / 2}
@@ -184,17 +235,28 @@ function GoalProgressRing({ mode, goalPercent }: { mode: TimerMode; goalPercent:
       <div
         className={`absolute inset-2 rounded-full flex flex-col items-center justify-center transition-colors duration-700 ${getModeBackground(mode)}`}
       >
-        <div className={`transition-colors duration-500 ${getModeColor(mode)}`}>
-          <ModeIcon mode={mode} />
-        </div>
-        <span className={`text-sm font-semibold tracking-widest uppercase mt-1 transition-colors duration-500 ${getModeColor(mode)}`}>
-          {getModeLabel(mode)}
-        </span>
-        <span
-          className={`text-xs font-medium mt-1 tabular-nums transition-colors duration-500 ${goalMet ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}
-        >
-          {Math.round(clampedPercent)}%
-        </span>
+        {celebrating ? (
+          <span
+            className="text-2xl font-bold text-emerald-600 dark:text-emerald-400"
+            style={{ animation: "goal-text-pop 1.4s ease-in-out forwards" }}
+          >
+            Goal!
+          </span>
+        ) : (
+          <>
+            <div className={`transition-colors duration-500 ${getModeColor(mode)}`}>
+              <ModeIcon mode={mode} />
+            </div>
+            <span className={`text-sm font-semibold tracking-widest uppercase mt-1 transition-colors duration-500 ${getModeColor(mode)}`}>
+              {getModeLabel(mode)}
+            </span>
+            <span
+              className={`text-xs font-medium mt-1 tabular-nums transition-colors duration-500 ${goalMet ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}
+            >
+              {Math.round(clampedPercent)}%
+            </span>
+          </>
+        )}
       </div>
     </div>
   );
@@ -239,6 +301,33 @@ export default function TimerPage() {
   const liveGoalPercent = goalMinutes > 0
     ? Math.min(100, ((completedStandingMinutes + liveElapsedStandingMinutes) / goalMinutes) * 100)
     : todayStats?.goalProgressPercent ?? 0;
+
+  // Celebration: fire once per day when goal crosses from <100 to >=100
+  const [celebrating, setCelebrating] = useState(false);
+  const celebrationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevGoalPercentRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const prev = prevGoalPercentRef.current;
+    prevGoalPercentRef.current = liveGoalPercent;
+
+    // Only fire when crossing the 100% threshold (not on initial load when already >=100)
+    if (prev === null || prev >= 100 || liveGoalPercent < 100) return;
+
+    const today = todayStr();
+    if (getCelebratedDate() === today) return;
+    saveCelebratedDate(today);
+    setCelebrating(true);
+    celebrationTimerRef.current = setTimeout(() => {
+      setCelebrating(false);
+    }, 2000);
+  }, [liveGoalPercent]);
+
+  useEffect(() => {
+    return () => {
+      if (celebrationTimerRef.current) clearTimeout(celebrationTimerRef.current);
+    };
+  }, []);
 
   const nextActionSeconds =
     mode === "sitting"
@@ -321,6 +410,7 @@ export default function TimerPage() {
         <GoalProgressRing
           mode={mode}
           goalPercent={liveGoalPercent}
+          celebrating={celebrating}
         />
 
         <div className="text-center space-y-1">
