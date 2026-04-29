@@ -1,5 +1,5 @@
 import { useTimer, type TimerMode } from "@/contexts/TimerContext";
-import { useGetTodayStats, getGetTodayStatsQueryKey } from "@workspace/api-client-react";
+import { useGetTodayStats, useGetSettings, getGetTodayStatsQueryKey } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useEffect, useState } from "react";
@@ -148,8 +148,10 @@ export default function TimerPage() {
     }
   }, [notificationPermission, requestNotificationPermission]);
 
-  const sittingAlertMinutes = 45;
-  const standingMinMinutes = 10;
+  const { data: settingsData } = useGetSettings();
+  const sittingAlertMinutes = settingsData?.sittingAlertMinutes ?? 45;
+  const standingMinMinutes = settingsData?.standingMinMinutes ?? 10;
+  const remindersCount = settingsData?.remindersCount ?? 3;
 
   const nextActionSeconds =
     mode === "sitting"
@@ -160,8 +162,8 @@ export default function TimerPage() {
 
   const reminderMessage = inReminderPhase
     ? mode === "sitting"
-      ? `Reminder ${reminderCount} of 3 — time to stand!`
-      : `Reminder ${reminderCount} of 3 — time to sit!`
+      ? `Reminder ${reminderCount} of ${remindersCount} — time to stand!`
+      : `Reminder ${reminderCount} of ${remindersCount} — time to sit!`
     : null;
 
   return (
