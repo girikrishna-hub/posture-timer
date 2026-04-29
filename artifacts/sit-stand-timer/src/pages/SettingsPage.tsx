@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { useQueryClient } from "@tanstack/react-query";
 
-type GeoPermissionStatus = "unknown" | "requesting" | "granted" | "denied" | "unsupported";
+type GeoPermissionStatus = "unknown" | "prompt" | "requesting" | "granted" | "denied" | "unsupported";
 
 function SettingRow({
   label,
@@ -267,6 +267,9 @@ export default function SettingsPage() {
               </p>
               {geoPermission === "unsupported" && (
                 <p className="text-xs text-muted-foreground mt-1 italic">GPS not available on this device</p>
+              )}
+              {(geoPermission === "prompt" || geoPermission === "unknown") && localSettings.autoDetectWalking && (
+                <p className="text-xs text-muted-foreground mt-1">Location permission not yet granted — will be asked when monitoring starts</p>
               )}
               {geoPermission === "requesting" && (
                 <p className="text-xs text-teal-600 dark:text-teal-400 mt-1">Requesting location permission…</p>

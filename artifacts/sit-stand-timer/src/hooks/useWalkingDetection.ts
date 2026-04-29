@@ -67,9 +67,10 @@ export function useWalkingDetection({
 
     const now = Date.now();
     const mode = currentModeRef.current;
-    const isWalking = speed >= WALKING_MIN_SPEED && speed <= WALKING_MAX_SPEED;
+    const inWalkingRange = speed >= WALKING_MIN_SPEED && speed <= WALKING_MAX_SPEED;
+    const belowMin = speed < WALKING_MIN_SPEED;
 
-    if (isWalking) {
+    if (inWalkingRange) {
       belowThresholdSinceRef.current = null;
 
       if (mode !== "walking") {
@@ -85,13 +86,18 @@ export function useWalkingDetection({
     } else {
       walkingStartRef.current = null;
 
-      if (mode === "walking") {
+      // Only start stop-debounce when speed is actually below the minimum (not just above max,
+      // which likely means the user is in a vehicle — don't end walking for that).
+      if (belowMin && mode === "walking") {
         if (belowThresholdSinceRef.current === null) {
           belowThresholdSinceRef.current = now;
         } else if (now - belowThresholdSinceRef.current >= STOP_DURATION_MS) {
           belowThresholdSinceRef.current = null;
           void endCurrentSessionRef.current();
         }
+      } else if (!belowMin) {
+        // Speed > max (vehicle) — reset stop debounce without ending walking
+        belowThresholdSinceRef.current = null;
       }
     }
   }, []);

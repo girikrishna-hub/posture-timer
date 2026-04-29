@@ -126,12 +126,11 @@ function WeeklyChart({
   days: { date: string; sittingMinutes: number; standingMinutes: number; walkingMinutes: number }[];
   goalMinutes: number;
 }) {
-  const hasWalking = days.some((d) => d.walkingMinutes > 0);
   const data = days.map((d) => ({
     name: shortWeekday(d.date),
     Sitting: d.sittingMinutes,
     Standing: d.standingMinutes,
-    ...(hasWalking ? { Walking: d.walkingMinutes } : {}),
+    Walking: d.walkingMinutes,
   }));
 
   return (
@@ -152,7 +151,7 @@ function WeeklyChart({
           <ReferenceLine y={goalMinutes} stroke="#EF4444" strokeDasharray="4 4" strokeWidth={1.5} />
           <Bar dataKey="Sitting" fill={MODE_COLORS.sitting} radius={[3, 3, 0, 0]} />
           <Bar dataKey="Standing" fill={MODE_COLORS.standing} radius={[3, 3, 0, 0]} />
-          {hasWalking && <Bar dataKey="Walking" fill={MODE_COLORS.walking} radius={[3, 3, 0, 0]} />}
+          <Bar dataKey="Walking" fill={MODE_COLORS.walking} radius={[3, 3, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -717,12 +716,10 @@ function DailyStatGrid({ dayData }: { dayData: DayDataShape }) {
           <p className="text-xs text-purple-600">Active</p>
           <p className="text-base font-semibold text-purple-700">{formatMinutes(dayData.activeMinutes)}</p>
         </div>
-        {dayData.walkingMinutes > 0 && (
-          <div className="bg-teal-50 border border-teal-200 rounded-xl px-3 py-2 text-center">
-            <p className="text-xs text-teal-600">Walking</p>
-            <p className="text-base font-semibold text-teal-700">{formatMinutes(dayData.walkingMinutes)}</p>
-          </div>
-        )}
+        <div className="bg-teal-50 border border-teal-200 rounded-xl px-3 py-2 text-center">
+          <p className="text-xs text-teal-600">Walking</p>
+          <p className="text-base font-semibold text-teal-700">{formatMinutes(dayData.walkingMinutes)}</p>
+        </div>
         {dayData.napMinutes > 0 && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-center">
             <p className="text-xs text-amber-600">Nap</p>
