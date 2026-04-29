@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Sit/Stand Timer"
+version = "1.0.0"
+id = "artifacts/sit-stand-timer"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22687
+
+[services.development]
+run = "pnpm --filter @workspace/sit-stand-timer run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/sit-stand-timer", "run", "build" ]
+publicDir = "artifacts/sit-stand-timer/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22687"
+BASE_PATH = "/"

@@ -8,3 +8,100 @@
 export interface HealthStatus {
   status: string;
 }
+
+export type SessionMode = (typeof SessionMode)[keyof typeof SessionMode];
+
+export const SessionMode = {
+  sitting: "sitting",
+  standing: "standing",
+  resting: "resting",
+} as const;
+
+export type RestType = (typeof RestType)[keyof typeof RestType] | null;
+
+export const RestType = {
+  nap: "nap",
+  sleep: "sleep",
+} as const;
+
+export interface Session {
+  id: number;
+  mode: SessionMode;
+  startedAt: string;
+  endedAt: string | null;
+  durationSeconds: number | null;
+  restType: RestType | null;
+}
+
+export interface SessionList {
+  sessions: Session[];
+  total: number;
+}
+
+export interface ActiveSessionResponse {
+  session: Session | null;
+}
+
+export interface StartSessionBody {
+  mode: SessionMode;
+}
+
+export interface Settings {
+  id: number;
+  dailyStandingGoalMinutes: number;
+  sittingAlertMinutes: number;
+  standingMinMinutes: number;
+  standingMaxMinutes: number;
+  reminderIntervalMinutes: number;
+  remindersCount: number;
+}
+
+export interface UpdateSettingsBody {
+  dailyStandingGoalMinutes?: number;
+  sittingAlertMinutes?: number;
+  standingMinMinutes?: number;
+  standingMaxMinutes?: number;
+  reminderIntervalMinutes?: number;
+  remindersCount?: number;
+}
+
+export interface TodayStats {
+  date: string;
+  sittingMinutes: number;
+  standingMinutes: number;
+  restingMinutes: number;
+  activeMinutes: number;
+  goalMinutes: number;
+  goalProgressPercent: number;
+  sessionCount: number;
+  currentStreak: number;
+}
+
+export interface DayStats {
+  date: string;
+  sittingMinutes: number;
+  standingMinutes: number;
+  restingMinutes: number;
+  activeMinutes: number;
+  goalProgressPercent: number;
+}
+
+export interface WeeklyStats {
+  days: DayStats[];
+  weeklyStandingMinutes: number;
+  weeklyGoalMinutes: number;
+  currentStreak: number;
+}
+
+export type ListSessionsParams = {
+  /**
+   * Filter sessions from this date (YYYY-MM-DD)
+   */
+  from?: string;
+  /**
+   * Filter sessions to this date (YYYY-MM-DD)
+   */
+  to?: string;
+  limit?: number;
+  offset?: number;
+};

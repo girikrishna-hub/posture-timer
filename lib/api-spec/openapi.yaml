@@ -10,6 +10,12 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: sessions
+    description: Sitting/standing/resting session tracking
+  - name: settings
+    description: User preferences and goals
+  - name: stats
+    description: Aggregated statistics and summaries
 paths:
   /healthz:
     get:
@@ -24,6 +30,148 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /sessions:
+    post:
+      operationId: startSession
+      tags: [sessions]
+      summary: Start a new session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartSessionBody"
+      responses:
+        "201":
+          description: Session started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+    get:
+      operationId: listSessions
+      tags: [sessions]
+      summary: List sessions
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Filter sessions from this date (YYYY-MM-DD)
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Filter sessions to this date (YYYY-MM-DD)
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of sessions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionList"
+
+  /sessions/active:
+    get:
+      operationId: getActiveSession
+      tags: [sessions]
+      summary: Get the currently active (in-progress) session
+      responses:
+        "200":
+          description: Active session or null
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActiveSessionResponse"
+
+  /sessions/{id}:
+    patch:
+      operationId: endSession
+      tags: [sessions]
+      summary: End an active session
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Session ended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [settings]
+      summary: Get user settings
+      responses:
+        "200":
+          description: User settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+    patch:
+      operationId: updateSettings
+      tags: [settings]
+      summary: Update user settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSettingsBody"
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+
+  /stats/today:
+    get:
+      operationId: getTodayStats
+      tags: [stats]
+      summary: Get today's summary stats
+      responses:
+        "200":
+          description: Today's stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TodayStats"
+
+  /stats/weekly:
+    get:
+      operationId: getWeeklyStats
+      tags: [stats]
+      summary: Get this week's daily breakdown
+      responses:
+        "200":
+          description: Weekly stats by day
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WeeklyStats"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +182,192 @@ components:
       required:
         - status
 
+    SessionMode:
+      type: string
+      enum: [sitting, standing, resting]
+
+    RestType:
+      type: string
+      enum: [nap, sleep]
+      nullable: true
+
+    Session:
+      type: object
+      properties:
+        id:
+          type: integer
+        mode:
+          $ref: "#/components/schemas/SessionMode"
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+          nullable: true
+        durationSeconds:
+          type: integer
+          nullable: true
+        restType:
+          $ref: "#/components/schemas/RestType"
+      required:
+        - id
+        - mode
+        - startedAt
+        - endedAt
+        - durationSeconds
+        - restType
+
+    SessionList:
+      type: object
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Session"
+        total:
+          type: integer
+      required:
+        - sessions
+        - total
+
+    ActiveSessionResponse:
+      type: object
+      properties:
+        session:
+          $ref: "#/components/schemas/Session"
+          nullable: true
+      required:
+        - session
+
+    StartSessionBody:
+      type: object
+      properties:
+        mode:
+          $ref: "#/components/schemas/SessionMode"
+      required:
+        - mode
+
+    Settings:
+      type: object
+      properties:
+        id:
+          type: integer
+        dailyStandingGoalMinutes:
+          type: integer
+          default: 120
+        sittingAlertMinutes:
+          type: integer
+          default: 45
+        standingMinMinutes:
+          type: integer
+          default: 10
+        standingMaxMinutes:
+          type: integer
+          default: 15
+        reminderIntervalMinutes:
+          type: integer
+          default: 1
+        remindersCount:
+          type: integer
+          default: 3
+      required:
+        - id
+        - dailyStandingGoalMinutes
+        - sittingAlertMinutes
+        - standingMinMinutes
+        - standingMaxMinutes
+        - reminderIntervalMinutes
+        - remindersCount
+
+    UpdateSettingsBody:
+      type: object
+      properties:
+        dailyStandingGoalMinutes:
+          type: integer
+        sittingAlertMinutes:
+          type: integer
+        standingMinMinutes:
+          type: integer
+        standingMaxMinutes:
+          type: integer
+        reminderIntervalMinutes:
+          type: integer
+        remindersCount:
+          type: integer
+
+    TodayStats:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        sittingMinutes:
+          type: integer
+        standingMinutes:
+          type: integer
+        restingMinutes:
+          type: integer
+        activeMinutes:
+          type: integer
+        goalMinutes:
+          type: integer
+        goalProgressPercent:
+          type: number
+        sessionCount:
+          type: integer
+        currentStreak:
+          type: integer
+      required:
+        - date
+        - sittingMinutes
+        - standingMinutes
+        - restingMinutes
+        - activeMinutes
+        - goalMinutes
+        - goalProgressPercent
+        - sessionCount
+        - currentStreak
+
+    DayStats:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        sittingMinutes:
+          type: integer
+        standingMinutes:
+          type: integer
+        restingMinutes:
+          type: integer
+        activeMinutes:
+          type: integer
+        goalProgressPercent:
+          type: number
+      required:
+        - date
+        - sittingMinutes
+        - standingMinutes
+        - restingMinutes
+        - activeMinutes
+        - goalProgressPercent
+
+    WeeklyStats:
+      type: object
+      properties:
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/DayStats"
+        weeklyStandingMinutes:
+          type: integer
+        weeklyGoalMinutes:
+          type: integer
+        currentStreak:
+          type: integer
+      required:
+        - days
+        - weeklyStandingMinutes
+        - weeklyGoalMinutes
+        - currentStreak

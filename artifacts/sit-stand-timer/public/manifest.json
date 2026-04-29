@@ -1,0 +1,16 @@
+{
+  "name": "Sit/Stand Timer",
+  "short_name": "Timer",
+  "description": "A calm, attentive personal companion to balance sitting and standing.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAFAF9",
+  "theme_color": "#84A98C",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

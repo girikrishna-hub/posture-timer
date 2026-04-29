@@ -14,3 +14,182 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
+
+/**
+ * @summary Start a new session
+ */
+export const StartSessionBody = zod.object({
+  mode: zod.enum(["sitting", "standing", "resting"]),
+});
+
+/**
+ * @summary List sessions
+ */
+export const listSessionsQueryLimitDefault = 100;
+export const listSessionsQueryOffsetDefault = 0;
+
+export const ListSessionsQueryParams = zod.object({
+  from: zod
+    .date()
+    .optional()
+    .describe("Filter sessions from this date (YYYY-MM-DD)"),
+  to: zod
+    .date()
+    .optional()
+    .describe("Filter sessions to this date (YYYY-MM-DD)"),
+  limit: zod.coerce.number().default(listSessionsQueryLimitDefault),
+  offset: zod.coerce.number().default(listSessionsQueryOffsetDefault),
+});
+
+export const ListSessionsResponse = zod.object({
+  sessions: zod.array(
+    zod.object({
+      id: zod.number(),
+      mode: zod.enum(["sitting", "standing", "resting"]),
+      startedAt: zod.coerce.date(),
+      endedAt: zod.coerce.date().nullable(),
+      durationSeconds: zod.number().nullable(),
+      restType: zod.enum(["nap", "sleep"]).nullable(),
+    }),
+  ),
+  total: zod.number(),
+});
+
+/**
+ * @summary Get the currently active (in-progress) session
+ */
+export const GetActiveSessionResponse = zod.object({
+  session: zod
+    .object({
+      id: zod.number(),
+      mode: zod.enum(["sitting", "standing", "resting"]),
+      startedAt: zod.coerce.date(),
+      endedAt: zod.coerce.date().nullable(),
+      durationSeconds: zod.number().nullable(),
+      restType: zod.enum(["nap", "sleep"]).nullable(),
+    })
+    .nullable(),
+});
+
+/**
+ * @summary End an active session
+ */
+export const EndSessionParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const EndSessionResponse = zod.object({
+  id: zod.number(),
+  mode: zod.enum(["sitting", "standing", "resting"]),
+  startedAt: zod.coerce.date(),
+  endedAt: zod.coerce.date().nullable(),
+  durationSeconds: zod.number().nullable(),
+  restType: zod.enum(["nap", "sleep"]).nullable(),
+});
+
+/**
+ * @summary Get user settings
+ */
+export const getSettingsResponseDailyStandingGoalMinutesDefault = 120;
+export const getSettingsResponseSittingAlertMinutesDefault = 45;
+export const getSettingsResponseStandingMinMinutesDefault = 10;
+export const getSettingsResponseStandingMaxMinutesDefault = 15;
+export const getSettingsResponseReminderIntervalMinutesDefault = 1;
+export const getSettingsResponseRemindersCountDefault = 3;
+
+export const GetSettingsResponse = zod.object({
+  id: zod.number(),
+  dailyStandingGoalMinutes: zod
+    .number()
+    .default(getSettingsResponseDailyStandingGoalMinutesDefault),
+  sittingAlertMinutes: zod
+    .number()
+    .default(getSettingsResponseSittingAlertMinutesDefault),
+  standingMinMinutes: zod
+    .number()
+    .default(getSettingsResponseStandingMinMinutesDefault),
+  standingMaxMinutes: zod
+    .number()
+    .default(getSettingsResponseStandingMaxMinutesDefault),
+  reminderIntervalMinutes: zod
+    .number()
+    .default(getSettingsResponseReminderIntervalMinutesDefault),
+  remindersCount: zod
+    .number()
+    .default(getSettingsResponseRemindersCountDefault),
+});
+
+/**
+ * @summary Update user settings
+ */
+export const UpdateSettingsBody = zod.object({
+  dailyStandingGoalMinutes: zod.number().optional(),
+  sittingAlertMinutes: zod.number().optional(),
+  standingMinMinutes: zod.number().optional(),
+  standingMaxMinutes: zod.number().optional(),
+  reminderIntervalMinutes: zod.number().optional(),
+  remindersCount: zod.number().optional(),
+});
+
+export const updateSettingsResponseDailyStandingGoalMinutesDefault = 120;
+export const updateSettingsResponseSittingAlertMinutesDefault = 45;
+export const updateSettingsResponseStandingMinMinutesDefault = 10;
+export const updateSettingsResponseStandingMaxMinutesDefault = 15;
+export const updateSettingsResponseReminderIntervalMinutesDefault = 1;
+export const updateSettingsResponseRemindersCountDefault = 3;
+
+export const UpdateSettingsResponse = zod.object({
+  id: zod.number(),
+  dailyStandingGoalMinutes: zod
+    .number()
+    .default(updateSettingsResponseDailyStandingGoalMinutesDefault),
+  sittingAlertMinutes: zod
+    .number()
+    .default(updateSettingsResponseSittingAlertMinutesDefault),
+  standingMinMinutes: zod
+    .number()
+    .default(updateSettingsResponseStandingMinMinutesDefault),
+  standingMaxMinutes: zod
+    .number()
+    .default(updateSettingsResponseStandingMaxMinutesDefault),
+  reminderIntervalMinutes: zod
+    .number()
+    .default(updateSettingsResponseReminderIntervalMinutesDefault),
+  remindersCount: zod
+    .number()
+    .default(updateSettingsResponseRemindersCountDefault),
+});
+
+/**
+ * @summary Get today's summary stats
+ */
+export const GetTodayStatsResponse = zod.object({
+  date: zod.coerce.date(),
+  sittingMinutes: zod.number(),
+  standingMinutes: zod.number(),
+  restingMinutes: zod.number(),
+  activeMinutes: zod.number(),
+  goalMinutes: zod.number(),
+  goalProgressPercent: zod.number(),
+  sessionCount: zod.number(),
+  currentStreak: zod.number(),
+});
+
+/**
+ * @summary Get this week's daily breakdown
+ */
+export const GetWeeklyStatsResponse = zod.object({
+  days: zod.array(
+    zod.object({
+      date: zod.coerce.date(),
+      sittingMinutes: zod.number(),
+      standingMinutes: zod.number(),
+      restingMinutes: zod.number(),
+      activeMinutes: zod.number(),
+      goalProgressPercent: zod.number(),
+    }),
+  ),
+  weeklyStandingMinutes: zod.number(),
+  weeklyGoalMinutes: zod.number(),
+  currentStreak: zod.number(),
+});
