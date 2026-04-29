@@ -356,10 +356,10 @@ function DailyTimeline({
 function goalColor(pct: number | undefined): string {
   if (pct === undefined || pct === 0) return "bg-muted text-muted-foreground";
   if (pct >= 100) return "bg-green-600 text-white";
-  if (pct >= 75) return "bg-green-500 text-white";
-  if (pct >= 50) return "bg-green-400 text-white";
-  if (pct >= 25) return "bg-green-200 text-green-900";
-  return "bg-green-100 text-green-800";
+  if (pct >= 75) return "bg-green-400 text-white";
+  if (pct >= 50) return "bg-yellow-400 text-white";
+  if (pct >= 25) return "bg-orange-400 text-white";
+  return "bg-red-400 text-white";
 }
 
 function MonthlyTab({ onDayClick }: { onDayClick: (date: Date) => void }) {
@@ -440,15 +440,21 @@ function MonthlyTab({ onDayClick }: { onDayClick: (date: Date) => void }) {
             })}
           </div>
         )}
-        <div className="mt-3 flex items-center gap-2 text-[10px] text-muted-foreground">
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
           <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded-sm bg-muted" /> None
+            <div className="w-3 h-3 rounded-sm bg-muted" /> No data
           </div>
           <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded-sm bg-green-200" /> 25%
+            <div className="w-3 h-3 rounded-sm bg-red-400" /> &lt;25%
           </div>
           <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded-sm bg-green-400" /> 50%
+            <div className="w-3 h-3 rounded-sm bg-orange-400" /> 25%
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded-sm bg-yellow-400" /> 50%
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 rounded-sm bg-green-400" /> 75%
           </div>
           <div className="flex items-center gap-1">
             <div className="w-3 h-3 rounded-sm bg-green-600" /> 100%
