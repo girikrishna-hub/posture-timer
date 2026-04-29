@@ -44,6 +44,13 @@ export interface ActiveSessionResponse {
 
 export interface StartSessionBody {
   mode: SessionMode;
+  /** Optional override for session start time (used for offline sync) */
+  startedAt?: string;
+}
+
+export interface EndSessionBody {
+  /** Optional override for session end time (used for offline sync) */
+  endedAt?: string;
 }
 
 export interface Settings {

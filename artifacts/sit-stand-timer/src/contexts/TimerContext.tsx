@@ -19,12 +19,21 @@ import { playStandTone, playSitTone, playConfirmTone, playRestTone } from "@/uti
 
 export type TimerMode = "idle" | "sitting" | "standing" | "resting";
 
-interface OfflineOp {
+interface OfflineEndOp {
   id: string;
-  type: "endSession" | "startSession";
-  payload: Record<string, unknown>;
-  createdAt: number;
+  type: "endSession";
+  sessionId: number;
+  endedAt: string;
 }
+
+interface OfflineStartOp {
+  id: string;
+  type: "startSession";
+  mode: "sitting" | "standing" | "resting";
+  startedAt: string;
+}
+
+type OfflineOp = OfflineEndOp | OfflineStartOp;
 
 const OFFLINE_QUEUE_KEY = "sit-stand-offline-queue";
 const IDLE_TIMEOUT_SECONDS = 60 * 60;
@@ -46,15 +55,17 @@ function saveQueue(ops: OfflineOp[]): void {
   }
 }
 
-function enqueueOp(op: Omit<OfflineOp, "id" | "createdAt">): void {
+type EnqueueArg = Omit<OfflineEndOp, "id"> | Omit<OfflineStartOp, "id">;
+
+function enqueueOp(op: EnqueueArg): void {
   const queue = loadQueue();
-  queue.push({ ...op, id: crypto.randomUUID(), createdAt: Date.now() });
+  queue.push({ ...op, id: crypto.randomUUID() } as OfflineOp);
   saveQueue(queue);
 }
 
 async function drainQueue(
-  endFn: (id: number) => Promise<unknown>,
-  startFn: (mode: string) => Promise<{ id: number }>
+  endFn: (id: number, endedAt: string) => Promise<unknown>,
+  startFn: (mode: string, startedAt: string) => Promise<{ id: number }>
 ): Promise<void> {
   const queue = loadQueue();
   if (queue.length === 0) return;
@@ -62,9 +73,9 @@ async function drainQueue(
   for (const op of queue) {
     try {
       if (op.type === "endSession") {
-        await endFn(op.payload.id as number);
+        await endFn(op.sessionId, op.endedAt);
       } else if (op.type === "startSession") {
-        await startFn(op.payload.mode as string);
+        await startFn(op.mode, op.startedAt);
       }
     } catch {
       remaining.push(op);
@@ -154,15 +165,23 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   const endSessionMutation = useEndSession();
 
   const doEndSession = useCallback(
-    async (id: number) => {
-      await endSessionMutation.mutateAsync({ id });
+    async (id: number, endedAt?: string) => {
+      await endSessionMutation.mutateAsync({
+        id,
+        data: endedAt ? { endedAt } : {},
+      });
     },
     [endSessionMutation]
   );
 
   const doStartSession = useCallback(
-    async (sessionMode: string) => {
-      return startSessionMutation.mutateAsync({ data: { mode: sessionMode as "sitting" | "standing" | "resting" } });
+    async (sessionMode: string, startedAt?: string) => {
+      return startSessionMutation.mutateAsync({
+        data: {
+          mode: sessionMode as "sitting" | "standing" | "resting",
+          ...(startedAt ? { startedAt } : {}),
+        },
+      });
     },
     [startSessionMutation]
   );
@@ -185,8 +204,8 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     function handleOnline() {
       drainQueue(
-        (id) => doEndSession(id),
-        (m) => doStartSession(m)
+        (id, endedAt) => doEndSession(id, endedAt),
+        (m, startedAt) => doStartSession(m, startedAt)
       );
     }
     window.addEventListener("online", handleOnline);
@@ -201,6 +220,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
 
       if (currentMode !== "idle" && currentMode === newMode) return;
 
+      const transitionTime = new Date().toISOString();
       lastActivityRef.current = Date.now();
 
       if (newMode === "resting") {
@@ -212,27 +232,25 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       if (currentId !== null) {
         if (navigator.onLine) {
           try {
-            await endSessionMutation.mutateAsync({ id: currentId });
+            await doEndSession(currentId, transitionTime);
           } catch {
-            enqueueOp({ type: "endSession", payload: { id: currentId } });
+            enqueueOp({ type: "endSession", sessionId: currentId, endedAt: transitionTime });
           }
         } else {
-          enqueueOp({ type: "endSession", payload: { id: currentId } });
+          enqueueOp({ type: "endSession", sessionId: currentId, endedAt: transitionTime });
         }
       }
 
       let newId: number | null = null;
       if (navigator.onLine) {
         try {
-          const newSession = await startSessionMutation.mutateAsync({
-            data: { mode: newMode },
-          });
+          const newSession = await doStartSession(newMode, transitionTime);
           newId = newSession.id;
         } catch {
-          enqueueOp({ type: "startSession", payload: { mode: newMode } });
+          enqueueOp({ type: "startSession", mode: newMode, startedAt: transitionTime });
         }
       } else {
-        enqueueOp({ type: "startSession", payload: { mode: newMode } });
+        enqueueOp({ type: "startSession", mode: newMode, startedAt: transitionTime });
       }
 
       setActiveSessionId(newId);
@@ -245,7 +263,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       await queryClient.invalidateQueries({ queryKey: getGetTodayStatsQueryKey() });
       await queryClient.invalidateQueries({ queryKey: getGetActiveSessionQueryKey() });
     },
-    [endSessionMutation, startSessionMutation, queryClient]
+    [doEndSession, doStartSession, queryClient]
   );
 
   const switchModeRef = useRef(switchMode);

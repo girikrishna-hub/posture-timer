@@ -2,7 +2,47 @@ import { useTimer, type TimerMode } from "@/contexts/TimerContext";
 import { useGetTodayStats, getGetTodayStatsQueryKey } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
+
+function useInstallPrompt() {
+  const [promptEvent, setPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isInstalled, setIsInstalled] = useState(false);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setPromptEvent(e as BeforeInstallPromptEvent);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+
+    const mq = window.matchMedia("(display-mode: standalone)");
+    if (mq.matches) setIsInstalled(true);
+    const mqHandler = (e: MediaQueryListEvent) => { if (e.matches) setIsInstalled(true); };
+    mq.addEventListener("change", mqHandler);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handler);
+      mq.removeEventListener("change", mqHandler);
+    };
+  }, []);
+
+  const install = async () => {
+    if (!promptEvent) return;
+    await promptEvent.prompt();
+    const { outcome } = await promptEvent.userChoice;
+    if (outcome === "accepted") {
+      setPromptEvent(null);
+      setIsInstalled(true);
+    }
+  };
+
+  return { canInstall: !!promptEvent && !isInstalled, install };
+}
 
 function formatTime(totalSeconds: number): string {
   const h = Math.floor(totalSeconds / 3600);
@@ -96,6 +136,8 @@ export default function TimerPage() {
     notificationPermission,
   } = useTimer();
 
+  const { canInstall, install } = useInstallPrompt();
+
   const { data: todayStats } = useGetTodayStats({
     query: { queryKey: getGetTodayStatsQueryKey(), refetchInterval: 30000 },
   });
@@ -124,6 +166,15 @@ export default function TimerPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
+      {canInstall && (
+        <div className="mx-4 mt-4 flex items-center justify-between gap-3 bg-card border border-border rounded-2xl px-4 py-3 shadow-sm">
+          <div>
+            <p className="text-sm font-medium text-foreground">Install app</p>
+            <p className="text-xs text-muted-foreground">Add to your home screen for quick access</p>
+          </div>
+          <Button size="sm" onClick={install} className="shrink-0">Install</Button>
+        </div>
+      )}
       <header className="flex items-center justify-between px-6 pt-6 pb-2">
         <div>
           <h1 className="text-xl font-semibold tracking-tight text-foreground">Sit + Stand</h1>

@@ -4,8 +4,20 @@ import { db, sessionsTable } from "@workspace/db";
 import {
   StartSessionBody,
   EndSessionParams,
-  ListSessionsQueryParams,
+  EndSessionBody,
 } from "@workspace/api-zod";
+
+function parseQueryDate(val: unknown): Date | undefined {
+  if (!val || typeof val !== "string") return undefined;
+  const d = new Date(val);
+  return isNaN(d.getTime()) ? undefined : d;
+}
+
+function parseQueryInt(val: unknown, fallback: number): number {
+  if (!val || typeof val !== "string") return fallback;
+  const n = parseInt(val, 10);
+  return isNaN(n) ? fallback : n;
+}
 
 const router: IRouter = Router();
 
@@ -42,11 +54,11 @@ router.post("/sessions", async (req, res) => {
     return;
   }
 
-  const { mode } = parse.data;
+  const { mode, startedAt } = parse.data;
 
   const [session] = await db
     .insert(sessionsTable)
-    .values({ mode, startedAt: new Date() })
+    .values({ mode, startedAt: startedAt ?? new Date() })
     .returning();
 
   res.status(201).json(formatSession(session));
@@ -64,17 +76,14 @@ router.get("/sessions/active", async (req, res) => {
 });
 
 router.get("/sessions", async (req, res) => {
-  const parseResult = ListSessionsQueryParams.safeParse(req.query);
-  if (!parseResult.success) {
-    res.status(400).json({ error: "Invalid query params", details: parseResult.error.issues });
-    return;
-  }
-
-  const { from, to, limit, offset } = parseResult.data;
+  const from = parseQueryDate(req.query.from);
+  const to = parseQueryDate(req.query.to);
+  const limit = parseQueryInt(req.query.limit, 100);
+  const offset = parseQueryInt(req.query.offset, 0);
 
   const conditions = [];
   if (from) {
-    conditions.push(gte(sessionsTable.startedAt, new Date(from)));
+    conditions.push(gte(sessionsTable.startedAt, from));
   }
   if (to) {
     const toEnd = new Date(to);
@@ -110,6 +119,9 @@ router.patch("/sessions/:id", async (req, res) => {
     return;
   }
 
+  const bodyResult = EndSessionBody.safeParse(req.body ?? {});
+  const providedEndedAt = bodyResult.success ? bodyResult.data.endedAt : undefined;
+
   const { id } = paramsResult.data;
 
   const [existing] = await db
@@ -123,7 +135,7 @@ router.patch("/sessions/:id", async (req, res) => {
     return;
   }
 
-  const endedAt = new Date();
+  const endedAt = providedEndedAt ?? new Date();
   const durationSeconds = Math.round(
     (endedAt.getTime() - existing.startedAt.getTime()) / 1000,
   );

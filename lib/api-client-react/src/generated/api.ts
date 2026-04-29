@@ -18,6 +18,7 @@ import type {
 
 import type {
   ActiveSessionResponse,
+  EndSessionBody,
   HealthStatus,
   ListSessionsParams,
   Session,
@@ -378,11 +379,14 @@ export const getEndSessionUrl = (id: number) => {
 
 export const endSession = async (
   id: number,
+  endSessionBody?: EndSessionBody,
   options?: RequestInit,
 ): Promise<Session> => {
   return customFetch<Session>(getEndSessionUrl(id), {
     ...options,
     method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(endSessionBody),
   });
 };
 
@@ -393,14 +397,14 @@ export const getEndSessionMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof endSession>>,
     TError,
-    { id: number },
+    { id: number; data: BodyType<EndSessionBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof endSession>>,
   TError,
-  { id: number },
+  { id: number; data: BodyType<EndSessionBody> },
   TContext
 > => {
   const mutationKey = ["endSession"];
@@ -414,11 +418,11 @@ export const getEndSessionMutationOptions = <
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof endSession>>,
-    { id: number }
+    { id: number; data: BodyType<EndSessionBody> }
   > = (props) => {
-    const { id } = props ?? {};
+    const { id, data } = props ?? {};
 
-    return endSession(id, requestOptions);
+    return endSession(id, data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -427,7 +431,7 @@ export const getEndSessionMutationOptions = <
 export type EndSessionMutationResult = NonNullable<
   Awaited<ReturnType<typeof endSession>>
 >;
-
+export type EndSessionMutationBody = BodyType<EndSessionBody>;
 export type EndSessionMutationError = ErrorType<unknown>;
 
 /**
@@ -440,14 +444,14 @@ export const useEndSession = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof endSession>>,
     TError,
-    { id: number },
+    { id: number; data: BodyType<EndSessionBody> },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof endSession>>,
   TError,
-  { id: number },
+  { id: number; data: BodyType<EndSessionBody> },
   TContext
 > => {
   return useMutation(getEndSessionMutationOptions(options));

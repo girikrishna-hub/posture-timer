@@ -108,6 +108,12 @@ paths:
           required: true
           schema:
             type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EndSessionBody"
       responses:
         "200":
           description: Session ended
@@ -245,8 +251,20 @@ components:
       properties:
         mode:
           $ref: "#/components/schemas/SessionMode"
+        startedAt:
+          type: string
+          format: date-time
+          description: Optional override for session start time (used for offline sync)
       required:
         - mode
+
+    EndSessionBody:
+      type: object
+      properties:
+        endedAt:
+          type: string
+          format: date-time
+          description: Optional override for session end time (used for offline sync)
 
     Settings:
       type: object

@@ -20,6 +20,12 @@ export const HealthCheckResponse = zod.object({
  */
 export const StartSessionBody = zod.object({
   mode: zod.enum(["sitting", "standing", "resting"]),
+  startedAt: zod.coerce
+    .date()
+    .optional()
+    .describe(
+      "Optional override for session start time (used for offline sync)",
+    ),
 });
 
 /**
@@ -76,6 +82,13 @@ export const GetActiveSessionResponse = zod.object({
  */
 export const EndSessionParams = zod.object({
   id: zod.coerce.number(),
+});
+
+export const EndSessionBody = zod.object({
+  endedAt: zod.coerce
+    .date()
+    .optional()
+    .describe("Optional override for session end time (used for offline sync)"),
 });
 
 export const EndSessionResponse = zod.object({

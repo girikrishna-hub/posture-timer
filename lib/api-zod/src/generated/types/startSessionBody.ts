@@ -9,4 +9,6 @@ import type { SessionMode } from "./sessionMode";
 
 export interface StartSessionBody {
   mode: SessionMode;
+  /** Optional override for session start time (used for offline sync) */
+  startedAt?: Date;
 }

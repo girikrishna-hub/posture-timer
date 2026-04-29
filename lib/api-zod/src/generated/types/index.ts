@@ -8,6 +8,7 @@
 
 export * from "./activeSessionResponse";
 export * from "./dayStats";
+export * from "./endSessionBody";
 export * from "./healthStatus";
 export * from "./listSessionsParams";
 export * from "./restType";
