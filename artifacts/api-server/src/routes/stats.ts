@@ -30,12 +30,13 @@ async function getSettings() {
     standingMaxMinutes: 15,
     reminderIntervalMinutes: 1,
     remindersCount: 3,
+    autoDetectWalking: false,
   };
 }
 
 function getSessionMinutes(
   sessions: typeof sessionsTable.$inferSelect[],
-  mode: "sitting" | "standing" | "resting",
+  mode: "sitting" | "standing" | "resting" | "walking",
 ): number {
   return sessions
     .filter((s) => s.mode === mode)
@@ -102,12 +103,13 @@ router.get("/stats/today", async (_req, res) => {
 
   const sittingMinutes = getSessionMinutes(completedSessions, "sitting");
   const standingMinutes = getSessionMinutes(completedSessions, "standing");
+  const walkingMinutes = getSessionMinutes(completedSessions, "walking");
   const restingMinutes = getSessionMinutes(completedSessions, "resting");
-  const activeMinutes = sittingMinutes + standingMinutes;
+  const activeMinutes = sittingMinutes + standingMinutes + walkingMinutes;
   const goalMinutes = settings.dailyStandingGoalMinutes;
   const goalProgressPercent =
     goalMinutes > 0
-      ? Math.min(100, Math.round((standingMinutes / goalMinutes) * 100))
+      ? Math.min(100, Math.round(((standingMinutes + walkingMinutes) / goalMinutes) * 100))
       : 0;
 
   const currentStreak = await computeStreak(goalMinutes);
@@ -116,6 +118,7 @@ router.get("/stats/today", async (_req, res) => {
     date: toDateString(now),
     sittingMinutes,
     standingMinutes,
+    walkingMinutes,
     restingMinutes,
     activeMinutes,
     goalMinutes,
@@ -152,19 +155,21 @@ router.get("/stats/weekly", async (_req, res) => {
 
     const sittingMinutes = getSessionMinutes(daySessions, "sitting");
     const standingMinutes = getSessionMinutes(daySessions, "standing");
+    const walkingMinutes = getSessionMinutes(daySessions, "walking");
     const restingMinutes = getSessionMinutes(daySessions, "resting");
-    const activeMinutes = sittingMinutes + standingMinutes;
+    const activeMinutes = sittingMinutes + standingMinutes + walkingMinutes;
     const goalProgressPercent =
       goalMinutes > 0
-        ? Math.min(100, Math.round((standingMinutes / goalMinutes) * 100))
+        ? Math.min(100, Math.round(((standingMinutes + walkingMinutes) / goalMinutes) * 100))
         : 0;
 
-    weeklyStandingMinutes += standingMinutes;
+    weeklyStandingMinutes += standingMinutes + walkingMinutes;
 
     days.push({
       date: toDateString(date),
       sittingMinutes,
       standingMinutes,
+      walkingMinutes,
       restingMinutes,
       activeMinutes,
       goalProgressPercent,

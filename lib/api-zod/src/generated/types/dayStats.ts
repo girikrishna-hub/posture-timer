@@ -10,6 +10,7 @@ export interface DayStats {
   date: Date;
   sittingMinutes: number;
   standingMinutes: number;
+  walkingMinutes: number;
   restingMinutes: number;
   activeMinutes: number;
   goalProgressPercent: number;

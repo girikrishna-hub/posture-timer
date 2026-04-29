@@ -32,6 +32,7 @@ function formatSettings(s: typeof settingsTable.$inferSelect) {
     standingMaxMinutes: s.standingMaxMinutes,
     reminderIntervalMinutes: s.reminderIntervalMinutes,
     remindersCount: s.remindersCount,
+    autoDetectWalking: s.autoDetectWalking,
   };
 }
 

@@ -19,7 +19,7 @@ export const HealthCheckResponse = zod.object({
  * @summary Start a new session
  */
 export const StartSessionBody = zod.object({
-  mode: zod.enum(["sitting", "standing", "resting"]),
+  mode: zod.enum(["sitting", "standing", "resting", "walking"]),
   startedAt: zod.coerce
     .date()
     .optional()
@@ -51,7 +51,7 @@ export const ListSessionsResponse = zod.object({
   sessions: zod.array(
     zod.object({
       id: zod.number(),
-      mode: zod.enum(["sitting", "standing", "resting"]),
+      mode: zod.enum(["sitting", "standing", "resting", "walking"]),
       startedAt: zod.coerce.date(),
       endedAt: zod.coerce.date().nullable(),
       durationSeconds: zod.number().nullable(),
@@ -68,7 +68,7 @@ export const GetActiveSessionResponse = zod.object({
   session: zod
     .object({
       id: zod.number(),
-      mode: zod.enum(["sitting", "standing", "resting"]),
+      mode: zod.enum(["sitting", "standing", "resting", "walking"]),
       startedAt: zod.coerce.date(),
       endedAt: zod.coerce.date().nullable(),
       durationSeconds: zod.number().nullable(),
@@ -93,7 +93,7 @@ export const EndSessionBody = zod.object({
 
 export const EndSessionResponse = zod.object({
   id: zod.number(),
-  mode: zod.enum(["sitting", "standing", "resting"]),
+  mode: zod.enum(["sitting", "standing", "resting", "walking"]),
   startedAt: zod.coerce.date(),
   endedAt: zod.coerce.date().nullable(),
   durationSeconds: zod.number().nullable(),
@@ -109,6 +109,7 @@ export const getSettingsResponseStandingMinMinutesDefault = 10;
 export const getSettingsResponseStandingMaxMinutesDefault = 15;
 export const getSettingsResponseReminderIntervalMinutesDefault = 1;
 export const getSettingsResponseRemindersCountDefault = 3;
+export const getSettingsResponseAutoDetectWalkingDefault = false;
 
 export const GetSettingsResponse = zod.object({
   id: zod.number(),
@@ -130,6 +131,9 @@ export const GetSettingsResponse = zod.object({
   remindersCount: zod
     .number()
     .default(getSettingsResponseRemindersCountDefault),
+  autoDetectWalking: zod
+    .boolean()
+    .default(getSettingsResponseAutoDetectWalkingDefault),
 });
 
 /**
@@ -142,6 +146,7 @@ export const UpdateSettingsBody = zod.object({
   standingMaxMinutes: zod.number().optional(),
   reminderIntervalMinutes: zod.number().optional(),
   remindersCount: zod.number().optional(),
+  autoDetectWalking: zod.boolean().optional(),
 });
 
 export const updateSettingsResponseDailyStandingGoalMinutesDefault = 120;
@@ -150,6 +155,7 @@ export const updateSettingsResponseStandingMinMinutesDefault = 10;
 export const updateSettingsResponseStandingMaxMinutesDefault = 15;
 export const updateSettingsResponseReminderIntervalMinutesDefault = 1;
 export const updateSettingsResponseRemindersCountDefault = 3;
+export const updateSettingsResponseAutoDetectWalkingDefault = false;
 
 export const UpdateSettingsResponse = zod.object({
   id: zod.number(),
@@ -171,6 +177,9 @@ export const UpdateSettingsResponse = zod.object({
   remindersCount: zod
     .number()
     .default(updateSettingsResponseRemindersCountDefault),
+  autoDetectWalking: zod
+    .boolean()
+    .default(updateSettingsResponseAutoDetectWalkingDefault),
 });
 
 /**
@@ -180,6 +189,7 @@ export const GetTodayStatsResponse = zod.object({
   date: zod.coerce.date(),
   sittingMinutes: zod.number(),
   standingMinutes: zod.number(),
+  walkingMinutes: zod.number(),
   restingMinutes: zod.number(),
   activeMinutes: zod.number(),
   goalMinutes: zod.number(),
@@ -197,6 +207,7 @@ export const GetWeeklyStatsResponse = zod.object({
       date: zod.coerce.date(),
       sittingMinutes: zod.number(),
       standingMinutes: zod.number(),
+      walkingMinutes: zod.number(),
       restingMinutes: zod.number(),
       activeMinutes: zod.number(),
       goalProgressPercent: zod.number(),
@@ -221,6 +232,7 @@ export const GetDailyMetricsResponse = zod.object({
       date: zod.coerce.date(),
       sittingMinutes: zod.number(),
       standingMinutes: zod.number(),
+      walkingMinutes: zod.number(),
       napMinutes: zod.number(),
       sleepMinutes: zod.number(),
       activeMinutes: zod.number(),

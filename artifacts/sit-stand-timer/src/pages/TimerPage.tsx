@@ -3,6 +3,7 @@ import { useGetTodayStats, useGetSettings, getGetTodayStatsQueryKey } from "@wor
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useEffect, useState } from "react";
+import { useWalkingDetection } from "@/hooks/useWalkingDetection";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -89,6 +90,16 @@ function ModeIcon({ mode }: { mode: TimerMode }) {
       </svg>
     );
   }
+  if (mode === "walking") {
+    return (
+      <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-24 h-24">
+        <circle cx="36" cy="8" r="6" fill="currentColor" opacity="0.9" />
+        <path d="M30 16L22 30L14 28L12 34L24 38L32 24L36 30L34 44H40L42 28L36 20L38 16H30Z" fill="currentColor" opacity="0.8" />
+        <path d="M34 44H40L44 56H38L34 44Z" fill="currentColor" opacity="0.6" />
+        <path d="M40 44L36 56H30L34 44H40Z" fill="currentColor" opacity="0.5" />
+      </svg>
+    );
+  }
   return (
     <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-24 h-24">
       <circle cx="32" cy="32" r="20" stroke="currentColor" strokeWidth="3" strokeDasharray="6 4" fill="none" opacity="0.5" />
@@ -102,6 +113,7 @@ function getModeLabel(mode: TimerMode): string {
     case "sitting": return "Sitting";
     case "standing": return "Standing";
     case "resting": return "Resting";
+    case "walking": return "Walking";
     default: return "Ready";
   }
 }
@@ -111,6 +123,7 @@ function getModeColor(mode: TimerMode): string {
     case "sitting": return "text-amber-700 dark:text-amber-400";
     case "standing": return "text-emerald-700 dark:text-emerald-400";
     case "resting": return "text-indigo-700 dark:text-indigo-400";
+    case "walking": return "text-teal-700 dark:text-teal-400";
     default: return "text-muted-foreground";
   }
 }
@@ -120,6 +133,7 @@ function getModeRingColor(mode: TimerMode): string {
     case "sitting": return "ring-amber-200 dark:ring-amber-900 bg-amber-50 dark:bg-amber-950/40";
     case "standing": return "ring-emerald-200 dark:ring-emerald-900 bg-emerald-50 dark:bg-emerald-950/40";
     case "resting": return "ring-indigo-200 dark:ring-indigo-900 bg-indigo-50 dark:bg-indigo-950/40";
+    case "walking": return "ring-teal-200 dark:ring-teal-900 bg-teal-50 dark:bg-teal-950/40";
     default: return "ring-border bg-card";
   }
 }
@@ -152,6 +166,13 @@ export default function TimerPage() {
   const sittingAlertMinutes = settingsData?.sittingAlertMinutes ?? 45;
   const standingMinMinutes = settingsData?.standingMinMinutes ?? 10;
   const remindersCount = settingsData?.remindersCount ?? 3;
+  const autoDetectWalking = settingsData?.autoDetectWalking ?? false;
+
+  const gpsStatus = useWalkingDetection({
+    enabled: autoDetectWalking,
+    currentMode: mode,
+    switchMode,
+  });
 
   const nextActionSeconds =
     mode === "sitting"
@@ -180,7 +201,26 @@ export default function TimerPage() {
       <header className="flex items-center justify-between px-6 pt-6 pb-2">
         <div>
           <h1 className="text-xl font-semibold tracking-tight text-foreground">Sit + Stand</h1>
-          <p className="text-xs text-muted-foreground">Your daily movement tracker</p>
+          <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+            Your daily movement tracker
+            {gpsStatus === "monitoring" && (
+              <span className="inline-flex items-center gap-1 text-teal-600 dark:text-teal-400">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-500" />
+                </span>
+                GPS
+              </span>
+            )}
+            {gpsStatus === "walking" && (
+              <span className="inline-flex items-center gap-1 text-teal-600 dark:text-teal-400 font-medium">
+                <span className="relative flex h-2 w-2">
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-500" />
+                </span>
+                Walking detected
+              </span>
+            )}
+          </p>
         </div>
         <button
           onClick={() => window.location.href = "/settings"}
@@ -250,6 +290,35 @@ export default function TimerPage() {
                 I'm Standing
               </Button>
             </div>
+          ) : mode === "walking" ? (
+            <div className="space-y-3">
+              <Button
+                size="lg"
+                className="w-full h-14 text-base font-semibold rounded-2xl"
+                onClick={() => switchMode("sitting")}
+                disabled={isLoading}
+              >
+                I'm Sitting
+              </Button>
+              <Button
+                size="lg"
+                variant="secondary"
+                className="w-full h-14 text-base font-semibold rounded-2xl"
+                onClick={() => switchMode("standing")}
+                disabled={isLoading}
+              >
+                I'm Standing
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                className="w-full h-12 text-sm font-medium rounded-2xl"
+                onClick={() => switchMode("resting")}
+                disabled={isLoading}
+              >
+                Rest / Sleep
+              </Button>
+            </div>
           ) : (
             <div className="space-y-3">
               <Button
@@ -288,7 +357,7 @@ export default function TimerPage() {
         )}
 
         {todayStats && (
-          <div className="grid grid-cols-3 gap-3">
+          <div className={`grid gap-3 ${todayStats.walkingMinutes > 0 ? "grid-cols-4" : "grid-cols-3"}`}>
             <StatCard
               label="Sitting"
               value={formatMinutes(todayStats.sittingMinutes)}
@@ -299,6 +368,13 @@ export default function TimerPage() {
               value={formatMinutes(todayStats.standingMinutes)}
               color="text-emerald-700 dark:text-emerald-400"
             />
+            {todayStats.walkingMinutes > 0 && (
+              <StatCard
+                label="Walking"
+                value={formatMinutes(todayStats.walkingMinutes)}
+                color="text-teal-700 dark:text-teal-400"
+              />
+            )}
             <StatCard
               label="Streak"
               value={`${todayStats.currentStreak}d`}

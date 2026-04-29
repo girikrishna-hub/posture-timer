@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 const MODE_COLORS = {
   sitting: "#3B82F6",
   standing: "#22C55E",
+  walking: "#14B8A6",
   nap: "#F59E0B",
   sleep: "#6366F1",
 } as const;
@@ -122,13 +123,15 @@ function WeeklyChart({
   days,
   goalMinutes,
 }: {
-  days: { date: string; sittingMinutes: number; standingMinutes: number }[];
+  days: { date: string; sittingMinutes: number; standingMinutes: number; walkingMinutes: number }[];
   goalMinutes: number;
 }) {
+  const hasWalking = days.some((d) => d.walkingMinutes > 0);
   const data = days.map((d) => ({
     name: shortWeekday(d.date),
     Sitting: d.sittingMinutes,
     Standing: d.standingMinutes,
+    ...(hasWalking ? { Walking: d.walkingMinutes } : {}),
   }));
 
   return (
@@ -138,7 +141,7 @@ function WeeklyChart({
         <span className="text-xs text-muted-foreground">Goal: {formatMinutes(goalMinutes)}/day</span>
       </div>
       <ResponsiveContainer width="100%" height={180}>
-        <BarChart data={data} barGap={2} barSize={14} margin={{ top: 0, right: 8, left: -20, bottom: 0 }}>
+        <BarChart data={data} barGap={2} barSize={12} margin={{ top: 0, right: 8, left: -20, bottom: 0 }}>
           <XAxis dataKey="name" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
           <YAxis tickFormatter={(v: number) => `${v}m`} tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />
           <Tooltip
@@ -149,6 +152,7 @@ function WeeklyChart({
           <ReferenceLine y={goalMinutes} stroke="#EF4444" strokeDasharray="4 4" strokeWidth={1.5} />
           <Bar dataKey="Sitting" fill={MODE_COLORS.sitting} radius={[3, 3, 0, 0]} />
           <Bar dataKey="Standing" fill={MODE_COLORS.standing} radius={[3, 3, 0, 0]} />
+          {hasWalking && <Bar dataKey="Walking" fill={MODE_COLORS.walking} radius={[3, 3, 0, 0]} />}
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -284,6 +288,7 @@ function DailyTimeline({
   const getColor = (s: { mode: string; restType?: string | null }) => {
     if (s.mode === "sitting") return MODE_COLORS.sitting;
     if (s.mode === "standing") return MODE_COLORS.standing;
+    if (s.mode === "walking") return MODE_COLORS.walking;
     if (s.restType === "nap") return MODE_COLORS.nap;
     return MODE_COLORS.sleep;
   };
@@ -291,6 +296,7 @@ function DailyTimeline({
   const getLabel = (s: { mode: string; restType?: string | null }) => {
     if (s.mode === "sitting") return "Sitting";
     if (s.mode === "standing") return "Standing";
+    if (s.mode === "walking") return "Walking";
     if (s.restType === "nap") return "Nap";
     return "Sleep";
   };
@@ -514,6 +520,7 @@ function SessionsTab() {
   const modeColor = (mode: string, restType?: string | null) => {
     if (mode === "sitting") return "text-blue-600";
     if (mode === "standing") return "text-green-600";
+    if (mode === "walking") return "text-teal-600";
     if (restType === "nap") return "text-amber-600";
     return "text-indigo-600";
   };
@@ -521,6 +528,7 @@ function SessionsTab() {
   const modeLabel = (mode: string, restType?: string | null) => {
     if (mode === "sitting") return "Sitting";
     if (mode === "standing") return "Standing";
+    if (mode === "walking") return "Walking";
     if (restType === "nap") return "Nap";
     return mode === "resting" ? "Sleep" : mode;
   };
@@ -570,6 +578,8 @@ function SessionsTab() {
                           ? MODE_COLORS.sitting
                           : s.mode === "standing"
                           ? MODE_COLORS.standing
+                          : s.mode === "walking"
+                          ? MODE_COLORS.walking
                           : s.restType === "nap"
                           ? MODE_COLORS.nap
                           : MODE_COLORS.sleep,
@@ -667,6 +677,7 @@ export default function DashboardPage() {
 type DayDataShape = {
   sittingMinutes: number;
   standingMinutes: number;
+  walkingMinutes: number;
   activeMinutes: number;
   napMinutes: number;
   sleepMinutes: number;
@@ -706,6 +717,12 @@ function DailyStatGrid({ dayData }: { dayData: DayDataShape }) {
           <p className="text-xs text-purple-600">Active</p>
           <p className="text-base font-semibold text-purple-700">{formatMinutes(dayData.activeMinutes)}</p>
         </div>
+        {dayData.walkingMinutes > 0 && (
+          <div className="bg-teal-50 border border-teal-200 rounded-xl px-3 py-2 text-center">
+            <p className="text-xs text-teal-600">Walking</p>
+            <p className="text-base font-semibold text-teal-700">{formatMinutes(dayData.walkingMinutes)}</p>
+          </div>
+        )}
         {dayData.napMinutes > 0 && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-center">
             <p className="text-xs text-amber-600">Nap</p>

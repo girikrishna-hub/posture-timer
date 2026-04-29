@@ -244,7 +244,7 @@ components:
 
     SessionMode:
       type: string
-      enum: [sitting, standing, resting]
+      enum: [sitting, standing, resting, walking]
 
     RestType:
       type: string
@@ -343,6 +343,9 @@ components:
         remindersCount:
           type: integer
           default: 3
+        autoDetectWalking:
+          type: boolean
+          default: false
       required:
         - id
         - dailyStandingGoalMinutes
@@ -351,6 +354,7 @@ components:
         - standingMaxMinutes
         - reminderIntervalMinutes
         - remindersCount
+        - autoDetectWalking
 
     UpdateSettingsBody:
       type: object
@@ -367,6 +371,8 @@ components:
           type: integer
         remindersCount:
           type: integer
+        autoDetectWalking:
+          type: boolean
 
     TodayStats:
       type: object
@@ -377,6 +383,8 @@ components:
         sittingMinutes:
           type: integer
         standingMinutes:
+          type: integer
+        walkingMinutes:
           type: integer
         restingMinutes:
           type: integer
@@ -394,6 +402,7 @@ components:
         - date
         - sittingMinutes
         - standingMinutes
+        - walkingMinutes
         - restingMinutes
         - activeMinutes
         - goalMinutes
@@ -411,6 +420,8 @@ components:
           type: integer
         standingMinutes:
           type: integer
+        walkingMinutes:
+          type: integer
         restingMinutes:
           type: integer
         activeMinutes:
@@ -421,6 +432,7 @@ components:
         - date
         - sittingMinutes
         - standingMinutes
+        - walkingMinutes
         - restingMinutes
         - activeMinutes
         - goalProgressPercent
@@ -454,6 +466,8 @@ components:
           type: integer
         standingMinutes:
           type: integer
+        walkingMinutes:
+          type: integer
         napMinutes:
           type: integer
         sleepMinutes:
@@ -468,6 +482,7 @@ components:
         - date
         - sittingMinutes
         - standingMinutes
+        - walkingMinutes
         - napMinutes
         - sleepMinutes
         - activeMinutes

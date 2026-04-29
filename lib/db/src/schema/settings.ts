@@ -1,4 +1,4 @@
-import { pgTable, serial, integer } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -10,6 +10,7 @@ export const settingsTable = pgTable("settings", {
   standingMaxMinutes: integer("standing_max_minutes").notNull().default(15),
   reminderIntervalMinutes: integer("reminder_interval_minutes").notNull().default(1),
   remindersCount: integer("reminders_count").notNull().default(3),
+  autoDetectWalking: boolean("auto_detect_walking").notNull().default(false),
 });
 
 export const insertSettingsSchema = createInsertSchema(settingsTable).omit({ id: true });

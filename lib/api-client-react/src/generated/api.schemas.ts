@@ -15,6 +15,7 @@ export const SessionMode = {
   sitting: "sitting",
   standing: "standing",
   resting: "resting",
+  walking: "walking",
 } as const;
 
 export type RestType = (typeof RestType)[keyof typeof RestType] | null;
@@ -61,6 +62,7 @@ export interface Settings {
   standingMaxMinutes: number;
   reminderIntervalMinutes: number;
   remindersCount: number;
+  autoDetectWalking: boolean;
 }
 
 export interface UpdateSettingsBody {
@@ -70,12 +72,14 @@ export interface UpdateSettingsBody {
   standingMaxMinutes?: number;
   reminderIntervalMinutes?: number;
   remindersCount?: number;
+  autoDetectWalking?: boolean;
 }
 
 export interface TodayStats {
   date: string;
   sittingMinutes: number;
   standingMinutes: number;
+  walkingMinutes: number;
   restingMinutes: number;
   activeMinutes: number;
   goalMinutes: number;
@@ -88,6 +92,7 @@ export interface DayStats {
   date: string;
   sittingMinutes: number;
   standingMinutes: number;
+  walkingMinutes: number;
   restingMinutes: number;
   activeMinutes: number;
   goalProgressPercent: number;
@@ -104,6 +109,7 @@ export interface DailyMetric {
   date: string;
   sittingMinutes: number;
   standingMinutes: number;
+  walkingMinutes: number;
   napMinutes: number;
   sleepMinutes: number;
   activeMinutes: number;

@@ -14,4 +14,5 @@ export interface Settings {
   standingMaxMinutes: number;
   reminderIntervalMinutes: number;
   remindersCount: number;
+  autoDetectWalking: boolean;
 }

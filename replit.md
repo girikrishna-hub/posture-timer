@@ -42,6 +42,7 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
   - PWA manifest (`public/manifest.json`) for installability
   - **Dashboard**: Overview (summary cards + weekly Recharts bar chart), Daily timeline, Monthly heatmap calendar, Sessions log with pagination and CSV export
   - Bottom nav: Timer ↔ Dashboard tabs
+  - **Walking mode**: Auto-detect walking via Geolocation `watchPosition` speed (0.5–3.5 m/s). Opt-in toggle in Settings. 20s debounce to start, 30s to stop. Only speed used — no coordinates stored. Teal color theme. GPS pulsing indicator in header when active.
 
 ### Key Files
 - `lib/api-spec/openapi.yaml` — OpenAPI contract (sessions, settings, stats, metrics)

@@ -57,6 +57,12 @@ function getMinutes(sessions: SessionRow[], mode: string, restType?: string | nu
     .reduce((sum, s) => sum + Math.round((s.durationSeconds ?? 0) / 60), 0);
 }
 
+function getWalkingMinutes(sessions: SessionRow[]): number {
+  return sessions
+    .filter((s) => s.mode === "walking")
+    .reduce((sum, s) => sum + Math.round((s.durationSeconds ?? 0) / 60), 0);
+}
+
 /**
  * Health score (0–100) = standing_component + reminder_component
  *
@@ -228,6 +234,7 @@ router.get("/metrics/daily", async (req, res) => {
     date: string;
     sittingMinutes: number;
     standingMinutes: number;
+    walkingMinutes: number;
     napMinutes: number;
     sleepMinutes: number;
     activeMinutes: number;
@@ -243,19 +250,21 @@ router.get("/metrics/daily", async (req, res) => {
     const sittingSessions = daySessions.filter((s) => s.mode === "sitting");
     const sittingMinutes = getMinutes(daySessions, "sitting");
     const standingMinutes = getMinutes(daySessions, "standing");
+    const walkingMinutes = getWalkingMinutes(daySessions);
     const napMinutes = getMinutes(daySessions, "resting", "nap");
     const sleepMinutes = getMinutes(daySessions, "resting", "sleep");
-    const activeMinutes = sittingMinutes + standingMinutes;
+    const activeMinutes = sittingMinutes + standingMinutes + walkingMinutes;
     const goalProgressPercent =
       goalMinutes > 0
-        ? Math.min(100, Math.round((standingMinutes / goalMinutes) * 100))
+        ? Math.min(100, Math.round(((standingMinutes + walkingMinutes) / goalMinutes) * 100))
         : 0;
-    const score = computeHealthScore(standingMinutes, sittingSessions, settings);
+    const score = computeHealthScore(standingMinutes + walkingMinutes, sittingSessions, settings);
 
     days.push({
       date: dateStr,
       sittingMinutes,
       standingMinutes,
+      walkingMinutes,
       napMinutes,
       sleepMinutes,
       activeMinutes,

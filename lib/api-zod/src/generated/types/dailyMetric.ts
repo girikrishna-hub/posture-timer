@@ -10,6 +10,7 @@ export interface DailyMetric {
   date: Date;
   sittingMinutes: number;
   standingMinutes: number;
+  walkingMinutes: number;
   napMinutes: number;
   sleepMinutes: number;
   activeMinutes: number;

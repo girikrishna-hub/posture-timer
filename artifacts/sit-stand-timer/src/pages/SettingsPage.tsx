@@ -60,6 +60,7 @@ export default function SettingsPage() {
     standingMaxMinutes: 15,
     reminderIntervalMinutes: 1,
     remindersCount: 3,
+    autoDetectWalking: false,
   });
 
   const [saved, setSaved] = useState(false);
@@ -76,6 +77,7 @@ export default function SettingsPage() {
         standingMaxMinutes: settings.standingMaxMinutes,
         reminderIntervalMinutes: settings.reminderIntervalMinutes,
         remindersCount: settings.remindersCount,
+        autoDetectWalking: settings.autoDetectWalking,
       });
     }
   }, [settings]);
@@ -175,7 +177,7 @@ export default function SettingsPage() {
           />
         </div>
 
-        <div className="bg-card border border-border rounded-2xl p-5 mb-6">
+        <div className="bg-card border border-border rounded-2xl p-5 mb-4 space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-foreground">Notifications</p>
@@ -198,6 +200,32 @@ export default function SettingsPage() {
             {notifPermission === "denied" && (
               <span className="text-xs text-destructive font-medium">Blocked</span>
             )}
+          </div>
+
+          <div className="border-t border-border pt-4 flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-foreground">Auto-detect walking</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Uses GPS speed to automatically log walking sessions (0.5–3.5 m/s). No location is stored — only speed is read.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={localSettings.autoDetectWalking}
+              onClick={() =>
+                setLocalSettings((s) => ({ ...s, autoDetectWalking: !s.autoDetectWalking }))
+              }
+              className={`relative shrink-0 mt-0.5 inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                localSettings.autoDetectWalking ? "bg-teal-500" : "bg-muted-foreground/30"
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                  localSettings.autoDetectWalking ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </button>
           </div>
         </div>
 

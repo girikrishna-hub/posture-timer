@@ -10,6 +10,7 @@ export interface TodayStats {
   date: Date;
   sittingMinutes: number;
   standingMinutes: number;
+  walkingMinutes: number;
   restingMinutes: number;
   activeMinutes: number;
   goalMinutes: number;

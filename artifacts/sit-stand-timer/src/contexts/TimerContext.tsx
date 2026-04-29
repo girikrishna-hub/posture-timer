@@ -17,7 +17,7 @@ import {
 } from "@workspace/api-client-react";
 import { playStandTone, playSitTone, playConfirmTone, playRestTone } from "@/utils/audio";
 
-export type TimerMode = "idle" | "sitting" | "standing" | "resting";
+export type TimerMode = "idle" | "sitting" | "standing" | "resting" | "walking";
 
 // ─── Offline queue types ───────────────────────────────────────────────────
 
@@ -31,7 +31,7 @@ interface OfflineEndOp {
 interface OfflineStartOp {
   id: string;
   type: "startSession";
-  mode: "sitting" | "standing" | "resting";
+  mode: "sitting" | "standing" | "resting" | "walking";
   startedAt: string;
   endedAt?: string;
 }
@@ -108,7 +108,7 @@ interface TimerContextValue {
   activeSessionId: number | null;
   notificationPermission: NotificationPermission;
   requestNotificationPermission: () => Promise<void>;
-  switchMode: (newMode: "sitting" | "standing" | "resting") => Promise<void>;
+  switchMode: (newMode: "sitting" | "standing" | "resting" | "walking") => Promise<void>;
   isLoading: boolean;
 }
 
@@ -155,6 +155,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     standingMaxMinutes: 15,
     reminderIntervalMinutes: 1,
     remindersCount: 3,
+    autoDetectWalking: false,
   };
   const settingsRef = useRef(settings);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
@@ -177,7 +178,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     async (sessionMode: string, startedAt?: string): Promise<{ id: number }> => {
       return startMutationRef.current.mutateAsync({
         data: {
-          mode: sessionMode as "sitting" | "standing" | "resting",
+          mode: sessionMode as "sitting" | "standing" | "resting" | "walking",
           ...(startedAt ? { startedAt } : {}),
         },
       });
@@ -235,7 +236,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   }, [doEndSession, doStartSession, queryClient]);
 
   const switchMode = useCallback(
-    async (newMode: "sitting" | "standing" | "resting") => {
+    async (newMode: "sitting" | "standing" | "resting" | "walking") => {
       const currentId = activeSessionIdRef.current;
       const currentMode = modeRef.current;
 

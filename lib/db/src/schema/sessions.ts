@@ -4,7 +4,7 @@ import { z } from "zod/v4";
 
 export const sessionsTable = pgTable("sessions", {
   id: serial("id").primaryKey(),
-  mode: text("mode", { enum: ["sitting", "standing", "resting"] }).notNull(),
+  mode: text("mode", { enum: ["sitting", "standing", "resting", "walking"] }).notNull(),
   startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
   endedAt: timestamp("ended_at", { withTimezone: true }),
   durationSeconds: integer("duration_seconds"),
