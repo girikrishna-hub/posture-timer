@@ -1,5 +1,6 @@
 import { useTimer, type TimerMode } from "@/contexts/TimerContext";
 import { useGetTodayStats, useGetSettings, getGetTodayStatsQueryKey } from "@workspace/api-client-react";
+import { playGoalCelebrationTone } from "@/utils/audio";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useEffect, useRef, useState } from "react";
@@ -349,6 +350,7 @@ export default function TimerPage() {
     saveCelebratedDate(today);
     freshAchievementRef.current = true;
     setGoalAchieved(true);
+    playGoalCelebrationTone();
     setCelebrating(true);
     celebrationTimerRef.current = setTimeout(() => {
       setCelebrating(false);

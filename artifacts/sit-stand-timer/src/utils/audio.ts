@@ -49,3 +49,12 @@ export function playConfirmTone(): void {
 export function playRestTone(): void {
   playTone(392, 0.5, "sine", 0.1);
 }
+
+export function playGoalCelebrationTone(): void {
+  playTone(523, 0.12, "sine", 0.25);
+  setTimeout(() => playTone(659, 0.12, "sine", 0.22), 130);
+  setTimeout(() => playTone(784, 0.12, "sine", 0.22), 260);
+  setTimeout(() => playTone(1047, 0.4, "sine", 0.28), 390);
+  setTimeout(() => playTone(880, 0.12, "sine", 0.18), 560);
+  setTimeout(() => playTone(1047, 0.6, "sine", 0.22), 680);
+}
