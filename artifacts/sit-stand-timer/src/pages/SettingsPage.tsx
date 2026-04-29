@@ -88,8 +88,25 @@ export default function SettingsPage() {
   }, [settings]);
 
   const handleSave = async () => {
+    const goalChanged =
+      localSettings.dailyStandingGoalMinutes !== settings?.dailyStandingGoalMinutes;
+
     await updateMutation.mutateAsync({ data: localSettings });
+
+    // Write the reset before invalidation so TimerContext reads fresh state on refetch.
+    if (goalChanged) {
+      try {
+        const d = new Date();
+        const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        localStorage.setItem(
+          "sit-stand-goal-notif",
+          JSON.stringify({ date: today, half: false, full: false })
+        );
+      } catch { /* ignore */ }
+    }
+
     await queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
+
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };

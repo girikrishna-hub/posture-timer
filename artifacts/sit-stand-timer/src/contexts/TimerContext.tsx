@@ -185,6 +185,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
 
   // Goal milestone notification refs (half / full goal)
   const goalNotifStateRef = useRef<GoalNotifState>(getGoalNotifState());
+  const prevDailyGoalRef = useRef<number | null>(null);
 
   useEffect(() => { modeRef.current = mode; }, [mode]);
   useEffect(() => { reminderCountRef.current = reminderCount; }, [reminderCount]);
@@ -515,6 +516,18 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     const goalMinutes = settingsRef.current.dailyStandingGoalMinutes;
     if (!goalMinutes || goalMinutes <= 0) return;
 
+    const today = todayDateString();
+
+    // If the daily goal has changed since the last run, reset the notif state
+    // directly (do not re-read from localStorage to avoid cross-component
+    // timing races with SettingsPage's invalidateQueries call).
+    if (prevDailyGoalRef.current !== null && prevDailyGoalRef.current !== goalMinutes) {
+      const fresh: GoalNotifState = { date: today, half: false, full: false };
+      goalNotifStateRef.current = fresh;
+      saveGoalNotifState(fresh);
+    }
+    prevDailyGoalRef.current = goalMinutes;
+
     const completedStandingMinutes = todayStatsData?.standingMinutes ?? 0;
     const completedWalkingMinutes = todayStatsData?.walkingMinutes ?? 0;
     // Cap in-progress contribution to minutes elapsed since local midnight so a
@@ -528,7 +541,6 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       inProgressStandingMinutes +
       inProgressWalkingMinutes;
 
-    const today = todayDateString();
     const state = goalNotifStateRef.current;
 
     // Reset state if it's a new day
@@ -557,7 +569,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
         `${Math.round(totalActiveMinutes)} of ${goalMinutes} min done — keep it up!`
       );
     }
-  }, [todayStatsData, elapsedSeconds, mode]);
+  }, [todayStatsData, elapsedSeconds, mode, settingsData]);
 
   const requestNotificationPermission = useCallback(async () => {
     if (typeof Notification !== "undefined" && Notification.permission === "default") {
