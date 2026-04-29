@@ -6,6 +6,13 @@ declare const self: ServiceWorkerGlobalScope;
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
 
+// Activate immediately and claim all open clients so updates take effect
+// without requiring the user to close and reopen the app.
+self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("activate", (event: ExtendableEvent) =>
+  event.waitUntil(self.clients.claim()),
+);
+
 self.addEventListener("message", (event: ExtendableMessageEvent) => {
   if (event.data?.type === "SKIP_WAITING") {
     self.skipWaiting();
