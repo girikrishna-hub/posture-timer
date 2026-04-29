@@ -5,19 +5,8 @@ import {
   StartSessionBody,
   EndSessionParams,
   EndSessionBody,
+  ListSessionsQueryParams,
 } from "@workspace/api-zod";
-
-function parseQueryDate(val: unknown): Date | undefined {
-  if (!val || typeof val !== "string") return undefined;
-  const d = new Date(val);
-  return isNaN(d.getTime()) ? undefined : d;
-}
-
-function parseQueryInt(val: unknown, fallback: number): number {
-  if (!val || typeof val !== "string") return fallback;
-  const n = parseInt(val, 10);
-  return isNaN(n) ? fallback : n;
-}
 
 const router: IRouter = Router();
 
@@ -76,10 +65,19 @@ router.get("/sessions/active", async (req, res) => {
 });
 
 router.get("/sessions", async (req, res) => {
-  const from = parseQueryDate(req.query.from);
-  const to = parseQueryDate(req.query.to);
-  const limit = parseQueryInt(req.query.limit, 100);
-  const offset = parseQueryInt(req.query.offset, 0);
+  const rawQuery = {
+    ...req.query,
+    from:
+      typeof req.query.from === "string" ? new Date(req.query.from) : undefined,
+    to:
+      typeof req.query.to === "string" ? new Date(req.query.to) : undefined,
+  };
+  const queryResult = ListSessionsQueryParams.safeParse(rawQuery);
+  if (!queryResult.success) {
+    res.status(400).json({ error: "Invalid query parameters", details: queryResult.error.issues });
+    return;
+  }
+  const { from, to, limit, offset } = queryResult.data;
 
   const conditions = [];
   if (from) {
