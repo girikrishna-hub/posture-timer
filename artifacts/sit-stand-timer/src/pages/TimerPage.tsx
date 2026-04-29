@@ -127,14 +127,77 @@ function getModeColor(mode: TimerMode): string {
   }
 }
 
-function getModeRingColor(mode: TimerMode): string {
-  switch (mode) {
-    case "sitting": return "ring-amber-200 dark:ring-amber-900 bg-amber-50 dark:bg-amber-950/40";
-    case "standing": return "ring-emerald-200 dark:ring-emerald-900 bg-emerald-50 dark:bg-emerald-950/40";
-    case "resting": return "ring-indigo-200 dark:ring-indigo-900 bg-indigo-50 dark:bg-indigo-950/40";
-    case "walking": return "ring-teal-200 dark:ring-teal-900 bg-teal-50 dark:bg-teal-950/40";
-    default: return "ring-border bg-card";
+
+const RING_SIZE = 224;
+const STROKE_WIDTH = 10;
+const RADIUS = (RING_SIZE - STROKE_WIDTH) / 2;
+const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+
+function GoalProgressRing({ mode, goalPercent }: { mode: TimerMode; goalPercent: number }) {
+  const clampedPercent = Math.max(0, Math.min(goalPercent, 100));
+  const dashOffset = CIRCUMFERENCE * (1 - clampedPercent / 100);
+  const goalMet = goalPercent >= 100;
+
+  const trackColor = "rgba(128,128,128,0.15)";
+  const progressColor = goalMet ? "#10b981" : "#f59e0b";
+
+  function getModeBackground(m: TimerMode): string {
+    switch (m) {
+      case "sitting": return "bg-amber-50 dark:bg-amber-950/40";
+      case "standing": return "bg-emerald-50 dark:bg-emerald-950/40";
+      case "resting": return "bg-indigo-50 dark:bg-indigo-950/40";
+      case "walking": return "bg-teal-50 dark:bg-teal-950/40";
+      default: return "bg-card";
+    }
   }
+
+  return (
+    <div className="relative w-56 h-56">
+      <svg
+        width={RING_SIZE}
+        height={RING_SIZE}
+        viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}
+        className="absolute inset-0"
+        style={{ transform: "rotate(-90deg)" }}
+      >
+        <circle
+          cx={RING_SIZE / 2}
+          cy={RING_SIZE / 2}
+          r={RADIUS}
+          fill="none"
+          stroke={trackColor}
+          strokeWidth={STROKE_WIDTH}
+        />
+        <circle
+          cx={RING_SIZE / 2}
+          cy={RING_SIZE / 2}
+          r={RADIUS}
+          fill="none"
+          stroke={progressColor}
+          strokeWidth={STROKE_WIDTH}
+          strokeLinecap="round"
+          strokeDasharray={CIRCUMFERENCE}
+          strokeDashoffset={dashOffset}
+          style={{ transition: "stroke-dashoffset 0.7s ease, stroke 0.5s ease" }}
+        />
+      </svg>
+      <div
+        className={`absolute inset-2 rounded-full flex flex-col items-center justify-center transition-colors duration-700 ${getModeBackground(mode)}`}
+      >
+        <div className={`transition-colors duration-500 ${getModeColor(mode)}`}>
+          <ModeIcon mode={mode} />
+        </div>
+        <span className={`text-sm font-semibold tracking-widest uppercase mt-1 transition-colors duration-500 ${getModeColor(mode)}`}>
+          {getModeLabel(mode)}
+        </span>
+        <span
+          className={`text-xs font-medium mt-1 tabular-nums transition-colors duration-500 ${goalMet ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}
+        >
+          {Math.round(clampedPercent)}%
+        </span>
+      </div>
+    </div>
+  );
 }
 
 export default function TimerPage() {
@@ -246,14 +309,10 @@ export default function TimerPage() {
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center px-6 gap-8">
-        <div className={`relative flex flex-col items-center justify-center w-56 h-56 rounded-full ring-8 transition-all duration-700 ${getModeRingColor(mode)}`}>
-          <div className={`transition-colors duration-500 ${getModeColor(mode)}`}>
-            <ModeIcon mode={mode} />
-          </div>
-          <span className={`text-sm font-semibold tracking-widest uppercase mt-1 transition-colors duration-500 ${getModeColor(mode)}`}>
-            {getModeLabel(mode)}
-          </span>
-        </div>
+        <GoalProgressRing
+          mode={mode}
+          goalPercent={todayStats?.goalProgressPercent ?? 0}
+        />
 
         <div className="text-center space-y-1">
           <div className="text-6xl font-mono font-light tracking-tight text-foreground tabular-nums">
