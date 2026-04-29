@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useGetSettings, useUpdateSettings, getGetSettingsQueryKey } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -66,12 +66,22 @@ export default function SettingsPage() {
   });
 
   const [saved, setSaved] = useState(false);
+  const [goalUpdated, setGoalUpdated] = useState(false);
+  const goalUpdatedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>(
     typeof Notification !== "undefined" ? Notification.permission : "default"
   );
   const [geoPermission, setGeoPermission] = useState<GeoPermissionStatus>(
     "geolocation" in navigator ? "unknown" : "unsupported"
   );
+
+  useEffect(() => {
+    return () => {
+      if (goalUpdatedTimerRef.current !== null) {
+        clearTimeout(goalUpdatedTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (settings) {
@@ -103,6 +113,15 @@ export default function SettingsPage() {
           JSON.stringify({ date: today, half: false, full: false })
         );
       } catch { /* ignore */ }
+
+      if (goalUpdatedTimerRef.current !== null) {
+        clearTimeout(goalUpdatedTimerRef.current);
+      }
+      setGoalUpdated(true);
+      goalUpdatedTimerRef.current = setTimeout(() => {
+        setGoalUpdated(false);
+        goalUpdatedTimerRef.current = null;
+      }, 5000);
     }
 
     await queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
@@ -188,7 +207,24 @@ export default function SettingsPage() {
         </div>
       </header>
 
-      <div className="px-6 pb-8 space-y-0">
+      {goalUpdated && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="mx-6 mb-2 flex items-start gap-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-4 py-3"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+            <polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+          <div>
+            <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">Goal updated</p>
+            <p className="text-xs text-emerald-700 dark:text-emerald-300">Milestone alerts have been reset for today.</p>
+          </div>
+        </div>
+      )}
+
+      <div className="px-6 pb-24 space-y-0">
         <div className="bg-card border border-border rounded-2xl p-5 space-y-6 mb-4">
           <SettingRow
             label="Daily standing goal"
