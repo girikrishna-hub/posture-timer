@@ -341,6 +341,9 @@ export default function TimerPage() {
   const isActiveStanding = mode === "standing" || mode === "walking";
   const liveElapsedStandingMinutes = isActiveStanding ? elapsedSeconds / 60 : 0;
   const liveStandingTotalSeconds = completedStandingMinutes * 60 + (isActiveStanding ? elapsedSeconds : 0);
+  const completedSittingMinutes = todayStats?.sittingMinutes ?? 0;
+  const isActiveSitting = mode === "sitting";
+  const liveSittingTotalSeconds = completedSittingMinutes * 60 + (isActiveSitting ? elapsedSeconds : 0);
   // Cap in-progress minutes to time elapsed since local midnight so a session
   // spanning midnight doesn't inflate today's count — same guard used for
   // milestone notifications in TimerContext.
@@ -682,7 +685,7 @@ export default function TimerPage() {
           <div className={`grid gap-3 ${todayStats.walkingMinutes > 0 ? "grid-cols-4" : "grid-cols-3"}`}>
             <StatCard
               label="Sitting"
-              value={formatMinutes(todayStats.sittingMinutes)}
+              value={isActiveSitting ? formatLiveStanding(liveSittingTotalSeconds) : formatMinutes(completedSittingMinutes)}
               color="text-amber-700 dark:text-amber-400"
             />
             <StatCard
