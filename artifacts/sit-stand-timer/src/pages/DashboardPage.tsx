@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useTimer } from "@/contexts/TimerContext";
 import {
   BarChart,
@@ -30,7 +30,24 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { playGoalCelebrationTone } from "@/utils/audio";
 import html2canvas from "html2canvas";
+
+// ─── Goal celebration (shared localStorage key with TimerPage) ───────────────
+const CELEBRATION_KEY = "sit-stand-goal-celebrated";
+
+function getCelebratedDate(): string {
+  try { return localStorage.getItem(CELEBRATION_KEY) ?? ""; } catch { return ""; }
+}
+
+function saveCelebratedDate(date: string): void {
+  try { localStorage.setItem(CELEBRATION_KEY, date); } catch { /* ignore */ }
+}
+
+function todayStr(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 // ─── Color constants ────────────────────────────────────────────────────────
 const MODE_COLORS = {
@@ -304,6 +321,9 @@ function OverviewTab() {
   const { mode, elapsedSeconds } = useTimer();
   const { data: summary, isLoading: sumLoading } = useGetMetricsSummary();
   const { data: todayStats } = useGetTodayStats();
+  const [celebrating, setCelebrating] = useState(false);
+  const prevGoalPercentRef = useRef<number | null>(null);
+  const celebrationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [previewImgUrl, setPreviewImgUrl] = useState<string | null>(null);
@@ -395,6 +415,50 @@ function OverviewTab() {
     }
   }, [previewBlob, handleClosePreview, toast]);
 
+  // ── Lifted goal-percent computation (needed by celebration effect) ──────────
+  const goalMinutes = todayStats?.goalMinutes ?? 120;
+  const isActiveMode = mode === "standing" || mode === "walking";
+  const secondsSinceLocalMidnight = (() => {
+    const now = new Date();
+    return now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+  })();
+  const cappedElapsedMinutes = isActiveMode
+    ? Math.min(elapsedSeconds, secondsSinceLocalMidnight) / 60
+    : 0;
+  const goalPercent = todayStats
+    ? goalMinutes > 0
+      ? Math.min(100, ((todayStats.standingMinutes + todayStats.walkingMinutes + cappedElapsedMinutes) / goalMinutes) * 100)
+      : todayStats.goalProgressPercent ?? 0
+    : 0;
+  const goalMet = goalPercent >= 100;
+
+  // ── Celebration: fire once per day when the bar crosses 100% live ─────────
+  useEffect(() => {
+    if (!todayStats) return;
+    const prev = prevGoalPercentRef.current;
+    prevGoalPercentRef.current = goalPercent;
+
+    // Only fire when crossing from <100 to >=100 (not on initial render when already >=100)
+    if (prev === null || prev >= 100 || goalPercent < 100) return;
+
+    // Shared localStorage guard with TimerPage – skip if already celebrated today
+    const today = todayStr();
+    if (getCelebratedDate() === today) return;
+
+    saveCelebratedDate(today);
+    playGoalCelebrationTone();
+    toast({ title: "Goal reached! 🎉", description: "You've hit your standing goal for today." });
+    setCelebrating(true);
+    celebrationTimerRef.current = setTimeout(() => setCelebrating(false), 2000);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [goalPercent]);
+
+  useEffect(() => {
+    return () => {
+      if (celebrationTimerRef.current) clearTimeout(celebrationTimerRef.current);
+    };
+  }, []);
+
   if (sumLoading || weekLoading) {
     return (
       <div className="p-4 space-y-4">
@@ -452,42 +516,36 @@ function OverviewTab() {
         />
       </div>
 
-      {todayStats && (() => {
-        const goalMinutes = todayStats.goalMinutes ?? 120;
-        const isActiveMode = mode === "standing" || mode === "walking";
-        const secondsSinceLocalMidnight = (() => {
-          const now = new Date();
-          return now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
-        })();
-        const cappedElapsedMinutes = isActiveMode
-          ? Math.min(elapsedSeconds, secondsSinceLocalMidnight) / 60
-          : 0;
-        const goalPercent = goalMinutes > 0
-          ? Math.min(100, ((todayStats.standingMinutes + todayStats.walkingMinutes + cappedElapsedMinutes) / goalMinutes) * 100)
-          : todayStats.goalProgressPercent ?? 0;
-        const goalMet = goalPercent >= 100;
-        return (
-          <div className="bg-card border border-border rounded-2xl px-4 py-3 space-y-2">
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span className={`flex items-center gap-1 transition-colors duration-500 ${goalMet ? "text-emerald-600 dark:text-emerald-400 font-medium" : ""}`}>
-                {goalMet && (
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 shrink-0">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clipRule="evenodd" />
-                  </svg>
-                )}
-                {goalMet ? "Goal reached!" : "Standing goal"}
-              </span>
-              <span className={`font-medium transition-colors duration-500 ${goalMet ? "text-emerald-600 dark:text-emerald-400" : "text-foreground"}`}>
-                {formatMinutes(Math.floor(todayStats.standingMinutes + todayStats.walkingMinutes + cappedElapsedMinutes))} / {formatMinutes(goalMinutes)}
-              </span>
-            </div>
+      {todayStats && (
+        <div className="bg-card border border-border rounded-2xl px-4 py-3 space-y-2">
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span className={`flex items-center gap-1 transition-colors duration-500 ${goalMet ? "text-emerald-600 dark:text-emerald-400 font-medium" : ""}`}>
+              {goalMet && (
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 shrink-0">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clipRule="evenodd" />
+                </svg>
+              )}
+              {goalMet ? "Goal reached!" : "Standing goal"}
+            </span>
+            <span className={`font-medium transition-colors duration-500 ${goalMet ? "text-emerald-600 dark:text-emerald-400" : "text-foreground"}`}>
+              {formatMinutes(Math.floor(todayStats.standingMinutes + todayStats.walkingMinutes + cappedElapsedMinutes))} / {formatMinutes(goalMinutes)}
+            </span>
+          </div>
+          <div className="relative">
+            {celebrating && (
+              <>
+                <span className="absolute inset-0 rounded-full pointer-events-none" style={{ animation: "goal-pulse 0.7s ease-out forwards", background: "transparent", border: "2px solid #10b981", borderRadius: 4 }} />
+                <span className="absolute inset-0 rounded-full pointer-events-none" style={{ animation: "goal-pulse 0.7s 0.25s ease-out forwards", background: "transparent", border: "2px solid #10b981", borderRadius: 4, opacity: 0 }} />
+                <span className="absolute inset-0 rounded-full pointer-events-none" style={{ animation: "goal-pulse 0.7s 0.5s ease-out forwards", background: "transparent", border: "2px solid #10b981", borderRadius: 4, opacity: 0 }} />
+              </>
+            )}
             <Progress
               value={goalPercent}
               className={`h-2 transition-all duration-500 ${goalMet ? "[&>div]:bg-emerald-500 dark:[&>div]:bg-emerald-400" : ""}`}
             />
           </div>
-        );
-      })()}
+        </div>
+      )}
 
       {weeklyData && (
         <WeeklyChart
