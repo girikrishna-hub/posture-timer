@@ -81,7 +81,7 @@ export default function SettingsPage() {
   });
 
   const [soundOn, setSoundOn] = useState(isSoundEnabled);
-  const [saved, setSaved] = useState(false);
+  const savedBanner = useBanner(3000);
   const [fitbitAssistedEnabled, setFitbitAssistedEnabled] = useState(() => {
     try { return localStorage.getItem("fitbitAssisted") === "true"; } catch { return false; }
   });
@@ -131,8 +131,7 @@ export default function SettingsPage() {
 
     await queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
 
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    savedBanner.show();
   };
 
   const requestNotifications = async () => {
@@ -536,12 +535,43 @@ export default function SettingsPage() {
           )}
         </div>
 
+        {savedBanner.shown && (
+          <div
+            role="status"
+            aria-live="polite"
+            className={[
+              "mx-0 mb-2 flex items-center gap-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-4 py-3",
+              "transition-all duration-300 ease-out",
+              savedBanner.visible
+                ? "opacity-100 translate-y-0"
+                : "opacity-0 -translate-y-2",
+            ].join(" ")}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-emerald-600 dark:text-emerald-400">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+              <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+            <p className="flex-1 text-sm font-semibold text-emerald-800 dark:text-emerald-200">Settings saved!</p>
+            <button
+              type="button"
+              onClick={() => savedBanner.dismiss()}
+              aria-label="Dismiss"
+              className="shrink-0 ml-1 -mr-1 p-1 rounded-full text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+        )}
+
         <Button
           className="w-full h-12 rounded-2xl text-base font-semibold"
           onClick={handleSave}
           disabled={updateMutation.isPending}
         >
-          {saved ? "Saved" : updateMutation.isPending ? "Saving..." : "Save Settings"}
+          {updateMutation.isPending ? "Saving..." : "Save Settings"}
         </Button>
       </div>
     </div>
