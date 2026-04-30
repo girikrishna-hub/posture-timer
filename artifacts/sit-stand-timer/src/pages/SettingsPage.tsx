@@ -87,7 +87,9 @@ export default function SettingsPage() {
   const [fitbitConnecting, setFitbitConnecting] = useState(false);
   const [fitbitDisconnecting, setFitbitDisconnecting] = useState(false);
   const [goalUpdated, setGoalUpdated] = useState(false);
+  const [goalUpdatedVisible, setGoalUpdatedVisible] = useState(false);
   const goalUpdatedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const goalUpdatedVisibleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>(
     typeof Notification !== "undefined" ? Notification.permission : "default"
   );
@@ -99,6 +101,9 @@ export default function SettingsPage() {
     return () => {
       if (goalUpdatedTimerRef.current !== null) {
         clearTimeout(goalUpdatedTimerRef.current);
+      }
+      if (goalUpdatedVisibleTimerRef.current !== null) {
+        clearTimeout(goalUpdatedVisibleTimerRef.current);
       }
     };
   }, []);
@@ -137,10 +142,22 @@ export default function SettingsPage() {
       if (goalUpdatedTimerRef.current !== null) {
         clearTimeout(goalUpdatedTimerRef.current);
       }
+      if (goalUpdatedVisibleTimerRef.current !== null) {
+        clearTimeout(goalUpdatedVisibleTimerRef.current);
+      }
       setGoalUpdated(true);
+      setGoalUpdatedVisible(false);
+      goalUpdatedVisibleTimerRef.current = setTimeout(() => {
+        setGoalUpdatedVisible(true);
+        goalUpdatedVisibleTimerRef.current = null;
+      }, 16);
       goalUpdatedTimerRef.current = setTimeout(() => {
-        setGoalUpdated(false);
+        setGoalUpdatedVisible(false);
         goalUpdatedTimerRef.current = null;
+        goalUpdatedVisibleTimerRef.current = setTimeout(() => {
+          setGoalUpdated(false);
+          goalUpdatedVisibleTimerRef.current = null;
+        }, 350);
       }, 5000);
     }
 
@@ -276,7 +293,13 @@ export default function SettingsPage() {
         <div
           role="status"
           aria-live="polite"
-          className="mx-6 mb-2 flex items-start gap-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-4 py-3"
+          className={[
+            "mx-6 mb-2 flex items-start gap-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-4 py-3",
+            "transition-all duration-300 ease-out",
+            goalUpdatedVisible
+              ? "opacity-100 translate-y-0"
+              : "opacity-0 -translate-y-2",
+          ].join(" ")}
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400">
             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
