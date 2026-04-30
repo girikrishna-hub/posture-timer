@@ -416,6 +416,11 @@ export default function TimerPage() {
   }
   const celebrationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevGoalPercentRef = useRef<number | null>(null);
+  // Track whether the goal was already met when stats first loaded so we can
+  // skip the appear animation on reload. null = stats not yet available.
+  // Set exactly once (via hasSetGoalMetOnLoad guard) when todayStats first resolves.
+  const [goalMetOnLoad, setGoalMetOnLoad] = useState<boolean | null>(null);
+  const hasSetGoalMetOnLoad = useRef(false);
 
   useEffect(() => {
     const prev = prevGoalPercentRef.current;
@@ -435,6 +440,17 @@ export default function TimerPage() {
       setCelebrating(false);
     }, 2000);
   }, [liveGoalPercent]);
+
+  // Capture once — when todayStats first resolves — whether the goal was
+  // already met at load time. This lets us skip the footer appear animation
+  // on page reload while still playing it for mid-session crossings.
+  useEffect(() => {
+    if (todayStats && !hasSetGoalMetOnLoad.current) {
+      hasSetGoalMetOnLoad.current = true;
+      setGoalMetOnLoad(liveGoalPercent >= 100);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todayStats]);
 
   useEffect(() => {
     return () => {
@@ -478,6 +494,9 @@ export default function TimerPage() {
         }
         // Also reset the prev-goal ref so the crossing logic works fresh
         prevGoalPercentRef.current = null;
+        // Reset on-load snapshot so next-day goal crossing animates correctly
+        hasSetGoalMetOnLoad.current = false;
+        setGoalMetOnLoad(null);
         // Schedule the next midnight reset
         scheduleMidnightReset();
       }, msUntilMidnight());
@@ -720,7 +739,7 @@ export default function TimerPage() {
                   <div className="flex justify-between text-xs text-muted-foreground">
                     <span
                       key={footerGoalMet ? "met" : "not-met"}
-                      className={`flex items-center gap-1 transition-colors duration-500 ${footerGoalMet ? "text-emerald-600 dark:text-emerald-400 font-medium goal-label-appear" : ""}`}
+                      className={`flex items-center gap-1 transition-colors duration-500 ${footerGoalMet ? `text-emerald-600 dark:text-emerald-400 font-medium${goalMetOnLoad === false ? " goal-label-appear" : ""}` : ""}`}
                     >
                       {footerGoalMet && (
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 shrink-0">
