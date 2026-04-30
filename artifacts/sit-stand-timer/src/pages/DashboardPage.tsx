@@ -13,11 +13,13 @@ import {
 import {
   useGetMetricsSummary,
   useGetDailyMetrics,
+  useGetTodayStats,
   useListSessions,
   type SummaryMetrics,
   type DailyMetricsResponse,
 } from "@workspace/api-client-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -299,6 +301,7 @@ function ShareCard({
 // ─── Overview tab ───────────────────────────────────────────────────────────
 function OverviewTab() {
   const { data: summary, isLoading: sumLoading } = useGetMetricsSummary();
+  const { data: todayStats } = useGetTodayStats();
   const [previewing, setPreviewing] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [previewImgUrl, setPreviewImgUrl] = useState<string | null>(null);
@@ -446,6 +449,35 @@ function OverviewTab() {
           color="text-red-500"
         />
       </div>
+
+      {todayStats && (() => {
+        const goalMinutes = todayStats.goalMinutes ?? 120;
+        const goalPercent = goalMinutes > 0
+          ? Math.min(100, ((todayStats.standingMinutes + todayStats.walkingMinutes) / goalMinutes) * 100)
+          : todayStats.goalProgressPercent ?? 0;
+        const goalMet = goalPercent >= 100;
+        return (
+          <div className="bg-card border border-border rounded-2xl px-4 py-3 space-y-2">
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span className={`flex items-center gap-1 transition-colors duration-500 ${goalMet ? "text-emerald-600 dark:text-emerald-400 font-medium" : ""}`}>
+                {goalMet && (
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 shrink-0">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16Zm3.857-9.809a.75.75 0 0 0-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 1 0-1.06 1.061l2.5 2.5a.75.75 0 0 0 1.137-.089l4-5.5Z" clipRule="evenodd" />
+                  </svg>
+                )}
+                {goalMet ? "Goal reached!" : "Standing goal"}
+              </span>
+              <span className={`font-medium transition-colors duration-500 ${goalMet ? "text-emerald-600 dark:text-emerald-400" : "text-foreground"}`}>
+                {formatMinutes(todayStats.standingMinutes + todayStats.walkingMinutes)} / {formatMinutes(goalMinutes)}
+              </span>
+            </div>
+            <Progress
+              value={goalPercent}
+              className={`h-2 transition-all duration-500 ${goalMet ? "[&>div]:bg-emerald-500 dark:[&>div]:bg-emerald-400" : ""}`}
+            />
+          </div>
+        );
+      })()}
 
       {weeklyData && (
         <WeeklyChart
