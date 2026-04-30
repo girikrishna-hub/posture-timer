@@ -489,13 +489,13 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Fitbit Assisted Mode card */}
+        {/* Google Fit Assisted Mode card */}
         <div className="bg-card border border-border rounded-2xl p-5 mb-4 space-y-4">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1">
-              <p className="text-sm font-medium text-foreground">Fitbit Assisted Mode</p>
+              <p className="text-sm font-medium text-foreground">Google Fit Assisted Mode</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Uses your Fitbit step data to nudge you when it detects drift from your current mode.
+                Uses your Google Fit step data to nudge you when it detects drift from your current mode.
                 Manual switches always take priority.
               </p>
             </div>
@@ -522,7 +522,7 @@ export default function SettingsPage() {
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                     <div>
-                      <p className="text-sm font-medium text-foreground">Fitbit connected</p>
+                      <p className="text-sm font-medium text-foreground">Google Fit connected</p>
                       <p className="text-xs text-muted-foreground">
                         {fitbitStatus?.connectedAt
                           ? `Since ${new Date(fitbitStatus.connectedAt).toLocaleDateString()}`
@@ -543,7 +543,7 @@ export default function SettingsPage() {
               ) : (
                 <div className="space-y-2">
                   <p className="text-xs text-muted-foreground">
-                    Connect your Fitbit account to enable step-based drift detection.
+                    Connect your Google Fit account to enable step-based drift detection.
                   </p>
                   <Button
                     size="sm"
@@ -552,7 +552,7 @@ export default function SettingsPage() {
                     disabled={fitbitConnecting}
                     className="w-full"
                   >
-                    {fitbitConnecting ? "Waiting for Fitbit…" : "Connect Fitbit Account"}
+                    {fitbitConnecting ? "Waiting for Google…" : "Connect Google Fit"}
                   </Button>
                 </div>
               )}

@@ -2,22 +2,25 @@ import { db, fitbitConnectionsTable } from "@workspace/db";
 import { desc } from "drizzle-orm";
 import { logger } from "../lib/logger";
 
-const FITBIT_TOKEN_URL = "https://api.fitbit.com/oauth2/token";
-const FITBIT_INTRADAY_URL =
-  "https://api.fitbit.com/1/user/-/activities/steps/date/today/1d/1min.json";
+const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/auth";
+const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+const GOOGLE_FIT_AGGREGATE_URL =
+  "https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate";
+
+const FIT_SCOPE = "https://www.googleapis.com/auth/fitness.activity.read";
 
 export function getFitbitAuthUrl(redirectUri: string, state: string): string {
   const clientId = process.env["GOOGLE_FIT_CLIENT_ID"] ?? "";
-  const scopes = ["activity", "profile"].join("%20");
-  return (
-    `https://www.fitbit.com/oauth2/authorize` +
-    `?response_type=code` +
-    `&client_id=${encodeURIComponent(clientId)}` +
-    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-    `&scope=${scopes}` +
-    `&state=${encodeURIComponent(state)}` +
-    `&expires_in=604800`
-  );
+  const params = new URLSearchParams({
+    response_type: "code",
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    scope: FIT_SCOPE,
+    state,
+    access_type: "offline",
+    prompt: "consent",
+  });
+  return `${GOOGLE_AUTH_URL}?${params.toString()}`;
 }
 
 export async function exchangeCodeForTokens(
@@ -27,37 +30,37 @@ export async function exchangeCodeForTokens(
   const clientId = process.env["GOOGLE_FIT_CLIENT_ID"] ?? "";
   const clientSecret = process.env["GOOGLE_FIT_CLIENT_SECRET"] ?? "";
 
-  const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString(
-    "base64",
-  );
-
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code,
     redirect_uri: redirectUri,
     client_id: clientId,
+    client_secret: clientSecret,
   });
 
-  const res = await fetch(FITBIT_TOKEN_URL, {
+  const res = await fetch(GOOGLE_TOKEN_URL, {
     method: "POST",
-    headers: {
-      Authorization: `Basic ${basicAuth}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: body.toString(),
   });
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Fitbit token exchange failed: ${res.status} ${text}`);
+    throw new Error(`Google token exchange failed: ${res.status} ${text}`);
   }
 
   const data = (await res.json()) as {
     access_token: string;
-    refresh_token: string;
+    refresh_token?: string;
     expires_in: number;
     scope: string;
   };
+
+  if (!data.refresh_token) {
+    throw new Error(
+      "Google did not return a refresh_token. Ensure the app requested offline access.",
+    );
+  }
 
   const expiresAt = new Date(Date.now() + data.expires_in * 1000);
 
@@ -66,10 +69,10 @@ export async function exchangeCodeForTokens(
     accessToken: data.access_token,
     refreshToken: data.refresh_token,
     expiresAt,
-    scope: data.scope ?? "",
+    scope: data.scope ?? FIT_SCOPE,
   });
 
-  logger.info("Fitbit tokens stored");
+  logger.info("Google Fit tokens stored");
 }
 
 export async function refreshAccessToken(): Promise<string | null> {
@@ -84,32 +87,28 @@ export async function refreshAccessToken(): Promise<string | null> {
   const conn = rows[0];
   const clientId = process.env["GOOGLE_FIT_CLIENT_ID"] ?? "";
   const clientSecret = process.env["GOOGLE_FIT_CLIENT_SECRET"] ?? "";
-  const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString(
-    "base64",
-  );
 
   const body = new URLSearchParams({
     grant_type: "refresh_token",
     refresh_token: conn.refreshToken,
+    client_id: clientId,
+    client_secret: clientSecret,
   });
 
-  const res = await fetch(FITBIT_TOKEN_URL, {
+  const res = await fetch(GOOGLE_TOKEN_URL, {
     method: "POST",
-    headers: {
-      Authorization: `Basic ${basicAuth}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: body.toString(),
   });
 
   if (!res.ok) {
-    logger.error({ status: res.status }, "Fitbit token refresh failed");
+    logger.error({ status: res.status }, "Google token refresh failed");
     return null;
   }
 
   const data = (await res.json()) as {
     access_token: string;
-    refresh_token: string;
+    refresh_token?: string;
     expires_in: number;
     scope: string;
   };
@@ -118,7 +117,7 @@ export async function refreshAccessToken(): Promise<string | null> {
   await db.delete(fitbitConnectionsTable);
   await db.insert(fitbitConnectionsTable).values({
     accessToken: data.access_token,
-    refreshToken: data.refresh_token,
+    refreshToken: data.refresh_token ?? conn.refreshToken,
     expiresAt,
     scope: data.scope ?? conn.scope,
   });
@@ -136,10 +135,9 @@ export async function getValidAccessToken(): Promise<string | null> {
   if (rows.length === 0) return null;
 
   const conn = rows[0];
-  const now = new Date();
   const bufferMs = 5 * 60 * 1000;
 
-  if (conn.expiresAt.getTime() - bufferMs > now.getTime()) {
+  if (conn.expiresAt.getTime() - bufferMs > Date.now()) {
     return conn.accessToken;
   }
 
@@ -151,27 +149,62 @@ export interface StepMinute {
   steps: number;
 }
 
+interface GoogleFitBucket {
+  startTimeMillis: string;
+  endTimeMillis: string;
+  dataset: Array<{
+    dataSourceId: string;
+    point: Array<{
+      value: Array<{ intVal?: number; fpVal?: number }>;
+    }>;
+  }>;
+}
+
+interface GoogleFitAggregateResponse {
+  bucket?: GoogleFitBucket[];
+}
+
 export async function fetchIntradaySteps(): Promise<StepMinute[]> {
   const token = await getValidAccessToken();
   if (!token) return [];
 
-  const res = await fetch(FITBIT_INTRADAY_URL, {
-    headers: { Authorization: `Bearer ${token}` },
+  const endMs = Date.now();
+  const startMs = endMs - 15 * 60 * 1000;
+
+  const body = JSON.stringify({
+    aggregateBy: [{ dataTypeName: "com.google.step_count.delta" }],
+    bucketByTime: { durationMillis: 60_000 },
+    startTimeMillis: startMs.toString(),
+    endTimeMillis: endMs.toString(),
+  });
+
+  const res = await fetch(GOOGLE_FIT_AGGREGATE_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body,
   });
 
   if (!res.ok) {
-    logger.error({ status: res.status }, "Fitbit intraday fetch failed");
+    logger.error({ status: res.status }, "Google Fit aggregate fetch failed");
     return [];
   }
 
-  const data = (await res.json()) as {
-    "activities-steps-intraday"?: {
-      dataset?: { time: string; value: number }[];
-    };
-  };
+  const data = (await res.json()) as GoogleFitAggregateResponse;
+  const buckets = data.bucket ?? [];
 
-  const dataset =
-    data["activities-steps-intraday"]?.dataset ?? [];
+  return buckets.map((bucket) => {
+    const tsMs = parseInt(bucket.startTimeMillis, 10);
+    const d = new Date(tsMs);
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    const time = `${hh}:${mm}`;
 
-  return dataset.map((d) => ({ time: d.time, steps: d.value }));
+    const point = bucket.dataset[0]?.point[0];
+    const steps = point?.value[0]?.intVal ?? point?.value[0]?.fpVal ?? 0;
+
+    return { time, steps: Math.round(steps) };
+  });
 }

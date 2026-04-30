@@ -38,7 +38,7 @@ async function poll(): Promise<void> {
       signal: deriveDriftSignal(recent),
     };
   } catch (err) {
-    logger.error({ err }, "Fitbit poll error");
+    logger.error({ err }, "Google Fit poll error");
   }
 }
 
@@ -46,7 +46,7 @@ export function startFitbitPoller(): void {
   if (pollTimer) return;
   void poll();
   pollTimer = setInterval(() => void poll(), POLL_INTERVAL_MS);
-  logger.info({ intervalMs: POLL_INTERVAL_MS }, "Fitbit poller started");
+  logger.info({ intervalMs: POLL_INTERVAL_MS }, "Google Fit poller started");
 }
 
 export function stopFitbitPoller(): void {
