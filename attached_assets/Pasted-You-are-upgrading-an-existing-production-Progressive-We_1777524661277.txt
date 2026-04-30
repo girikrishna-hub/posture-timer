@@ -1,0 +1,293 @@
+You are upgrading an existing production Progressive Web App (PWA) that tracks sitting, standing, resting, and walking sessions with timers, notifications, and analytics.
+
+Your task is to implement Fitbit-assisted state correction, NOT full automation.
+
+---
+
+CORE PRINCIPLE
+
+The system is manual-first:
+
+- User button presses define the current state
+- Fitbit is used ONLY to detect when the user has likely forgotten to switch states
+
+Fitbit must NEVER aggressively override user intent.
+
+---
+
+FEATURE NAME
+
+Fitbit Assisted Mode (toggle in Settings)
+
+---
+
+HIGH LEVEL BEHAVIOR
+
+1. User taps mode → system switches immediately
+2. System enters a lock window where Fitbit data is ignored
+3. After lock window expires → Fitbit data is used to detect “drift”
+4. If drift is detected → show nudge
+5. If user does not respond → auto-correct state
+
+---
+
+IMPLEMENTATION DETAILS
+
+1. FITBIT INTEGRATION
+
+Implement OAuth2 connection to Fitbit Web API.
+
+Store:
+
+- access_token
+- refresh_token
+- expiry
+
+Create backend endpoint:
+
+GET /fitbit/intraday
+
+Fetch:
+
+- steps per minute for current day:
+  /1/user/-/activities/steps/date/today/1d/1min.json
+
+Polling interval:
+
+- every 2 minutes (configurable)
+
+Cache latest 15 minutes of data.
+
+---
+
+2. STATE ENGINE EXTENSION
+
+Existing states:
+
+- SITTING
+- STANDING
+- WALKING
+- RESTING
+
+Add:
+
+stateSource:
+
+- "manual"
+- "fitbit_auto"
+- "fitbit_suggested"
+
+lastManualActionTimestamp
+
+---
+
+3. LOCK WINDOW
+
+After manual switch:
+
+If SITTING:
+
+- lock = 15 minutes
+
+If STANDING:
+
+- lock = 10 minutes
+
+If WALKING:
+
+- no lock (Fitbit can override freely)
+
+During lock:
+
+- ignore Fitbit data completely
+
+---
+
+4. FITBIT SIGNAL PROCESSING
+
+From last 10 minutes of steps/min:
+
+Define:
+
+walkingThreshold = >30 steps/min
+standingThreshold = 2–30 steps/min
+sittingThreshold = 0 steps sustained
+
+Compute:
+
+avgSteps = average last 3 minutes
+zeroStepDuration = continuous minutes with 0 steps
+
+---
+
+5. DRIFT DETECTION RULES
+
+CASE 1 — App says STANDING, but user inactive
+
+Condition:
+
+- zeroStepDuration >= 8 minutes
+
+Action:
+
+- trigger NUDGE:
+  "No movement detected. Switch to Sitting?"
+
+- start 15-second countdown
+
+If no user response:
+
+- auto switch to SITTING
+- stateSource = "fitbit_auto"
+
+---
+
+CASE 2 — App says SITTING, but user active
+
+Condition:
+
+- avgSteps >= 5 steps/min for 3 consecutive minutes
+
+Action:
+
+- trigger NUDGE:
+  "Activity detected. Switch to Standing?"
+
+- start 10-second countdown
+
+If no user response:
+
+- auto switch to STANDING
+- stateSource = "fitbit_auto"
+
+---
+
+CASE 3 — WALKING DETECTION
+
+Condition:
+
+- steps >= 30 steps/min for 2 consecutive minutes
+
+Action:
+
+- immediate switch to WALKING
+- no confirmation required
+- stateSource = "fitbit_auto"
+
+---
+
+6. CONFIDENCE BUFFER
+
+To prevent jitter:
+
+- Require conditions to hold continuously before triggering
+- Reset counters if condition breaks
+
+---
+
+7. UI REQUIREMENTS
+
+When Fitbit triggers anything:
+
+Show banner/toast:
+
+Examples:
+
+- "Auto-switched to Sitting (no movement detected)"
+- "Auto-switched to Standing (activity detected)"
+- "Walking detected"
+
+For nudges:
+
+- Show modal or bottom sheet with countdown
+- Allow:
+  - Confirm
+  - Cancel
+
+---
+
+8. SETTINGS
+
+Add toggle:
+
+[ ] Enable Fitbit Assisted Mode
+
+When OFF:
+
+- system behaves exactly as current implementation
+
+When ON:
+
+- all above logic is active
+
+---
+
+9. ERROR HANDLING
+
+If Fitbit data unavailable:
+
+- fallback to existing timer logic
+- do NOT block app
+
+---
+
+10. PERFORMANCE
+
+- Do NOT poll more than once every 2 minutes
+- Use debouncing for state changes
+- Ensure battery efficiency
+
+---
+
+11. ANALYTICS
+
+Track:
+
+- number of Fitbit nudges
+- number of auto-corrections
+- user acceptance vs cancellation rate
+
+---
+
+12. NON-GOALS (IMPORTANT)
+
+Do NOT:
+
+- Attempt perfect posture detection
+- Replace timer-based system
+- Continuously flip states
+- Override manual action during lock window
+
+---
+
+DELIVERABLES
+
+1. Backend:
+   
+   - Fitbit OAuth integration
+   - Intraday polling service
+   - Drift detection service
+
+2. Frontend:
+   
+   - Nudge UI
+   - Auto-switch feedback
+   - Settings toggle
+
+3. State management updates:
+   
+   - Lock window logic
+   - Fitbit-assisted transitions
+
+---
+
+SUCCESS CRITERIA
+
+- Manual control always respected first
+- Fitbit only corrects after inactivity or missed transitions
+- No rapid or confusing state flipping
+- User clearly understands why a switch occurred
+
+---
+
+Build this incrementally and ensure backward compatibility with existing timer, analytics, and notification systems.
