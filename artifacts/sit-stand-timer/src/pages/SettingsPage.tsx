@@ -3,6 +3,7 @@ import { useGetSettings, useUpdateSettings, getGetSettingsQueryKey } from "@work
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { useQueryClient } from "@tanstack/react-query";
+import { isSoundEnabled, setSoundEnabled } from "@/utils/audio";
 
 type GeoPermissionStatus = "unknown" | "prompt" | "requesting" | "granted" | "denied" | "unsupported";
 
@@ -65,6 +66,7 @@ export default function SettingsPage() {
     autoDetectWalking: false,
   });
 
+  const [soundOn, setSoundOn] = useState(isSoundEnabled);
   const [saved, setSaved] = useState(false);
   const [goalUpdated, setGoalUpdated] = useState(false);
   const goalUpdatedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -189,6 +191,14 @@ export default function SettingsPage() {
       );
     }
   }, [localSettings, geoPermission, updateMutation, queryClient]);
+
+  const handleToggleSound = useCallback(() => {
+    setSoundOn((prev) => {
+      const next = !prev;
+      setSoundEnabled(next);
+      return next;
+    });
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">
@@ -360,6 +370,30 @@ export default function SettingsPage() {
               <span
                 className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
                   localSettings.autoDetectWalking ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="border-t border-border pt-4 flex items-start justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground">Sound effects</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Play tones when switching positions and reaching your daily goal
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={soundOn}
+              onClick={handleToggleSound}
+              className={`relative shrink-0 mt-0.5 inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                soundOn ? "bg-teal-500" : "bg-muted-foreground/30"
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                  soundOn ? "translate-x-6" : "translate-x-1"
                 }`}
               />
             </button>

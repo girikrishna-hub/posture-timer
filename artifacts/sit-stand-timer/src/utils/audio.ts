@@ -1,3 +1,23 @@
+const SOUND_KEY = "sit-stand-sound-enabled";
+
+export function isSoundEnabled(): boolean {
+  try {
+    const stored = localStorage.getItem(SOUND_KEY);
+    if (stored === null) return true;
+    return stored === "true";
+  } catch {
+    return true;
+  }
+}
+
+export function setSoundEnabled(enabled: boolean): void {
+  try {
+    localStorage.setItem(SOUND_KEY, String(enabled));
+  } catch {
+    // ignore
+  }
+}
+
 let audioCtx: AudioContext | null = null;
 
 function getAudioContext(): AudioContext {
@@ -8,6 +28,7 @@ function getAudioContext(): AudioContext {
 }
 
 function playTone(frequency: number, duration: number, type: OscillatorType = "sine", gain = 0.3): void {
+  if (!isSoundEnabled()) return;
   try {
     const ctx = getAudioContext();
     const oscillator = ctx.createOscillator();
