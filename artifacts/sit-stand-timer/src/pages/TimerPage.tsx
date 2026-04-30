@@ -171,12 +171,12 @@ const STROKE_WIDTH = 10;
 const RADIUS = (RING_SIZE - STROKE_WIDTH) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
-function TrophyBadge({ delayed, onReplay, showHint, onHintShown }: { delayed: boolean; onReplay: () => void; showHint: boolean; onHintShown: () => void }) {
+function TrophyBadge({ delayed, skipPopIn, onReplay, showHint, onHintShown }: { delayed: boolean; skipPopIn: boolean; onReplay: () => void; showHint: boolean; onHintShown: () => void }) {
   const popInDelay = delayed ? 2.1 : 0;
   const wiggleDelay = popInDelay + 0.8;
-  const animation = showHint
-    ? `badge-pop-in 0.5s ${popInDelay}s cubic-bezier(0.34,1.56,0.64,1) both, badge-hint-wiggle 0.7s ${wiggleDelay}s ease-in-out 1 both`
-    : `badge-pop-in 0.5s ${popInDelay}s cubic-bezier(0.34,1.56,0.64,1) both`;
+  const popInPart = skipPopIn ? "" : `badge-pop-in 0.5s ${popInDelay}s cubic-bezier(0.34,1.56,0.64,1) both`;
+  const hintPart = showHint ? `badge-hint-wiggle 0.7s ${wiggleDelay}s ease-in-out 1 both` : "";
+  const animation = [popInPart, hintPart].filter(Boolean).join(", ") || undefined;
 
   const handleAnimationEnd = (e: React.AnimationEvent<HTMLButtonElement>) => {
     if (e.animationName === "badge-hint-wiggle") {
@@ -209,7 +209,7 @@ function TrophyBadge({ delayed, onReplay, showHint, onHintShown }: { delayed: bo
   );
 }
 
-function GoalProgressRing({ mode, goalPercent, celebrating, goalAchieved, badgeDelayed, showBadgeHint, onBadgeHintShown, onReplayCelebration }: { mode: TimerMode; goalPercent: number; celebrating: boolean; goalAchieved: boolean; badgeDelayed: boolean; showBadgeHint: boolean; onBadgeHintShown: () => void; onReplayCelebration: () => void }) {
+function GoalProgressRing({ mode, goalPercent, celebrating, goalAchieved, badgeDelayed, skipBadgePopIn, showBadgeHint, onBadgeHintShown, onReplayCelebration }: { mode: TimerMode; goalPercent: number; celebrating: boolean; goalAchieved: boolean; badgeDelayed: boolean; skipBadgePopIn: boolean; showBadgeHint: boolean; onBadgeHintShown: () => void; onReplayCelebration: () => void }) {
   const clampedPercent = Math.max(0, Math.min(goalPercent, 100));
   const dashOffset = CIRCUMFERENCE * (1 - clampedPercent / 100);
   const goalMet = goalPercent >= 100;
@@ -229,7 +229,7 @@ function GoalProgressRing({ mode, goalPercent, celebrating, goalAchieved, badgeD
 
   return (
     <div className="relative w-56 h-56">
-      {goalAchieved && !celebrating && <TrophyBadge delayed={badgeDelayed} onReplay={onReplayCelebration} showHint={showBadgeHint} onHintShown={onBadgeHintShown} />}
+      {goalAchieved && !celebrating && <TrophyBadge delayed={badgeDelayed} skipPopIn={skipBadgePopIn} onReplay={onReplayCelebration} showHint={showBadgeHint} onHintShown={onBadgeHintShown} />}
       {celebrating && (
         <>
           <span
@@ -394,6 +394,10 @@ export default function TimerPage() {
   // true = badge was just earned this session (animate in after celebration delay)
   // false = badge loaded from localStorage (animate in immediately on mount)
   const freshAchievementRef = useRef(false);
+  // true = goal was already achieved when the page loaded (from localStorage), so
+  // skip the badge-pop-in animation to prevent it replaying on every reload.
+  // Cleared to false on first replay so subsequent appearances still animate.
+  const skipBadgePopInRef = useRef(getCelebratedDate() === todayStr());
   // Track whether the hint wiggle has already been shown today (state) or
   // at least scheduled this session (ref). State initialises from localStorage
   // so a page reload after the hint played still suppresses it.
@@ -470,6 +474,8 @@ export default function TimerPage() {
     if (!goalAchieved || celebrating) return;
     // After first display the badge should pop back in immediately (no delay)
     freshAchievementRef.current = false;
+    // Allow the pop-in animation for replays, even if it was skipped on page load
+    skipBadgePopInRef.current = false;
     playGoalCelebrationTone();
     if (celebrationTimerRef.current) clearTimeout(celebrationTimerRef.current);
     setCelebrating(true);
@@ -494,6 +500,7 @@ export default function TimerPage() {
         setCelebrating(false);
         setGoalAchieved(false);
         freshAchievementRef.current = false;
+        skipBadgePopInRef.current = false;
         setBadgeHintShown(false);
         hintScheduledRef.current = false;
         if (celebrationTimerRef.current) {
@@ -655,6 +662,7 @@ export default function TimerPage() {
           celebrating={celebrating}
           goalAchieved={goalAchieved}
           badgeDelayed={freshAchievementRef.current}
+          skipBadgePopIn={skipBadgePopInRef.current}
           showBadgeHint={showBadgeHint}
           onBadgeHintShown={handleBadgeHintShown}
           onReplayCelebration={replayCelebration}
