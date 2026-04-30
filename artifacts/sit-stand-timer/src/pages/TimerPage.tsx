@@ -391,6 +391,7 @@ export default function TimerPage() {
     if (!goalAchieved || celebrating) return;
     // After first display the badge should pop back in immediately (no delay)
     freshAchievementRef.current = false;
+    playGoalCelebrationTone();
     if (celebrationTimerRef.current) clearTimeout(celebrationTimerRef.current);
     setCelebrating(true);
     celebrationTimerRef.current = setTimeout(() => {
