@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useBanner } from "@/hooks/useBanner";
 import {
   useGetSettings,
   useUpdateSettings,
@@ -86,27 +87,13 @@ export default function SettingsPage() {
   });
   const [fitbitConnecting, setFitbitConnecting] = useState(false);
   const [fitbitDisconnecting, setFitbitDisconnecting] = useState(false);
-  const [goalUpdated, setGoalUpdated] = useState(false);
-  const [goalUpdatedVisible, setGoalUpdatedVisible] = useState(false);
-  const goalUpdatedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const goalUpdatedVisibleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const goalBanner = useBanner(5000);
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>(
     typeof Notification !== "undefined" ? Notification.permission : "default"
   );
   const [geoPermission, setGeoPermission] = useState<GeoPermissionStatus>(
     "geolocation" in navigator ? "unknown" : "unsupported"
   );
-
-  useEffect(() => {
-    return () => {
-      if (goalUpdatedTimerRef.current !== null) {
-        clearTimeout(goalUpdatedTimerRef.current);
-      }
-      if (goalUpdatedVisibleTimerRef.current !== null) {
-        clearTimeout(goalUpdatedVisibleTimerRef.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     if (settings) {
@@ -139,26 +126,7 @@ export default function SettingsPage() {
         );
       } catch { /* ignore */ }
 
-      if (goalUpdatedTimerRef.current !== null) {
-        clearTimeout(goalUpdatedTimerRef.current);
-      }
-      if (goalUpdatedVisibleTimerRef.current !== null) {
-        clearTimeout(goalUpdatedVisibleTimerRef.current);
-      }
-      setGoalUpdated(true);
-      setGoalUpdatedVisible(false);
-      goalUpdatedVisibleTimerRef.current = setTimeout(() => {
-        setGoalUpdatedVisible(true);
-        goalUpdatedVisibleTimerRef.current = null;
-      }, 16);
-      goalUpdatedTimerRef.current = setTimeout(() => {
-        setGoalUpdatedVisible(false);
-        goalUpdatedTimerRef.current = null;
-        goalUpdatedVisibleTimerRef.current = setTimeout(() => {
-          setGoalUpdated(false);
-          goalUpdatedVisibleTimerRef.current = null;
-        }, 350);
-      }, 5000);
+      goalBanner.show();
     }
 
     await queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() });
@@ -289,14 +257,14 @@ export default function SettingsPage() {
         </div>
       </header>
 
-      {goalUpdated && (
+      {goalBanner.shown && (
         <div
           role="status"
           aria-live="polite"
           className={[
             "mx-6 mb-2 flex items-start gap-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-4 py-3",
             "transition-all duration-300 ease-out",
-            goalUpdatedVisible
+            goalBanner.visible
               ? "opacity-100 translate-y-0"
               : "opacity-0 -translate-y-2",
           ].join(" ")}
@@ -311,7 +279,7 @@ export default function SettingsPage() {
           </div>
           <button
             type="button"
-            onClick={() => setGoalUpdated(false)}
+            onClick={() => goalBanner.dismiss()}
             aria-label="Dismiss"
             className="shrink-0 ml-1 -mr-1 p-1 rounded-full text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
           >

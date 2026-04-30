@@ -6,6 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { useEffect, useRef, useState } from "react";
 import { useFitbitDrift } from "@/hooks/useFitbitDrift";
 import { NudgeModal } from "@/components/NudgeModal";
+import { useBanner } from "@/hooks/useBanner";
 
 const CELEBRATION_KEY = "sit-stand-goal-celebrated";
 const BADGE_HINT_KEY = "sit-stand-badge-hint";
@@ -500,13 +501,10 @@ export default function TimerPage() {
     : null;
 
   // Auto-switch toast
-  const [autoSwitchToast, setAutoSwitchToast] = useState<string | null>(null);
-  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoSwitchBanner = useBanner<string>(4000);
   const showAutoSwitchToast = (toMode: string, reason: string) => {
     const label = toMode === "sitting" ? "Sitting" : toMode === "standing" ? "Standing" : "Walking";
-    setAutoSwitchToast(`Auto-switched to ${label} — ${reason}`);
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = setTimeout(() => setAutoSwitchToast(null), 4000);
+    autoSwitchBanner.show(`Auto-switched to ${label} — ${reason}`);
   };
 
   // Hook handles switchMode internally; onAutoSwitch is only for UI feedback
@@ -523,10 +521,18 @@ export default function TimerPage() {
     <div className="min-h-screen flex flex-col bg-background">
       <NudgeModal nudge={nudge} onConfirm={handleNudgeConfirm} onCancel={cancelNudge} />
 
-      {autoSwitchToast && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-card border border-border shadow-lg rounded-2xl px-4 py-2.5 text-sm font-medium text-foreground flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
+      {autoSwitchBanner.shown && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={[
+            "fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-card border border-border shadow-lg rounded-2xl px-4 py-2.5 text-sm font-medium text-foreground flex items-center gap-2",
+            "transition-all duration-300 ease-out",
+            autoSwitchBanner.visible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2",
+          ].join(" ")}
+        >
           <span>🤖</span>
-          {autoSwitchToast}
+          {autoSwitchBanner.message}
         </div>
       )}
 
