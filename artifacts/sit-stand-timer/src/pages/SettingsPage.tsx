@@ -305,10 +305,21 @@ export default function SettingsPage() {
             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
             <polyline points="22 4 12 14.01 9 11.01"/>
           </svg>
-          <div>
+          <div className="flex-1">
             <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">Goal updated</p>
             <p className="text-xs text-emerald-700 dark:text-emerald-300">Milestone alerts have been reset for today.</p>
           </div>
+          <button
+            type="button"
+            onClick={() => setGoalUpdated(false)}
+            aria-label="Dismiss"
+            className="shrink-0 ml-1 -mr-1 p-1 rounded-full text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
         </div>
       )}
 
