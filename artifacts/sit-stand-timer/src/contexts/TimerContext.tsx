@@ -418,7 +418,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     endCurrentSession,
   });
 
-  // Main 1-second tick: reminder logic + idle auto-pause
+  // Main 1-second tick — pure increment only (no side-effects inside updater)
   useEffect(() => {
     if (!initialized) return;
     if (mode === "idle" || mode === "resting") return;
@@ -426,83 +426,89 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     const interval = setInterval(() => {
       const currentMode = modeRef.current;
       if (currentMode === "idle" || currentMode === "resting") return;
-
-      setElapsedSeconds((prev) => {
-        const next = prev + 1;
-        const elapsedMinutes = next / 60;
-        const s = settingsRef.current;
-
-        const inactiveSecs = (Date.now() - lastActivityRef.current) / 1000;
-        if (inactiveSecs >= IDLE_TIMEOUT_SECONDS) {
-          void switchModeRef.current("resting");
-          notify("Auto-paused", "No activity detected for an hour. Timer paused.");
-          return next;
-        }
-
-        if (currentMode === "sitting") {
-          const alertMin = s.sittingAlertMinutes;
-          const reminderInterval = s.reminderIntervalMinutes;
-          const maxReminders = s.remindersCount;
-
-          if (elapsedMinutes >= alertMin && !inReminderPhaseRef.current) {
-            setInReminderPhase(true);
-            setReminderCount(1);
-            playStandTone();
-            notify("Time to stand!", `You've been sitting for ${alertMin} minutes.`);
-          } else if (inReminderPhaseRef.current) {
-            const soFar = reminderCountRef.current;
-            const nextAt = alertMin + soFar * reminderInterval;
-            if (elapsedMinutes >= nextAt && soFar < maxReminders) {
-              setReminderCount((r) => r + 1);
-              playStandTone();
-              notify(
-                `Stand up — reminder ${soFar + 1}/${maxReminders}`,
-                `You've been sitting for ${Math.round(elapsedMinutes)} minutes.`
-              );
-            }
-          }
-        } else if (currentMode === "standing") {
-          const minMin = s.standingMinMinutes;
-          const maxMin = s.standingMaxMinutes;
-          const reminderInterval = s.reminderIntervalMinutes;
-          const maxReminders = s.remindersCount;
-
-          if (elapsedMinutes >= minMin && !inReminderPhaseRef.current) {
-            setInReminderPhase(true);
-            setReminderCount(1);
-            playSitTone();
-            notify("Time to sit!", `You've been standing for ${minMin} minutes.`);
-          } else if (inReminderPhaseRef.current) {
-            const soFar = reminderCountRef.current;
-
-            if (elapsedMinutes >= maxMin && !finalReminderFiredRef.current) {
-              finalReminderFiredRef.current = true;
-              setReminderCount((r) => r + 1);
-              playSitTone();
-              notify(
-                "Final reminder — please sit down",
-                `Maximum standing time of ${maxMin} minutes reached.`
-              );
-            } else if (elapsedMinutes < maxMin) {
-              const nextAt = minMin + soFar * reminderInterval;
-              if (elapsedMinutes >= nextAt && soFar < maxReminders) {
-                setReminderCount((r) => r + 1);
-                playSitTone();
-                notify(
-                  `Sit down — reminder ${soFar + 1}/${maxReminders}`,
-                  `You've been standing for ${Math.round(elapsedMinutes)} minutes.`
-                );
-              }
-            }
-          }
-        }
-
-        return next;
-      });
+      setElapsedSeconds((prev) => prev + 1);
     }, 1000);
 
     return () => clearInterval(interval);
   }, [initialized, mode]);
+
+  // Reminder/notification side-effects — runs after each tick, safely outside any updater
+  useEffect(() => {
+    if (!initialized) return;
+    const currentMode = modeRef.current;
+    if (currentMode === "idle" || currentMode === "resting") return;
+
+    const elapsedMinutes = elapsedSeconds / 60;
+    const s = settingsRef.current;
+
+    // Idle auto-pause check
+    const inactiveSecs = (Date.now() - lastActivityRef.current) / 1000;
+    if (inactiveSecs >= IDLE_TIMEOUT_SECONDS) {
+      void switchModeRef.current("resting");
+      notify("Auto-paused", "No activity detected for an hour. Timer paused.");
+      return;
+    }
+
+    if (currentMode === "sitting") {
+      const alertMin = s.sittingAlertMinutes;
+      const reminderInterval = s.reminderIntervalMinutes;
+      const maxReminders = s.remindersCount;
+
+      if (elapsedMinutes >= alertMin && !inReminderPhaseRef.current) {
+        setInReminderPhase(true);
+        setReminderCount(1);
+        playStandTone();
+        notify("Time to stand!", `You've been sitting for ${alertMin} minutes.`);
+      } else if (inReminderPhaseRef.current) {
+        const soFar = reminderCountRef.current;
+        const nextAt = alertMin + soFar * reminderInterval;
+        if (elapsedMinutes >= nextAt && soFar < maxReminders) {
+          setReminderCount((r) => r + 1);
+          playStandTone();
+          notify(
+            `Stand up — reminder ${soFar + 1}/${maxReminders}`,
+            `You've been sitting for ${Math.round(elapsedMinutes)} minutes.`
+          );
+        }
+      }
+    } else if (currentMode === "standing") {
+      const minMin = s.standingMinMinutes;
+      const maxMin = s.standingMaxMinutes;
+      const reminderInterval = s.reminderIntervalMinutes;
+      const maxReminders = s.remindersCount;
+
+      if (elapsedMinutes >= minMin && !inReminderPhaseRef.current) {
+        setInReminderPhase(true);
+        setReminderCount(1);
+        playSitTone();
+        notify("Time to sit!", `You've been standing for ${minMin} minutes.`);
+      } else if (inReminderPhaseRef.current) {
+        const soFar = reminderCountRef.current;
+
+        if (elapsedMinutes >= maxMin && !finalReminderFiredRef.current) {
+          finalReminderFiredRef.current = true;
+          setReminderCount((r) => r + 1);
+          playSitTone();
+          notify(
+            "Final reminder — please sit down",
+            `Maximum standing time of ${maxMin} minutes reached.`
+          );
+        } else if (elapsedMinutes < maxMin) {
+          const nextAt = minMin + soFar * reminderInterval;
+          if (elapsedMinutes >= nextAt && soFar < maxReminders) {
+            setReminderCount((r) => r + 1);
+            playSitTone();
+            notify(
+              `Sit down — reminder ${soFar + 1}/${maxReminders}`,
+              `You've been standing for ${Math.round(elapsedMinutes)} minutes.`
+            );
+          }
+        }
+      }
+    }
+  // elapsedSeconds drives this; all other values are read via stable refs
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [elapsedSeconds, initialized]);
 
   // Track user activity for idle detection
   useEffect(() => {
