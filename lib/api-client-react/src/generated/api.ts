@@ -20,7 +20,13 @@ import type {
   ActiveSessionResponse,
   DailyMetricsResponse,
   EndSessionBody,
+  FitbitAnalyticsSummary,
+  FitbitAuthUrl,
+  FitbitEventBody,
+  FitbitIntradayData,
+  FitbitStatus,
   GetDailyMetricsParams,
+  HandleFitbitCallbackParams,
   HealthStatus,
   ListSessionsParams,
   Session,
@@ -1012,3 +1018,570 @@ export function useGetMetricsSummary<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Get Fitbit connection status
+ */
+export const getGetFitbitStatusUrl = () => {
+  return `/api/fitbit/status`;
+};
+
+export const getFitbitStatus = async (
+  options?: RequestInit,
+): Promise<FitbitStatus> => {
+  return customFetch<FitbitStatus>(getGetFitbitStatusUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetFitbitStatusQueryKey = () => {
+  return [`/api/fitbit/status`] as const;
+};
+
+export const getGetFitbitStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof getFitbitStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getFitbitStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetFitbitStatusQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getFitbitStatus>>> = ({
+    signal,
+  }) => getFitbitStatus({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getFitbitStatus>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetFitbitStatusQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getFitbitStatus>>
+>;
+export type GetFitbitStatusQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get Fitbit connection status
+ */
+
+export function useGetFitbitStatus<
+  TData = Awaited<ReturnType<typeof getFitbitStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getFitbitStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetFitbitStatusQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get Fitbit OAuth authorization URL
+ */
+export const getGetFitbitAuthUrlUrl = () => {
+  return `/api/fitbit/auth-url`;
+};
+
+export const getFitbitAuthUrl = async (
+  options?: RequestInit,
+): Promise<FitbitAuthUrl> => {
+  return customFetch<FitbitAuthUrl>(getGetFitbitAuthUrlUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetFitbitAuthUrlQueryKey = () => {
+  return [`/api/fitbit/auth-url`] as const;
+};
+
+export const getGetFitbitAuthUrlQueryOptions = <
+  TData = Awaited<ReturnType<typeof getFitbitAuthUrl>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getFitbitAuthUrl>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetFitbitAuthUrlQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getFitbitAuthUrl>>
+  > = ({ signal }) => getFitbitAuthUrl({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getFitbitAuthUrl>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetFitbitAuthUrlQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getFitbitAuthUrl>>
+>;
+export type GetFitbitAuthUrlQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get Fitbit OAuth authorization URL
+ */
+
+export function useGetFitbitAuthUrl<
+  TData = Awaited<ReturnType<typeof getFitbitAuthUrl>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getFitbitAuthUrl>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetFitbitAuthUrlQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Fitbit OAuth callback — exchanges code for tokens
+ */
+export const getHandleFitbitCallbackUrl = (
+  params: HandleFitbitCallbackParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/fitbit/callback?${stringifiedParams}`
+    : `/api/fitbit/callback`;
+};
+
+export const handleFitbitCallback = async (
+  params: HandleFitbitCallbackParams,
+  options?: RequestInit,
+): Promise<unknown> => {
+  return customFetch<unknown>(getHandleFitbitCallbackUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getHandleFitbitCallbackQueryKey = (
+  params?: HandleFitbitCallbackParams,
+) => {
+  return [`/api/fitbit/callback`, ...(params ? [params] : [])] as const;
+};
+
+export const getHandleFitbitCallbackQueryOptions = <
+  TData = Awaited<ReturnType<typeof handleFitbitCallback>>,
+  TError = ErrorType<void>,
+>(
+  params: HandleFitbitCallbackParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof handleFitbitCallback>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getHandleFitbitCallbackQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof handleFitbitCallback>>
+  > = ({ signal }) =>
+    handleFitbitCallback(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof handleFitbitCallback>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type HandleFitbitCallbackQueryResult = NonNullable<
+  Awaited<ReturnType<typeof handleFitbitCallback>>
+>;
+export type HandleFitbitCallbackQueryError = ErrorType<void>;
+
+/**
+ * @summary Fitbit OAuth callback — exchanges code for tokens
+ */
+
+export function useHandleFitbitCallback<
+  TData = Awaited<ReturnType<typeof handleFitbitCallback>>,
+  TError = ErrorType<void>,
+>(
+  params: HandleFitbitCallbackParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof handleFitbitCallback>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getHandleFitbitCallbackQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Remove stored Fitbit tokens
+ */
+export const getDisconnectFitbitUrl = () => {
+  return `/api/fitbit/disconnect`;
+};
+
+export const disconnectFitbit = async (
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDisconnectFitbitUrl(), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDisconnectFitbitMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof disconnectFitbit>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof disconnectFitbit>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["disconnectFitbit"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof disconnectFitbit>>,
+    void
+  > = () => {
+    return disconnectFitbit(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DisconnectFitbitMutationResult = NonNullable<
+  Awaited<ReturnType<typeof disconnectFitbit>>
+>;
+
+export type DisconnectFitbitMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Remove stored Fitbit tokens
+ */
+export const useDisconnectFitbit = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof disconnectFitbit>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof disconnectFitbit>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getDisconnectFitbitMutationOptions(options));
+};
+
+/**
+ * @summary Get last 15 minutes of intraday step data (cached)
+ */
+export const getGetFitbitIntradayUrl = () => {
+  return `/api/fitbit/intraday`;
+};
+
+export const getFitbitIntraday = async (
+  options?: RequestInit,
+): Promise<FitbitIntradayData> => {
+  return customFetch<FitbitIntradayData>(getGetFitbitIntradayUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetFitbitIntradayQueryKey = () => {
+  return [`/api/fitbit/intraday`] as const;
+};
+
+export const getGetFitbitIntradayQueryOptions = <
+  TData = Awaited<ReturnType<typeof getFitbitIntraday>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getFitbitIntraday>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetFitbitIntradayQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getFitbitIntraday>>
+  > = ({ signal }) => getFitbitIntraday({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getFitbitIntraday>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetFitbitIntradayQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getFitbitIntraday>>
+>;
+export type GetFitbitIntradayQueryError = ErrorType<void>;
+
+/**
+ * @summary Get last 15 minutes of intraday step data (cached)
+ */
+
+export function useGetFitbitIntraday<
+  TData = Awaited<ReturnType<typeof getFitbitIntraday>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getFitbitIntraday>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetFitbitIntradayQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get Fitbit assisted-mode analytics totals
+ */
+export const getGetFitbitAnalyticsUrl = () => {
+  return `/api/fitbit/analytics`;
+};
+
+export const getFitbitAnalytics = async (
+  options?: RequestInit,
+): Promise<FitbitAnalyticsSummary> => {
+  return customFetch<FitbitAnalyticsSummary>(getGetFitbitAnalyticsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetFitbitAnalyticsQueryKey = () => {
+  return [`/api/fitbit/analytics`] as const;
+};
+
+export const getGetFitbitAnalyticsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getFitbitAnalytics>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getFitbitAnalytics>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetFitbitAnalyticsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getFitbitAnalytics>>
+  > = ({ signal }) => getFitbitAnalytics({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getFitbitAnalytics>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetFitbitAnalyticsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getFitbitAnalytics>>
+>;
+export type GetFitbitAnalyticsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get Fitbit assisted-mode analytics totals
+ */
+
+export function useGetFitbitAnalytics<
+  TData = Awaited<ReturnType<typeof getFitbitAnalytics>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getFitbitAnalytics>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetFitbitAnalyticsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Record a Fitbit assisted-mode event (nudge, correction, acceptance, cancellation)
+ */
+export const getRecordFitbitEventUrl = () => {
+  return `/api/fitbit/analytics/event`;
+};
+
+export const recordFitbitEvent = async (
+  fitbitEventBody: FitbitEventBody,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getRecordFitbitEventUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(fitbitEventBody),
+  });
+};
+
+export const getRecordFitbitEventMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recordFitbitEvent>>,
+    TError,
+    { data: BodyType<FitbitEventBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof recordFitbitEvent>>,
+  TError,
+  { data: BodyType<FitbitEventBody> },
+  TContext
+> => {
+  const mutationKey = ["recordFitbitEvent"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof recordFitbitEvent>>,
+    { data: BodyType<FitbitEventBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return recordFitbitEvent(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RecordFitbitEventMutationResult = NonNullable<
+  Awaited<ReturnType<typeof recordFitbitEvent>>
+>;
+export type RecordFitbitEventMutationBody = BodyType<FitbitEventBody>;
+export type RecordFitbitEventMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Record a Fitbit assisted-mode event (nudge, correction, acceptance, cancellation)
+ */
+export const useRecordFitbitEvent = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof recordFitbitEvent>>,
+    TError,
+    { data: BodyType<FitbitEventBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof recordFitbitEvent>>,
+  TError,
+  { data: BodyType<FitbitEventBody> },
+  TContext
+> => {
+  return useMutation(getRecordFitbitEventMutationOptions(options));
+};

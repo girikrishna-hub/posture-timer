@@ -269,3 +269,68 @@ export const GetMetricsSummaryResponse = zod.object({
   avgNapDurationMinutes: zod.number(),
   avgSleepDurationMinutes: zod.number(),
 });
+
+/**
+ * @summary Get Fitbit connection status
+ */
+export const GetFitbitStatusResponse = zod.object({
+  connected: zod.boolean(),
+  expiresAt: zod.coerce.date().nullish(),
+  connectedAt: zod.coerce.date().nullish(),
+});
+
+/**
+ * @summary Get Fitbit OAuth authorization URL
+ */
+export const GetFitbitAuthUrlResponse = zod.object({
+  url: zod.string(),
+});
+
+/**
+ * @summary Fitbit OAuth callback — exchanges code for tokens
+ */
+export const HandleFitbitCallbackQueryParams = zod.object({
+  code: zod.coerce.string(),
+  state: zod.coerce.string().optional(),
+});
+
+/**
+ * @summary Get last 15 minutes of intraday step data (cached)
+ */
+export const GetFitbitIntradayResponse = zod.object({
+  minutes: zod.array(
+    zod.object({
+      time: zod.string().describe("HH:MM:SS"),
+      steps: zod.number(),
+    }),
+  ),
+  fetchedAt: zod.coerce.date(),
+  signal: zod
+    .enum(["sitting", "standing", "walking", "unknown"])
+    .describe("Derived signal from last 3 minutes of step data"),
+});
+
+/**
+ * @summary Get Fitbit assisted-mode analytics totals
+ */
+export const GetFitbitAnalyticsResponse = zod.object({
+  nudgeCount: zod.number(),
+  autoCorrectionCount: zod.number(),
+  userAcceptedCount: zod.number(),
+  userCancelledCount: zod.number(),
+});
+
+/**
+ * @summary Record a Fitbit assisted-mode event (nudge, correction, acceptance, cancellation)
+ */
+export const RecordFitbitEventBody = zod.object({
+  eventType: zod.enum([
+    "nudge",
+    "auto_correction",
+    "user_accepted",
+    "user_cancelled",
+  ]),
+  fromMode: zod.enum(["sitting", "standing", "resting", "walking"]),
+  toMode: zod.enum(["sitting", "standing", "resting", "walking"]),
+  reason: zod.string().optional(),
+});

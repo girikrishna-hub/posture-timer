@@ -4,6 +4,8 @@ import { playGoalCelebrationTone } from "@/utils/audio";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useEffect, useRef, useState } from "react";
+import { useFitbitDrift } from "@/hooks/useFitbitDrift";
+import { NudgeModal } from "@/components/NudgeModal";
 
 const CELEBRATION_KEY = "sit-stand-goal-celebrated";
 
@@ -443,8 +445,37 @@ export default function TimerPage() {
       : `Reminder ${reminderCount} of ${remindersCount} — time to sit!`
     : null;
 
+  // Auto-switch toast
+  const [autoSwitchToast, setAutoSwitchToast] = useState<string | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showAutoSwitchToast = (toMode: string, reason: string) => {
+    const label = toMode === "sitting" ? "Sitting" : toMode === "standing" ? "Standing" : "Walking";
+    setAutoSwitchToast(`Auto-switched to ${label} — ${reason}`);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setAutoSwitchToast(null), 4000);
+  };
+
+  // Hook handles switchMode internally; onAutoSwitch is only for UI feedback
+  const { nudge, confirmNudge, cancelNudge } = useFitbitDrift({
+    onAutoSwitch: showAutoSwitchToast,
+  });
+
+  // confirmNudge already calls switchMode("fitbit_suggested") inside the hook
+  const handleNudgeConfirm = () => {
+    confirmNudge();
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
+      <NudgeModal nudge={nudge} onConfirm={handleNudgeConfirm} onCancel={cancelNudge} />
+
+      {autoSwitchToast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-card border border-border shadow-lg rounded-2xl px-4 py-2.5 text-sm font-medium text-foreground flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
+          <span>🤖</span>
+          {autoSwitchToast}
+        </div>
+      )}
+
       {canInstall && (
         <div className="mx-4 mt-4 flex items-center justify-between gap-3 bg-card border border-border rounded-2xl px-4 py-3 shadow-sm">
           <div>

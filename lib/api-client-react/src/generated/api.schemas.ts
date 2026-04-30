@@ -145,6 +145,86 @@ export interface SummaryMetrics {
   avgSleepDurationMinutes: number;
 }
 
+export interface FitbitStatus {
+  connected: boolean;
+  expiresAt?: string | null;
+  connectedAt?: string | null;
+}
+
+export interface FitbitAuthUrl {
+  url: string;
+}
+
+export interface FitbitStepMinute {
+  /** HH:MM:SS */
+  time: string;
+  steps: number;
+}
+
+/**
+ * Derived signal from last 3 minutes of step data
+ */
+export type FitbitIntradayDataSignal =
+  (typeof FitbitIntradayDataSignal)[keyof typeof FitbitIntradayDataSignal];
+
+export const FitbitIntradayDataSignal = {
+  sitting: "sitting",
+  standing: "standing",
+  walking: "walking",
+  unknown: "unknown",
+} as const;
+
+export interface FitbitIntradayData {
+  minutes: FitbitStepMinute[];
+  fetchedAt: string;
+  /** Derived signal from last 3 minutes of step data */
+  signal: FitbitIntradayDataSignal;
+}
+
+export interface FitbitAnalyticsSummary {
+  nudgeCount: number;
+  autoCorrectionCount: number;
+  userAcceptedCount: number;
+  userCancelledCount: number;
+}
+
+export type FitbitEventBodyEventType =
+  (typeof FitbitEventBodyEventType)[keyof typeof FitbitEventBodyEventType];
+
+export const FitbitEventBodyEventType = {
+  nudge: "nudge",
+  auto_correction: "auto_correction",
+  user_accepted: "user_accepted",
+  user_cancelled: "user_cancelled",
+} as const;
+
+export type FitbitEventBodyFromMode =
+  (typeof FitbitEventBodyFromMode)[keyof typeof FitbitEventBodyFromMode];
+
+export const FitbitEventBodyFromMode = {
+  sitting: "sitting",
+  standing: "standing",
+  resting: "resting",
+  walking: "walking",
+} as const;
+
+export type FitbitEventBodyToMode =
+  (typeof FitbitEventBodyToMode)[keyof typeof FitbitEventBodyToMode];
+
+export const FitbitEventBodyToMode = {
+  sitting: "sitting",
+  standing: "standing",
+  resting: "resting",
+  walking: "walking",
+} as const;
+
+export interface FitbitEventBody {
+  eventType: FitbitEventBodyEventType;
+  fromMode: FitbitEventBodyFromMode;
+  toMode: FitbitEventBodyToMode;
+  reason?: string;
+}
+
 export type ListSessionsParams = {
   /**
    * Filter sessions from this date (YYYY-MM-DD)
@@ -167,4 +247,9 @@ export type GetDailyMetricsParams = {
    * End date (YYYY-MM-DD, inclusive)
    */
   to: string;
+};
+
+export type HandleFitbitCallbackParams = {
+  code: string;
+  state?: string;
 };

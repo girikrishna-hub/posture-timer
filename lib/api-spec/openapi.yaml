@@ -16,6 +16,8 @@ tags:
     description: User preferences and goals
   - name: stats
     description: Aggregated statistics and summaries
+  - name: fitbit
+    description: Fitbit OAuth connection and assisted-mode data
 paths:
   /healthz:
     get:
@@ -231,6 +233,103 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SummaryMetrics"
+
+  /fitbit/status:
+    get:
+      operationId: getFitbitStatus
+      tags: [fitbit]
+      summary: Get Fitbit connection status
+      responses:
+        "200":
+          description: Connection status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FitbitStatus"
+
+  /fitbit/auth-url:
+    get:
+      operationId: getFitbitAuthUrl
+      tags: [fitbit]
+      summary: Get Fitbit OAuth authorization URL
+      responses:
+        "200":
+          description: Authorization URL to open in a new window
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FitbitAuthUrl"
+
+  /fitbit/callback:
+    get:
+      operationId: handleFitbitCallback
+      tags: [fitbit]
+      summary: Fitbit OAuth callback — exchanges code for tokens
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect back to app after token exchange
+
+  /fitbit/disconnect:
+    delete:
+      operationId: disconnectFitbit
+      tags: [fitbit]
+      summary: Remove stored Fitbit tokens
+      responses:
+        "204":
+          description: Disconnected
+
+  /fitbit/intraday:
+    get:
+      operationId: getFitbitIntraday
+      tags: [fitbit]
+      summary: Get last 15 minutes of intraday step data (cached)
+      responses:
+        "200":
+          description: Intraday step data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FitbitIntradayData"
+        "404":
+          description: No Fitbit connection
+
+  /fitbit/analytics:
+    get:
+      operationId: getFitbitAnalytics
+      tags: [fitbit]
+      summary: Get Fitbit assisted-mode analytics totals
+      responses:
+        "200":
+          description: Analytics summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FitbitAnalyticsSummary"
+
+  /fitbit/analytics/event:
+    post:
+      operationId: recordFitbitEvent
+      tags: [fitbit]
+      summary: Record a Fitbit assisted-mode event (nudge, correction, acceptance, cancellation)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FitbitEventBody"
+      responses:
+        "201":
+          description: Event recorded
 
 components:
   schemas:
@@ -566,3 +665,94 @@ components:
         - sleepConsistency
         - avgNapDurationMinutes
         - avgSleepDurationMinutes
+
+    FitbitStatus:
+      type: object
+      properties:
+        connected:
+          type: boolean
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        connectedAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - connected
+
+    FitbitAuthUrl:
+      type: object
+      properties:
+        url:
+          type: string
+      required:
+        - url
+
+    FitbitStepMinute:
+      type: object
+      properties:
+        time:
+          type: string
+          description: "HH:MM:SS"
+        steps:
+          type: integer
+      required:
+        - time
+        - steps
+
+    FitbitIntradayData:
+      type: object
+      properties:
+        minutes:
+          type: array
+          items:
+            $ref: "#/components/schemas/FitbitStepMinute"
+        fetchedAt:
+          type: string
+          format: date-time
+        signal:
+          type: string
+          enum: [sitting, standing, walking, unknown]
+          description: Derived signal from last 3 minutes of step data
+      required:
+        - minutes
+        - fetchedAt
+        - signal
+
+    FitbitAnalyticsSummary:
+      type: object
+      properties:
+        nudgeCount:
+          type: integer
+        autoCorrectionCount:
+          type: integer
+        userAcceptedCount:
+          type: integer
+        userCancelledCount:
+          type: integer
+      required:
+        - nudgeCount
+        - autoCorrectionCount
+        - userAcceptedCount
+        - userCancelledCount
+
+    FitbitEventBody:
+      type: object
+      properties:
+        eventType:
+          type: string
+          enum: [nudge, auto_correction, user_accepted, user_cancelled]
+        fromMode:
+          type: string
+          enum: [sitting, standing, resting, walking]
+        toMode:
+          type: string
+          enum: [sitting, standing, resting, walking]
+        reason:
+          type: string
+      required:
+        - eventType
+        - fromMode
+        - toMode

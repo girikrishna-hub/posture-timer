@@ -1,5 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useGetSettings, useUpdateSettings, getGetSettingsQueryKey } from "@workspace/api-client-react";
+import {
+  useGetSettings,
+  useUpdateSettings,
+  getGetSettingsQueryKey,
+  useGetFitbitStatus,
+  getGetFitbitStatusQueryKey,
+  getFitbitAuthUrl,
+  disconnectFitbit,
+} from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { useQueryClient } from "@tanstack/react-query";
@@ -56,6 +64,11 @@ export default function SettingsPage() {
   });
   const updateMutation = useUpdateSettings();
 
+  const { data: fitbitStatus, refetch: refetchFitbitStatus } = useGetFitbitStatus({
+    query: { queryKey: getGetFitbitStatusQueryKey(), refetchInterval: 10_000 },
+  });
+  const fitbitConnected = fitbitStatus?.connected === true;
+
   const [localSettings, setLocalSettings] = useState({
     dailyStandingGoalMinutes: 120,
     sittingAlertMinutes: 45,
@@ -68,6 +81,11 @@ export default function SettingsPage() {
 
   const [soundOn, setSoundOn] = useState(isSoundEnabled);
   const [saved, setSaved] = useState(false);
+  const [fitbitAssistedEnabled, setFitbitAssistedEnabled] = useState(() => {
+    try { return localStorage.getItem("fitbitAssisted") === "true"; } catch { return false; }
+  });
+  const [fitbitConnecting, setFitbitConnecting] = useState(false);
+  const [fitbitDisconnecting, setFitbitDisconnecting] = useState(false);
   const [goalUpdated, setGoalUpdated] = useState(false);
   const goalUpdatedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>(
@@ -191,6 +209,43 @@ export default function SettingsPage() {
       );
     }
   }, [localSettings, geoPermission, updateMutation, queryClient]);
+
+  const handleToggleFitbitAssisted = useCallback(() => {
+    setFitbitAssistedEnabled((prev) => {
+      const next = !prev;
+      try { localStorage.setItem("fitbitAssisted", String(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
+  const handleConnectFitbit = useCallback(async () => {
+    setFitbitConnecting(true);
+    try {
+      const { url } = await getFitbitAuthUrl();
+      window.open(url, "_blank", "noopener,noreferrer,width=600,height=700");
+      const poll = setInterval(() => {
+        void refetchFitbitStatus().then(({ data }) => {
+          if (data?.connected) {
+            clearInterval(poll);
+            setFitbitConnecting(false);
+          }
+        });
+      }, 3000);
+      setTimeout(() => { clearInterval(poll); setFitbitConnecting(false); }, 5 * 60 * 1000);
+    } catch {
+      setFitbitConnecting(false);
+    }
+  }, [refetchFitbitStatus]);
+
+  const handleDisconnectFitbit = useCallback(async () => {
+    setFitbitDisconnecting(true);
+    try {
+      await disconnectFitbit();
+      await queryClient.invalidateQueries({ queryKey: getGetFitbitStatusQueryKey() });
+    } finally {
+      setFitbitDisconnecting(false);
+    }
+  }, [queryClient]);
 
   const handleToggleSound = useCallback(() => {
     setSoundOn((prev) => {
@@ -398,6 +453,85 @@ export default function SettingsPage() {
               />
             </button>
           </div>
+        </div>
+
+        {/* Fitbit Assisted Mode card */}
+        <div className="bg-card border border-border rounded-2xl p-5 mb-4 space-y-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1">
+              <p className="text-sm font-medium text-foreground">Fitbit Assisted Mode</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Uses your Fitbit step data to nudge you when it detects drift from your current mode.
+                Manual switches always take priority.
+              </p>
+            </div>
+            <button
+              role="switch"
+              aria-checked={fitbitAssistedEnabled}
+              onClick={handleToggleFitbitAssisted}
+              className={`relative shrink-0 mt-0.5 inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                fitbitAssistedEnabled ? "bg-teal-500" : "bg-muted-foreground/30"
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                  fitbitAssistedEnabled ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </button>
+          </div>
+
+          {fitbitAssistedEnabled && (
+            <div className="pt-2 border-t border-border space-y-3">
+              {fitbitConnected ? (
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Fitbit connected</p>
+                      <p className="text-xs text-muted-foreground">
+                        {fitbitStatus?.connectedAt
+                          ? `Since ${new Date(fitbitStatus.connectedAt).toLocaleDateString()}`
+                          : "Active"}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void handleDisconnectFitbit()}
+                    disabled={fitbitDisconnecting}
+                    className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                  >
+                    {fitbitDisconnecting ? "Removing…" : "Disconnect"}
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    Connect your Fitbit account to enable step-based drift detection.
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void handleConnectFitbit()}
+                    disabled={fitbitConnecting}
+                    className="w-full"
+                  >
+                    {fitbitConnecting ? "Waiting for Fitbit…" : "Connect Fitbit Account"}
+                  </Button>
+                </div>
+              )}
+
+              <div className="rounded-xl bg-muted/50 p-3 text-xs text-muted-foreground space-y-1">
+                <p className="font-medium text-foreground">How it works</p>
+                <p>• No movement for 8 min while standing → nudge to sit</p>
+                <p>• Activity for 3 min while sitting → nudge to stand</p>
+                <p>• Walking pace detected → auto-switches to walking</p>
+                <p>• Your manual switches are always respected (lock window)</p>
+              </div>
+            </div>
+          )}
         </div>
 
         <Button

@@ -140,6 +140,14 @@ function secondsSinceLocalMidnight(): number {
 
 // ─── Context types ─────────────────────────────────────────────────────────
 
+export type StateSource = "manual" | "fitbit_auto" | "fitbit_suggested";
+
+const LOCK_WINDOW_MS: Partial<Record<TimerMode, number>> = {
+  sitting: 15 * 60 * 1000,
+  standing: 10 * 60 * 1000,
+  resting: 15 * 60 * 1000,
+};
+
 interface TimerContextValue {
   mode: TimerMode;
   elapsedSeconds: number;
@@ -148,10 +156,12 @@ interface TimerContextValue {
   activeSessionId: number | null;
   notificationPermission: NotificationPermission;
   requestNotificationPermission: () => Promise<void>;
-  switchMode: (newMode: "sitting" | "standing" | "resting" | "walking") => Promise<void>;
+  switchMode: (newMode: "sitting" | "standing" | "resting" | "walking", source?: StateSource) => Promise<void>;
   endCurrentSession: () => Promise<void>;
   gpsStatus: GpsStatus;
   isLoading: boolean;
+  stateSource: StateSource;
+  isInLockWindow: () => boolean;
 }
 
 export type { GpsStatus };
@@ -173,9 +183,11 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       typeof Notification !== "undefined" ? Notification.permission : "default"
     );
   const [initialized, setInitialized] = useState(false);
+  const [stateSource, setStateSource] = useState<StateSource>("manual");
 
   // Refs used inside intervals/event handlers to avoid stale closures
   const modeRef = useRef(mode);
+  const lastManualActionAt = useRef<number | null>(null);
   const reminderCountRef = useRef(reminderCount);
   const inReminderPhaseRef = useRef(inReminderPhase);
   const activeSessionIdRef = useRef(activeSessionId);
@@ -285,7 +297,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   }, [doEndSession, doStartSession, queryClient]);
 
   const switchMode = useCallback(
-    async (newMode: "sitting" | "standing" | "resting" | "walking") => {
+    async (newMode: "sitting" | "standing" | "resting" | "walking", source: StateSource = "manual") => {
       const currentId = activeSessionIdRef.current;
       const currentMode = modeRef.current;
 
@@ -293,6 +305,8 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
 
       const transitionTime = new Date().toISOString();
       lastActivityRef.current = Date.now();
+      if (source === "manual") lastManualActionAt.current = Date.now();
+      setStateSource(source);
 
       if (newMode === "resting") {
         playRestTone();
@@ -350,6 +364,16 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
 
   const switchModeRef = useRef(switchMode);
   useEffect(() => { switchModeRef.current = switchMode; }, [switchMode]);
+
+  const isInLockWindow = useCallback((): boolean => {
+    const lastManual = lastManualActionAt.current;
+    if (lastManual === null) return false;
+    const currentMode = modeRef.current;
+    if (currentMode === "walking") return false;
+    const lockMs = LOCK_WINDOW_MS[currentMode];
+    if (!lockMs) return false;
+    return Date.now() - lastManual < lockMs;
+  }, []);
 
   const autoDetectWalking = settingsData?.autoDetectWalking ??
     (() => { try { return localStorage.getItem("autoDetectWalking") === "true"; } catch { return false; } })();
@@ -592,6 +616,8 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
         endCurrentSession,
         gpsStatus,
         isLoading: startSessionMutation.isPending || endSessionMutation.isPending,
+        stateSource,
+        isInLockWindow,
       }}
     >
       {children}
