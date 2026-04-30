@@ -341,10 +341,13 @@ export default function TimerPage() {
 
   const [soundEnabled, setSoundEnabledState] = useState(() => isSoundEnabled());
 
+  const soundBanner = useBanner<string>(1500);
+
   function toggleSound() {
     const next = !soundEnabled;
     setSoundEnabled(next);
     setSoundEnabledState(next);
+    soundBanner.show(next ? "Sound on" : "Sound off");
   }
 
   const { data: todayStats } = useGetTodayStats({
@@ -567,6 +570,21 @@ export default function TimerPage() {
         >
           <span>🤖</span>
           {autoSwitchBanner.message}
+        </div>
+      )}
+
+      {soundBanner.shown && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={[
+            "fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-card border border-border shadow-lg rounded-2xl px-4 py-2.5 text-sm font-medium text-foreground flex items-center gap-2",
+            "transition-all duration-300 ease-out",
+            soundBanner.visible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2",
+          ].join(" ")}
+        >
+          <span>{soundBanner.message === "Sound on" ? "🔔" : "🔇"}</span>
+          {soundBanner.message}
         </div>
       )}
 
