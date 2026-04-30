@@ -1,6 +1,6 @@
 import { useTimer, type TimerMode } from "@/contexts/TimerContext";
 import { useGetTodayStats, useGetSettings, getGetTodayStatsQueryKey } from "@workspace/api-client-react";
-import { playGoalCelebrationTone } from "@/utils/audio";
+import { playGoalCelebrationTone, isSoundEnabled, setSoundEnabled } from "@/utils/audio";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useEffect, useRef, useState } from "react";
@@ -339,6 +339,14 @@ export default function TimerPage() {
 
   const { canInstall, install } = useInstallPrompt();
 
+  const [soundEnabled, setSoundEnabledState] = useState(() => isSoundEnabled());
+
+  function toggleSound() {
+    const next = !soundEnabled;
+    setSoundEnabled(next);
+    setSoundEnabledState(next);
+  }
+
   const { data: todayStats } = useGetTodayStats({
     query: { queryKey: getGetTodayStatsQueryKey(), refetchInterval: 30000 },
   });
@@ -606,6 +614,28 @@ export default function TimerPage() {
             )}
           </p>
         </div>
+        <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={toggleSound}
+          className="text-muted-foreground hover:text-foreground transition-colors p-2 rounded-lg hover:bg-muted"
+          aria-label={soundEnabled ? "Mute sounds" : "Unmute sounds"}
+          title={soundEnabled ? "Mute sounds" : "Unmute sounds"}
+        >
+          {soundEnabled ? (
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+              <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+            </svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+              <line x1="22" y1="9" x2="16" y2="15"/>
+              <line x1="16" y1="9" x2="22" y2="15"/>
+            </svg>
+          )}
+        </button>
         <button
           onClick={() => window.location.href = "/settings"}
           className="text-muted-foreground hover:text-foreground transition-colors p-2 rounded-lg hover:bg-muted"
@@ -615,6 +645,7 @@ export default function TimerPage() {
             <circle cx="12" cy="12" r="3"/>
           </svg>
         </button>
+        </div>
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center px-6 gap-8">
