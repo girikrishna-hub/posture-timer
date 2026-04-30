@@ -86,7 +86,7 @@ function formatMinutes(minutes: number): string {
   return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
-function formatLiveStanding(totalSeconds: number): string {
+function formatLiveElapsed(totalSeconds: number): string {
   const totalSecsInt = Math.floor(totalSeconds);
   const mins = Math.floor(totalSecsInt / 60);
   const secs = totalSecsInt % 60;
@@ -724,7 +724,7 @@ export default function TimerPage() {
                       {footerGoalMet ? "Goal reached!" : "Standing goal"}
                     </span>
                     <span className={`font-medium transition-colors duration-500 ${footerGoalMet ? "text-emerald-600 dark:text-emerald-400" : "text-foreground"}`}>
-                      {isActiveMode ? formatLiveStanding(liveStandingTotalSeconds) : formatMinutes(completedStandingMinutes)} / {formatMinutes(todayStats.goalMinutes)}
+                      {isActiveMode ? formatLiveElapsed(liveStandingTotalSeconds) : formatMinutes(completedStandingMinutes)} / {formatMinutes(todayStats.goalMinutes)}
                     </span>
                   </div>
                   <Progress
@@ -741,12 +741,12 @@ export default function TimerPage() {
           <div className={`grid gap-3 ${todayStats.walkingMinutes > 0 ? "grid-cols-4" : "grid-cols-3"}`}>
             <StatCard
               label="Sitting"
-              value={isActiveSitting ? formatLiveStanding(liveSittingTotalSeconds) : formatMinutes(completedSittingMinutes)}
+              value={isActiveSitting ? formatLiveElapsed(liveSittingTotalSeconds) : formatMinutes(completedSittingMinutes)}
               color="text-amber-700 dark:text-amber-400"
             />
             <StatCard
               label="Standing"
-              value={isActiveMode ? formatLiveStanding(liveStandingTotalSeconds) : formatMinutes(completedStandingMinutes)}
+              value={isActiveMode ? formatLiveElapsed(liveStandingTotalSeconds) : formatMinutes(completedStandingMinutes)}
               color="text-emerald-700 dark:text-emerald-400"
             />
             {todayStats.walkingMinutes > 0 && (
