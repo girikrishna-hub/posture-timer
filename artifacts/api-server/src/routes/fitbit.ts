@@ -15,10 +15,17 @@ const router: IRouter = Router();
 
 const pendingStates = new Set<string>();
 
-function getRedirectUri(req: { protocol: string; hostname: string }): string {
+function getRedirectUri(req: { headers: Record<string, string | string[] | undefined>; hostname: string }): string {
+  // REPLIT_DOMAINS is set in both dev and production and contains the canonical
+  // public domain(s). Fall back to x-forwarded-host (Replit proxy header) and
+  // finally req.hostname.
+  const replitDomains = process.env["REPLIT_DOMAINS"];
+  const forwardedHost = req.headers["x-forwarded-host"];
   const domain =
+    replitDomains?.split(",")[0]?.trim() ??
+    (Array.isArray(forwardedHost) ? forwardedHost[0] : forwardedHost)?.split(",")[0]?.trim() ??
     process.env["REPLIT_DEV_DOMAIN"] ??
-    `${req.hostname}`;
+    req.hostname;
   return `https://${domain}/api/fitbit/callback`;
 }
 
@@ -47,6 +54,11 @@ router.get("/fitbit/auth-url", (req, res) => {
   setTimeout(() => pendingStates.delete(state), 10 * 60 * 1000);
 
   const redirectUri = getRedirectUri(req);
+  const clientId = process.env["GOOGLE_FIT_CLIENT_ID"] ?? "";
+  req.log.info(
+    { hasClientId: clientId.length > 0, redirectUri },
+    "Google Fit auth-url requested"
+  );
   const url = getFitbitAuthUrl(redirectUri, state);
   return res.json({ url });
 });
