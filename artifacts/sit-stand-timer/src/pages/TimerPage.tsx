@@ -338,9 +338,8 @@ export default function TimerPage() {
   const completedStandingMinutes = todayStats?.standingMinutes ?? 0;
   const completedWalkingMinutes = todayStats?.walkingMinutes ?? 0;
   const goalMinutes = todayStats?.goalMinutes ?? 120;
-  const isActiveStanding = mode === "standing" || mode === "walking";
-  const liveElapsedStandingMinutes = isActiveStanding ? elapsedSeconds / 60 : 0;
-  const liveStandingTotalSeconds = completedStandingMinutes * 60 + (isActiveStanding ? elapsedSeconds : 0);
+  const isActiveMode = mode === "standing" || mode === "walking";
+  const liveStandingTotalSeconds = completedStandingMinutes * 60 + (isActiveMode ? elapsedSeconds : 0);
   const completedSittingMinutes = todayStats?.sittingMinutes ?? 0;
   const isActiveSitting = mode === "sitting";
   const liveSittingTotalSeconds = completedSittingMinutes * 60 + (isActiveSitting ? elapsedSeconds : 0);
@@ -351,7 +350,7 @@ export default function TimerPage() {
     const now = new Date();
     return now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
   };
-  const cappedElapsedMinutes = isActiveStanding
+  const cappedElapsedMinutes = isActiveMode
     ? Math.min(elapsedSeconds, secondsSinceLocalMidnight()) / 60
     : 0;
   const liveGoalPercent = goalMinutes > 0
@@ -668,7 +667,7 @@ export default function TimerPage() {
                       {footerGoalMet ? "Goal reached!" : "Standing goal"}
                     </span>
                     <span className={`font-medium transition-colors duration-500 ${footerGoalMet ? "text-emerald-600 dark:text-emerald-400" : "text-foreground"}`}>
-                      {isActiveStanding ? formatLiveStanding(liveStandingTotalSeconds) : formatMinutes(completedStandingMinutes)} / {formatMinutes(todayStats.goalMinutes)}
+                      {isActiveMode ? formatLiveStanding(liveStandingTotalSeconds) : formatMinutes(completedStandingMinutes)} / {formatMinutes(todayStats.goalMinutes)}
                     </span>
                   </div>
                   <Progress
@@ -690,7 +689,7 @@ export default function TimerPage() {
             />
             <StatCard
               label="Standing"
-              value={isActiveStanding ? formatLiveStanding(liveStandingTotalSeconds) : formatMinutes(completedStandingMinutes)}
+              value={isActiveMode ? formatLiveStanding(liveStandingTotalSeconds) : formatMinutes(completedStandingMinutes)}
               color="text-emerald-700 dark:text-emerald-400"
             />
             {todayStats.walkingMinutes > 0 && (
