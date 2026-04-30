@@ -181,3 +181,13 @@
   80%  { transform: translateX(-50%) scale(0.9); }
   100% { opacity: 1; transform: translateX(-50%) scale(1); }
 }
+
+@keyframes badge-hint-wiggle {
+  0%   { transform: translateX(-50%) rotate(0deg) scale(1); }
+  15%  { transform: translateX(-50%) rotate(-18deg) scale(1.15); }
+  35%  { transform: translateX(-50%) rotate(14deg) scale(1.12); }
+  50%  { transform: translateX(-50%) rotate(-10deg) scale(1.08); }
+  65%  { transform: translateX(-50%) rotate(7deg) scale(1.04); }
+  80%  { transform: translateX(-50%) rotate(-4deg) scale(1.01); }
+  100% { transform: translateX(-50%) rotate(0deg) scale(1); }
+}

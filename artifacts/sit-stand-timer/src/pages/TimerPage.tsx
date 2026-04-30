@@ -8,6 +8,7 @@ import { useFitbitDrift } from "@/hooks/useFitbitDrift";
 import { NudgeModal } from "@/components/NudgeModal";
 
 const CELEBRATION_KEY = "sit-stand-goal-celebrated";
+const BADGE_HINT_KEY = "sit-stand-badge-hint";
 
 function getCelebratedDate(): string {
   try { return localStorage.getItem(CELEBRATION_KEY) ?? ""; } catch { return ""; }
@@ -15,6 +16,14 @@ function getCelebratedDate(): string {
 
 function saveCelebratedDate(date: string): void {
   try { localStorage.setItem(CELEBRATION_KEY, date); } catch { /* ignore */ }
+}
+
+function getBadgeHintDate(): string {
+  try { return localStorage.getItem(BADGE_HINT_KEY) ?? ""; } catch { return ""; }
+}
+
+function saveBadgeHintDate(date: string): void {
+  try { localStorage.setItem(BADGE_HINT_KEY, date); } catch { /* ignore */ }
 }
 
 function todayStr(): string {
@@ -161,7 +170,19 @@ const STROKE_WIDTH = 10;
 const RADIUS = (RING_SIZE - STROKE_WIDTH) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
-function TrophyBadge({ delayed, onReplay }: { delayed: boolean; onReplay: () => void }) {
+function TrophyBadge({ delayed, onReplay, showHint, onHintShown }: { delayed: boolean; onReplay: () => void; showHint: boolean; onHintShown: () => void }) {
+  const popInDelay = delayed ? 2.1 : 0;
+  const wiggleDelay = popInDelay + 0.8;
+  const animation = showHint
+    ? `badge-pop-in 0.5s ${popInDelay}s cubic-bezier(0.34,1.56,0.64,1) both, badge-hint-wiggle 0.7s ${wiggleDelay}s ease-in-out 1 both`
+    : `badge-pop-in 0.5s ${popInDelay}s cubic-bezier(0.34,1.56,0.64,1) both`;
+
+  const handleAnimationEnd = (e: React.AnimationEvent<HTMLButtonElement>) => {
+    if (e.animationName === "badge-hint-wiggle") {
+      onHintShown();
+    }
+  };
+
   return (
     <button
       type="button"
@@ -169,8 +190,9 @@ function TrophyBadge({ delayed, onReplay }: { delayed: boolean; onReplay: () => 
       className="absolute left-1/2 flex items-center justify-center w-7 h-7 rounded-full bg-emerald-500 dark:bg-emerald-600 shadow-md ring-2 ring-background hover:bg-emerald-400 dark:hover:bg-emerald-500 active:scale-90 transition-transform cursor-pointer"
       style={{
         top: "-10px",
-        animation: `badge-pop-in 0.5s ${delayed ? "2.1s" : "0s"} cubic-bezier(0.34,1.56,0.64,1) both`,
+        animation,
       }}
+      onAnimationEnd={handleAnimationEnd}
       title="Tap to replay celebration"
       aria-label="Replay goal celebration"
     >
@@ -186,7 +208,7 @@ function TrophyBadge({ delayed, onReplay }: { delayed: boolean; onReplay: () => 
   );
 }
 
-function GoalProgressRing({ mode, goalPercent, celebrating, goalAchieved, badgeDelayed, onReplayCelebration }: { mode: TimerMode; goalPercent: number; celebrating: boolean; goalAchieved: boolean; badgeDelayed: boolean; onReplayCelebration: () => void }) {
+function GoalProgressRing({ mode, goalPercent, celebrating, goalAchieved, badgeDelayed, showBadgeHint, onBadgeHintShown, onReplayCelebration }: { mode: TimerMode; goalPercent: number; celebrating: boolean; goalAchieved: boolean; badgeDelayed: boolean; showBadgeHint: boolean; onBadgeHintShown: () => void; onReplayCelebration: () => void }) {
   const clampedPercent = Math.max(0, Math.min(goalPercent, 100));
   const dashOffset = CIRCUMFERENCE * (1 - clampedPercent / 100);
   const goalMet = goalPercent >= 100;
@@ -206,7 +228,7 @@ function GoalProgressRing({ mode, goalPercent, celebrating, goalAchieved, badgeD
 
   return (
     <div className="relative w-56 h-56">
-      {goalAchieved && !celebrating && <TrophyBadge delayed={badgeDelayed} onReplay={onReplayCelebration} />}
+      {goalAchieved && !celebrating && <TrophyBadge delayed={badgeDelayed} onReplay={onReplayCelebration} showHint={showBadgeHint} onHintShown={onBadgeHintShown} />}
       {celebrating && (
         <>
           <span
@@ -363,6 +385,34 @@ export default function TimerPage() {
   // true = badge was just earned this session (animate in after celebration delay)
   // false = badge loaded from localStorage (animate in immediately on mount)
   const freshAchievementRef = useRef(false);
+  // Track whether the hint wiggle has already been shown today (state) or
+  // at least scheduled this session (ref). State initialises from localStorage
+  // so a page reload after the hint played still suppresses it.
+  const [badgeHintShown, setBadgeHintShown] = useState(() => getBadgeHintDate() === todayStr());
+  // Ref acts as an in-session guard: set true when the hint is first scheduled
+  // so the wiggle never replays even if the badge unmounts before animationEnd.
+  const hintScheduledRef = useRef(getBadgeHintDate() === todayStr());
+
+  // showBadgeHint stays true for the entire first mount of TrophyBadge so the
+  // CSS animation can play; it flips false after animationEnd (state) or on the
+  // next badge mount within the same session (ref).
+  const showBadgeHint = goalAchieved && !badgeHintShown && !hintScheduledRef.current;
+
+  // Persist the hint date immediately when scheduled — before the animation
+  // completes — so a reload mid-animation won't replay the wiggle.
+  useEffect(() => {
+    if (showBadgeHint) {
+      saveBadgeHintDate(todayStr());
+      hintScheduledRef.current = true;
+      // State intentionally NOT updated here so TrophyBadge keeps showHint=true
+      // for its current mount and the CSS animation can run to completion.
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showBadgeHint]);
+
+  function handleBadgeHintShown() {
+    setBadgeHintShown(true);
+  }
   const celebrationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevGoalPercentRef = useRef<number | null>(null);
 
@@ -419,6 +469,8 @@ export default function TimerPage() {
         setCelebrating(false);
         setGoalAchieved(false);
         freshAchievementRef.current = false;
+        setBadgeHintShown(false);
+        hintScheduledRef.current = false;
         if (celebrationTimerRef.current) {
           clearTimeout(celebrationTimerRef.current);
           celebrationTimerRef.current = null;
@@ -547,6 +599,8 @@ export default function TimerPage() {
           celebrating={celebrating}
           goalAchieved={goalAchieved}
           badgeDelayed={freshAchievementRef.current}
+          showBadgeHint={showBadgeHint}
+          onBadgeHintShown={handleBadgeHintShown}
           onReplayCelebration={replayCelebration}
         />
 
