@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useTimer } from "@/contexts/TimerContext";
+import { useBanner } from "@/hooks/useBanner";
 import {
   BarChart,
   Bar,
@@ -331,6 +332,7 @@ function OverviewTab() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+  const goalCelebrationBanner = useBanner(5000);
 
   const weekStart = toDateStr(addDays(today(), -6));
   const weekEnd = toDateStr(today());
@@ -447,7 +449,7 @@ function OverviewTab() {
 
     saveCelebratedDate(today);
     playGoalCelebrationTone();
-    toast({ title: "Goal reached! 🎉", description: "You've hit your standing goal for today." });
+    goalCelebrationBanner.show();
     setCelebrating(true);
     celebrationTimerRef.current = setTimeout(() => setCelebrating(false), 2000);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -544,6 +546,40 @@ function OverviewTab() {
               className={`h-2 transition-all duration-500 ${goalMet ? "[&>div]:bg-emerald-500 dark:[&>div]:bg-emerald-400" : ""}`}
             />
           </div>
+        </div>
+      )}
+
+      {goalCelebrationBanner.shown && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={[
+            "flex items-center gap-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-4 py-3",
+            "transition-all duration-300 ease-out",
+            goalCelebrationBanner.visible
+              ? "opacity-100 translate-y-0"
+              : "opacity-0 -translate-y-2",
+          ].join(" ")}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-emerald-600 dark:text-emerald-400">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+            <polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">Goal reached! 🎉</p>
+            <p className="text-xs text-emerald-700 dark:text-emerald-300">You've hit your standing goal for today.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => goalCelebrationBanner.dismiss()}
+            aria-label="Dismiss"
+            className="shrink-0 ml-1 -mr-1 p-1 rounded-full text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
         </div>
       )}
 
