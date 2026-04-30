@@ -22,6 +22,7 @@ const MODE_COLORS: Record<string, string> = {
 
 export function NudgeModal({ nudge, onConfirm, onCancel }: NudgeModalProps) {
   const [remaining, setRemaining] = useState(nudge?.countdownSeconds ?? 0);
+  const remainingRef = useRef(remaining);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onConfirmRef = useRef(onConfirm);
   useEffect(() => { onConfirmRef.current = onConfirm; }, [onConfirm]);
@@ -29,21 +30,22 @@ export function NudgeModal({ nudge, onConfirm, onCancel }: NudgeModalProps) {
   useEffect(() => {
     if (!nudge) {
       setRemaining(0);
+      remainingRef.current = 0;
       if (timerRef.current) clearInterval(timerRef.current);
       return;
     }
 
     setRemaining(nudge.countdownSeconds);
+    remainingRef.current = nudge.countdownSeconds;
 
     timerRef.current = setInterval(() => {
-      setRemaining((prev) => {
-        if (prev <= 1) {
-          if (timerRef.current) clearInterval(timerRef.current);
-          onConfirmRef.current();
-          return 0;
-        }
-        return prev - 1;
-      });
+      const next = remainingRef.current - 1;
+      remainingRef.current = next;
+      setRemaining(next);
+      if (next <= 0) {
+        if (timerRef.current) clearInterval(timerRef.current);
+        onConfirmRef.current();
+      }
     }, 1000);
 
     return () => {
