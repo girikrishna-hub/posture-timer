@@ -72,6 +72,7 @@ export function playRestTone(): void {
 }
 
 export function playGoalCelebrationTone(): void {
+  if (!isSoundEnabled()) return;
   playTone(523, 0.12, "sine", 0.25);
   setTimeout(() => playTone(659, 0.12, "sine", 0.22), 130);
   setTimeout(() => playTone(784, 0.12, "sine", 0.22), 260);
