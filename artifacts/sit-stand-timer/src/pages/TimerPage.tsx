@@ -8,8 +8,8 @@ import { useFitbitDrift } from "@/hooks/useFitbitDrift";
 import { NudgeModal } from "@/components/NudgeModal";
 import { useBanner } from "@/hooks/useBanner";
 
-const CELEBRATION_KEY = "sit-stand-goal-celebrated";
-const BADGE_HINT_KEY = "sit-stand-badge-hint";
+export const CELEBRATION_KEY = "sit-stand-goal-celebrated";
+export const BADGE_HINT_KEY = "sit-stand-badge-hint";
 
 function getCelebratedDate(): string {
   try { return localStorage.getItem(CELEBRATION_KEY) ?? ""; } catch { return ""; }
@@ -27,9 +27,17 @@ function saveBadgeHintDate(date: string): void {
   try { localStorage.setItem(BADGE_HINT_KEY, date); } catch { /* ignore */ }
 }
 
-function todayStr(): string {
+export function todayStr(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+export function goalLabelClass(footerGoalMet: boolean, goalMetOnLoad: boolean | null): string {
+  return `flex items-center gap-1 transition-colors duration-500 ${
+    footerGoalMet
+      ? `text-emerald-600 dark:text-emerald-400 font-medium${goalMetOnLoad === false ? " goal-label-appear" : ""}`
+      : ""
+  }`;
 }
 
 interface BeforeInstallPromptEvent extends Event {
@@ -171,7 +179,7 @@ const STROKE_WIDTH = 10;
 const RADIUS = (RING_SIZE - STROKE_WIDTH) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
-function TrophyBadge({ delayed, skipPopIn, onReplay, showHint, onHintShown }: { delayed: boolean; skipPopIn: boolean; onReplay: () => void; showHint: boolean; onHintShown: () => void }) {
+export function TrophyBadge({ delayed, skipPopIn, onReplay, showHint, onHintShown }: { delayed: boolean; skipPopIn: boolean; onReplay: () => void; showHint: boolean; onHintShown: () => void }) {
   const popInDelay = delayed ? 2.1 : 0;
   const wiggleDelay = popInDelay + 0.8;
   const popInPart = skipPopIn ? "" : `badge-pop-in 0.5s ${popInDelay}s cubic-bezier(0.34,1.56,0.64,1) both`;
@@ -796,7 +804,7 @@ export default function TimerPage() {
                   <div className="flex justify-between text-xs text-muted-foreground">
                     <span
                       key={footerGoalMet ? "met" : "not-met"}
-                      className={`flex items-center gap-1 transition-colors duration-500 ${footerGoalMet ? `text-emerald-600 dark:text-emerald-400 font-medium${goalMetOnLoad === false ? " goal-label-appear" : ""}` : ""}`}
+                      className={goalLabelClass(footerGoalMet, goalMetOnLoad)}
                     >
                       {footerGoalMet && (
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 shrink-0">
