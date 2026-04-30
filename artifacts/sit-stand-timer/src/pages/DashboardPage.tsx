@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useCallback } from "react";
+import { useTimer } from "@/contexts/TimerContext";
 import {
   BarChart,
   Bar,
@@ -300,6 +301,7 @@ function ShareCard({
 
 // ─── Overview tab ───────────────────────────────────────────────────────────
 function OverviewTab() {
+  const { mode, elapsedSeconds } = useTimer();
   const { data: summary, isLoading: sumLoading } = useGetMetricsSummary();
   const { data: todayStats } = useGetTodayStats();
   const [previewing, setPreviewing] = useState(false);
@@ -452,8 +454,16 @@ function OverviewTab() {
 
       {todayStats && (() => {
         const goalMinutes = todayStats.goalMinutes ?? 120;
+        const isActiveMode = mode === "standing" || mode === "walking";
+        const secondsSinceLocalMidnight = (() => {
+          const now = new Date();
+          return now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+        })();
+        const cappedElapsedMinutes = isActiveMode
+          ? Math.min(elapsedSeconds, secondsSinceLocalMidnight) / 60
+          : 0;
         const goalPercent = goalMinutes > 0
-          ? Math.min(100, ((todayStats.standingMinutes + todayStats.walkingMinutes) / goalMinutes) * 100)
+          ? Math.min(100, ((todayStats.standingMinutes + todayStats.walkingMinutes + cappedElapsedMinutes) / goalMinutes) * 100)
           : todayStats.goalProgressPercent ?? 0;
         const goalMet = goalPercent >= 100;
         return (
@@ -468,7 +478,7 @@ function OverviewTab() {
                 {goalMet ? "Goal reached!" : "Standing goal"}
               </span>
               <span className={`font-medium transition-colors duration-500 ${goalMet ? "text-emerald-600 dark:text-emerald-400" : "text-foreground"}`}>
-                {formatMinutes(todayStats.standingMinutes + todayStats.walkingMinutes)} / {formatMinutes(goalMinutes)}
+                {formatMinutes(Math.floor(todayStats.standingMinutes + todayStats.walkingMinutes + cappedElapsedMinutes))} / {formatMinutes(goalMinutes)}
               </span>
             </div>
             <Progress
