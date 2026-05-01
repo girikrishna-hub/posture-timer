@@ -81,24 +81,29 @@ function enqueueEndOp(sessionId: number, endedAt: string): void {
 // ─── Notifications ─────────────────────────────────────────────────────────
 
 function sendSWNotification(title: string, body: string): void {
-  if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
-    navigator.serviceWorker.controller.postMessage({
-      type: "SHOW_NOTIFICATION",
-      title,
-      body,
-      icon: "/favicon.svg",
+  if (!("serviceWorker" in navigator)) return;
+  navigator.serviceWorker.ready
+    .then((reg) =>
+      reg.showNotification(title, {
+        body,
+        icon: "/favicon.svg",
+        badge: "/favicon.svg",
+        tag: "timer-reminder",
+        renotify: true,
+        data: { url: "/" },
+      } as NotificationOptions)
+    )
+    .catch(() => {
+      // SW notification unavailable — silently ignore
     });
-  }
 }
 
 function notify(title: string, body: string): void {
   try {
     if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
-    if (document.visibilityState === "visible") {
-      new Notification(title, { body, icon: "/favicon.svg" });
-    } else {
-      sendSWNotification(title, body);
-    }
+    // Always use the service worker registration path — it works in both
+    // foreground and background, and is the only path that works on mobile.
+    sendSWNotification(title, body);
   } catch {
     // Notification API unavailable or restricted — silently ignore
   }
