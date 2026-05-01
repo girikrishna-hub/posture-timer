@@ -380,18 +380,30 @@ function ShareCard({
 }
 
 // ─── Overview tab ───────────────────────────────────────────────────────────
-function OverviewTab() {
-  const { mode, elapsedSeconds } = useTimer();
+function OverviewTab({
+  celebrating,
+  goalAchieved,
+  freshAchievement,
+  goalPercent,
+  goalMet,
+  goalMinutes,
+  cappedElapsedMinutes,
+  onReplayCelebration,
+}: {
+  celebrating: boolean;
+  goalAchieved: boolean;
+  freshAchievement: boolean;
+  goalPercent: number;
+  goalMet: boolean;
+  goalMinutes: number;
+  cappedElapsedMinutes: number;
+  onReplayCelebration: () => void;
+}) {
   const { data: summary, isLoading: sumLoading } = useGetMetricsSummary();
   const { data: todayStats } = useGetTodayStats();
-  const [celebrating, setCelebrating] = useState(false);
-  const [goalAchieved, setGoalAchieved] = useState(() => getCelebratedDate() === todayStr());
-  const freshAchievementRef = useRef(false);
   const skipBadgePopInRef = useRef(getCelebratedDate() === todayStr());
   const [badgeHintShown, setBadgeHintShown] = useState(() => getBadgeHintDate() === todayStr());
   const hintScheduledRef = useRef(getBadgeHintDate() === todayStr());
-  const prevGoalPercentRef = useRef<number | null>(null);
-  const celebrationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [previewImgUrl, setPreviewImgUrl] = useState<string | null>(null);
@@ -399,7 +411,6 @@ function OverviewTab() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
-  const goalCelebrationBanner = useBanner(5000);
 
   const weekStart = toDateStr(addDays(today(), -6));
   const weekEnd = toDateStr(today());
@@ -484,47 +495,7 @@ function OverviewTab() {
     }
   }, [previewBlob, handleClosePreview, toast]);
 
-  // ── Lifted goal-percent computation (needed by celebration effect) ──────────
-  const goalMinutes = todayStats?.goalMinutes ?? 120;
-  const isActiveMode = mode === "standing" || mode === "walking";
-  const secondsSinceLocalMidnight = (() => {
-    const now = new Date();
-    return now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
-  })();
-  const cappedElapsedMinutes = isActiveMode
-    ? Math.min(elapsedSeconds, secondsSinceLocalMidnight) / 60
-    : 0;
-  const goalPercent = todayStats
-    ? goalMinutes > 0
-      ? Math.min(100, ((todayStats.standingMinutes + todayStats.walkingMinutes + cappedElapsedMinutes) / goalMinutes) * 100)
-      : todayStats.goalProgressPercent ?? 0
-    : 0;
-  const goalMet = goalPercent >= 100;
-
-  // ── Celebration: fire once per day when the bar crosses 100% live ─────────
-  useEffect(() => {
-    if (!todayStats) return;
-    const prev = prevGoalPercentRef.current;
-    prevGoalPercentRef.current = goalPercent;
-
-    // Only fire when crossing from <100 to >=100 (not on initial render when already >=100)
-    if (prev === null || prev >= 100 || goalPercent < 100) return;
-
-    // Shared localStorage guard with TimerPage – skip if already celebrated today
-    const today = todayStr();
-    if (getCelebratedDate() === today) return;
-
-    saveCelebratedDate(today);
-    freshAchievementRef.current = true;
-    setGoalAchieved(true);
-    playGoalCelebrationTone();
-    goalCelebrationBanner.show();
-    setCelebrating(true);
-    celebrationTimerRef.current = setTimeout(() => setCelebrating(false), 2000);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [goalPercent]);
-
-  // ── Schedule badge hint exactly once (before animation fires) ─────────────
+  // ── Schedule badge hint exactly once (when goal first achieved) ──────────
   const showBadgeHint = goalAchieved && !badgeHintShown && !hintScheduledRef.current;
   useEffect(() => {
     if (showBadgeHint) {
@@ -538,23 +509,7 @@ function OverviewTab() {
     setBadgeHintShown(true);
   }
 
-  function onReplayCelebration() {
-    if (!goalAchieved || celebrating) return;
-    freshAchievementRef.current = false;
-    skipBadgePopInRef.current = false;
-    playGoalCelebrationTone();
-    if (celebrationTimerRef.current) clearTimeout(celebrationTimerRef.current);
-    setCelebrating(true);
-    celebrationTimerRef.current = setTimeout(() => setCelebrating(false), 2000);
-  }
-
-  useEffect(() => {
-    return () => {
-      if (celebrationTimerRef.current) clearTimeout(celebrationTimerRef.current);
-    };
-  }, []);
-
-  // ── Midnight reset: clear badge/celebration state when the day rolls over ──
+  // ── Midnight reset: clear badge hint state when the day rolls over ─────────
   useEffect(() => {
     function msUntilMidnight(): number {
       const now = new Date();
@@ -566,17 +521,9 @@ function OverviewTab() {
 
     function scheduleMidnightReset() {
       dayTimer = setTimeout(() => {
-        setCelebrating(false);
-        setGoalAchieved(false);
-        freshAchievementRef.current = false;
         skipBadgePopInRef.current = false;
         setBadgeHintShown(false);
         hintScheduledRef.current = false;
-        if (celebrationTimerRef.current) {
-          clearTimeout(celebrationTimerRef.current);
-          celebrationTimerRef.current = null;
-        }
-        prevGoalPercentRef.current = null;
         scheduleMidnightReset();
       }, msUntilMidnight());
     }
@@ -660,7 +607,7 @@ function OverviewTab() {
           <div className="relative pr-4 overflow-visible">
             {goalAchieved && !celebrating && (
               <DashboardTrophyBadge
-                delayed={freshAchievementRef.current}
+                delayed={freshAchievement}
                 skipPopIn={skipBadgePopInRef.current}
                 onReplay={onReplayCelebration}
                 showHint={showBadgeHint}
@@ -679,40 +626,6 @@ function OverviewTab() {
               className={`h-2 transition-all duration-500 ${goalMet ? "[&>div]:bg-emerald-500 dark:[&>div]:bg-emerald-400" : ""}`}
             />
           </div>
-        </div>
-      )}
-
-      {goalCelebrationBanner.shown && (
-        <div
-          role="status"
-          aria-live="polite"
-          className={[
-            "flex items-center gap-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-4 py-3",
-            "transition-all duration-300 ease-out",
-            goalCelebrationBanner.visible
-              ? "opacity-100 translate-y-0"
-              : "opacity-0 -translate-y-2",
-          ].join(" ")}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-emerald-600 dark:text-emerald-400">
-            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-            <polyline points="22 4 12 14.01 9 11.01"/>
-          </svg>
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">Goal reached! 🎉</p>
-            <p className="text-xs text-emerald-700 dark:text-emerald-300">You've hit your standing goal for today.</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => goalCelebrationBanner.dismiss()}
-            aria-label="Dismiss"
-            className="shrink-0 ml-1 -mr-1 p-1 rounded-full text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
         </div>
       )}
 
@@ -1184,6 +1097,93 @@ export default function DashboardPage() {
   const [tab, setTab] = useState<Tab>("Overview");
   const [dailyDate, setDailyDate] = useState(today());
 
+  // ── Goal celebration (lifted from OverviewTab so it fires on any active tab) ─
+  const { mode, elapsedSeconds } = useTimer();
+  const { data: todayStats } = useGetTodayStats();
+  const [celebrating, setCelebrating] = useState(false);
+  const [goalAchieved, setGoalAchieved] = useState(() => getCelebratedDate() === todayStr());
+  const freshAchievementRef = useRef(false);
+  const prevGoalPercentRef = useRef<number | null>(null);
+  const celebrationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const goalCelebrationBanner = useBanner(5000);
+
+  const goalMinutes = todayStats?.goalMinutes ?? 120;
+  const isActiveMode = mode === "standing" || mode === "walking";
+  const secondsSinceLocalMidnight = (() => {
+    const now = new Date();
+    return now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+  })();
+  const cappedElapsedMinutes = isActiveMode
+    ? Math.min(elapsedSeconds, secondsSinceLocalMidnight) / 60
+    : 0;
+  const goalPercent = todayStats
+    ? goalMinutes > 0
+      ? Math.min(100, ((todayStats.standingMinutes + todayStats.walkingMinutes + cappedElapsedMinutes) / goalMinutes) * 100)
+      : todayStats.goalProgressPercent ?? 0
+    : 0;
+  const goalMet = goalPercent >= 100;
+
+  // ── Celebration: fire once per day when goal crosses 100% (any tab) ─────────
+  useEffect(() => {
+    if (!todayStats) return;
+    const prev = prevGoalPercentRef.current;
+    prevGoalPercentRef.current = goalPercent;
+
+    if (prev === null || prev >= 100 || goalPercent < 100) return;
+
+    const todayDate = todayStr();
+    if (getCelebratedDate() === todayDate) return;
+
+    saveCelebratedDate(todayDate);
+    freshAchievementRef.current = true;
+    setGoalAchieved(true);
+    playGoalCelebrationTone();
+    goalCelebrationBanner.show();
+    setCelebrating(true);
+    celebrationTimerRef.current = setTimeout(() => setCelebrating(false), 2000);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [goalPercent]);
+
+  const onReplayCelebration = useCallback(() => {
+    if (!goalAchieved || celebrating) return;
+    freshAchievementRef.current = false;
+    playGoalCelebrationTone();
+    if (celebrationTimerRef.current) clearTimeout(celebrationTimerRef.current);
+    setCelebrating(true);
+    celebrationTimerRef.current = setTimeout(() => setCelebrating(false), 2000);
+  }, [goalAchieved, celebrating]);
+
+  useEffect(() => {
+    return () => {
+      if (celebrationTimerRef.current) clearTimeout(celebrationTimerRef.current);
+    };
+  }, []);
+
+  // ── Midnight reset: clear celebration state when day rolls over ──────────────
+  useEffect(() => {
+    function msUntilMidnight(): number {
+      const now = new Date();
+      const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
+      return midnight.getTime() - now.getTime();
+    }
+    let dayTimer: ReturnType<typeof setTimeout>;
+    function scheduleMidnightReset() {
+      dayTimer = setTimeout(() => {
+        setCelebrating(false);
+        setGoalAchieved(false);
+        freshAchievementRef.current = false;
+        if (celebrationTimerRef.current) {
+          clearTimeout(celebrationTimerRef.current);
+          celebrationTimerRef.current = null;
+        }
+        prevGoalPercentRef.current = null;
+        scheduleMidnightReset();
+      }, msUntilMidnight());
+    }
+    scheduleMidnightReset();
+    return () => clearTimeout(dayTimer);
+  }, []);
+
   function handleMonthDayClick(date: Date) {
     setDailyDate(date);
     setTab("Daily");
@@ -1198,8 +1198,53 @@ export default function DashboardPage() {
 
       <TabBar active={tab} onChange={setTab} />
 
+      {goalCelebrationBanner.shown && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={[
+            "mx-4 mt-3 flex items-center gap-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-4 py-3",
+            "transition-all duration-300 ease-out",
+            goalCelebrationBanner.visible
+              ? "opacity-100 translate-y-0"
+              : "opacity-0 -translate-y-2",
+          ].join(" ")}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-emerald-600 dark:text-emerald-400">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+            <polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">Goal reached! 🎉</p>
+            <p className="text-xs text-emerald-700 dark:text-emerald-300">You've hit your standing goal for today.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => goalCelebrationBanner.dismiss()}
+            aria-label="Dismiss"
+            className="shrink-0 ml-1 -mr-1 p-1 rounded-full text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto">
-        {tab === "Overview" && <OverviewTab />}
+        {tab === "Overview" && (
+          <OverviewTab
+            celebrating={celebrating}
+            goalAchieved={goalAchieved}
+            freshAchievement={freshAchievementRef.current}
+            goalPercent={goalPercent}
+            goalMet={goalMet}
+            goalMinutes={goalMinutes}
+            cappedElapsedMinutes={cappedElapsedMinutes}
+            onReplayCelebration={onReplayCelebration}
+          />
+        )}
         {tab === "Daily" && <DailyTabWithDate date={dailyDate} setDate={setDailyDate} />}
         {tab === "Monthly" && <MonthlyTab onDayClick={handleMonthDayClick} />}
         {tab === "Sessions" && <SessionsTab />}
