@@ -926,6 +926,7 @@ function SessionsTab() {
   const [page, setPage] = useState(0);
   const [sortDesc, setSortDesc] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const exportErrorBanner = useBanner(5000);
 
   const { data, isLoading } = useListSessions({
     limit: PAGE_SIZE,
@@ -959,7 +960,7 @@ function SessionsTab() {
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      alert("Export failed. Please try again.");
+      exportErrorBanner.show();
     } finally {
       setExporting(false);
     }
@@ -983,6 +984,24 @@ function SessionsTab() {
 
   return (
     <div className="p-4 pb-24 space-y-4">
+      {exportErrorBanner.shown && (
+        <div
+          className={[
+            "flex items-center gap-3 rounded-2xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-4 py-3 text-red-700 dark:text-red-300",
+            "transition-all duration-300 ease-out",
+            exportErrorBanner.visible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2",
+          ].join(" ")}
+        >
+          <span className="text-sm font-medium">Export failed. Please try again.</span>
+          <button
+            onClick={exportErrorBanner.dismiss}
+            className="ml-auto text-red-400 hover:text-red-600 dark:hover:text-red-200"
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">{total} sessions total</p>
         <div className="flex items-center gap-2">
