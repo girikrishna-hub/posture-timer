@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import {
   TrophyBadge,
@@ -6,6 +6,7 @@ import {
   CELEBRATION_KEY,
   BADGE_HINT_KEY,
   todayStr,
+  msUntilMidnight,
 } from "@/pages/TimerPage";
 
 // ---------------------------------------------------------------------------
@@ -331,5 +332,175 @@ describe("localStorage guard initialisation helpers", () => {
       />,
     );
     expect(getBadgeAnimation()).toContain("badge-hint-wiggle");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Midnight reset — day-boundary behaviour
+// ---------------------------------------------------------------------------
+
+describe("midnight reset — msUntilMidnight timing", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("msUntilMidnight returns a positive value less than 24 hours", () => {
+    const ms = msUntilMidnight();
+    expect(ms).toBeGreaterThan(0);
+    expect(ms).toBeLessThanOrEqual(24 * 60 * 60 * 1000);
+  });
+
+  it("msUntilMidnight returns ~1 second when the clock is at 23:59:59", () => {
+    // Pin the clock to 23:59:59.000 on an arbitrary date
+    const almostMidnight = new Date("2026-04-30T23:59:59.000Z");
+    // Use local midnight so the calculation aligns with the implementation
+    const localAlmostMidnight = new Date(
+      almostMidnight.getFullYear(),
+      almostMidnight.getMonth(),
+      almostMidnight.getDate(),
+      23, 59, 59, 0,
+    );
+    vi.useFakeTimers({ now: localAlmostMidnight.getTime() });
+    const ms = msUntilMidnight();
+    expect(ms).toBeGreaterThan(0);
+    expect(ms).toBeLessThanOrEqual(1000);
+  });
+
+  it("msUntilMidnight returns ~86400000 ms when the clock is at 00:00:00", () => {
+    const justAfterMidnight = new Date(
+      2026, 3, 30, 0, 0, 0, 0, // 2026-04-30 00:00:00 local
+    );
+    vi.useFakeTimers({ now: justAfterMidnight.getTime() });
+    const ms = msUntilMidnight();
+    // Should be almost a full day (within 1 second of 86400000)
+    expect(ms).toBeGreaterThan(86400000 - 1000);
+    expect(ms).toBeLessThanOrEqual(86400000);
+  });
+});
+
+describe("midnight reset — localStorage guards clear for the new day", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    localStorage.clear();
+  });
+
+  it("localStorage keys set to the old day no longer match todayStr() after the date advances", () => {
+    // Simulate: user celebrated on April 30
+    const oldDate = "2026-04-30";
+    localStorage.setItem(CELEBRATION_KEY, oldDate);
+    localStorage.setItem(BADGE_HINT_KEY, oldDate);
+
+    // Advance the clock past midnight — it's now May 1
+    vi.useFakeTimers({ now: new Date(2026, 4, 1, 0, 0, 1, 0).getTime() });
+
+    const newDay = todayStr();
+    expect(newDay).toBe("2026-05-01");
+
+    // The stored values are stale: they don't match the new day
+    expect(localStorage.getItem(CELEBRATION_KEY)).not.toBe(newDay);
+    expect(localStorage.getItem(BADGE_HINT_KEY)).not.toBe(newDay);
+  });
+
+  it("skipBadgePopIn guard evaluates to false when localStorage has yesterday's date", () => {
+    const oldDate = "2026-04-30";
+    localStorage.setItem(CELEBRATION_KEY, oldDate);
+
+    // It's the next day
+    vi.useFakeTimers({ now: new Date(2026, 4, 1, 0, 0, 1, 0).getTime() });
+
+    const skipPopIn = localStorage.getItem(CELEBRATION_KEY) === todayStr();
+    expect(skipPopIn).toBe(false);
+  });
+
+  it("hintAlreadyShown guard evaluates to false when localStorage has yesterday's date", () => {
+    const oldDate = "2026-04-30";
+    localStorage.setItem(BADGE_HINT_KEY, oldDate);
+
+    // It's the next day
+    vi.useFakeTimers({ now: new Date(2026, 4, 1, 0, 0, 1, 0).getTime() });
+
+    const hintAlreadyShown = localStorage.getItem(BADGE_HINT_KEY) === todayStr();
+    expect(hintAlreadyShown).toBe(false);
+  });
+
+  it("TrophyBadge shows badge-pop-in on new day even though yesterday's CELEBRATION_KEY is set", () => {
+    // Previous day's entry is present in localStorage
+    localStorage.setItem(CELEBRATION_KEY, "2026-04-30");
+
+    // It's the next day — guard should not suppress the pop-in
+    vi.useFakeTimers({ now: new Date(2026, 4, 1, 0, 0, 1, 0).getTime() });
+
+    const skipPopIn = localStorage.getItem(CELEBRATION_KEY) === todayStr();
+    expect(skipPopIn).toBe(false);
+
+    render(
+      <TrophyBadge
+        skipPopIn={skipPopIn}
+        delayed={false}
+        onReplay={() => {}}
+        showHint={false}
+        onHintShown={() => {}}
+      />,
+    );
+    expect(getBadgeAnimation()).toContain("badge-pop-in");
+  });
+
+  it("TrophyBadge shows badge-hint-wiggle on new day even though yesterday's BADGE_HINT_KEY is set", () => {
+    localStorage.setItem(BADGE_HINT_KEY, "2026-04-30");
+
+    vi.useFakeTimers({ now: new Date(2026, 4, 1, 0, 0, 1, 0).getTime() });
+
+    const hintAlreadyShown = localStorage.getItem(BADGE_HINT_KEY) === todayStr();
+    expect(hintAlreadyShown).toBe(false);
+
+    render(
+      <TrophyBadge
+        skipPopIn={false}
+        delayed={false}
+        onReplay={() => {}}
+        showHint={!hintAlreadyShown}
+        onHintShown={() => {}}
+      />,
+    );
+    expect(getBadgeAnimation()).toContain("badge-hint-wiggle");
+  });
+
+  it("midnight reset setTimeout fires after msUntilMidnight delay and callback executes", () => {
+    // Set the clock to 23:59:59 on April 30
+    const almostMidnight = new Date(2026, 3, 30, 23, 59, 59, 0);
+    vi.useFakeTimers({ now: almostMidnight.getTime() });
+
+    // Confirm we're ~1 second from midnight
+    const delay = msUntilMidnight();
+    expect(delay).toBeGreaterThan(0);
+    expect(delay).toBeLessThanOrEqual(1000);
+
+    // Simulate the reset callback registering and firing
+    let resetFired = false;
+    const timer = setTimeout(() => {
+      resetFired = true;
+    }, delay);
+
+    expect(resetFired).toBe(false);
+
+    // Advance past midnight
+    vi.advanceTimersByTime(1001);
+    expect(resetFired).toBe(true);
+
+    clearTimeout(timer);
+  });
+
+  it("todayStr returns the new day's date after midnight advance", () => {
+    // Just before midnight on April 30
+    vi.useFakeTimers({ now: new Date(2026, 3, 30, 23, 59, 59, 0).getTime() });
+    expect(todayStr()).toBe("2026-04-30");
+
+    // Advance 1.5 s — now it's May 1
+    vi.advanceTimersByTime(1500);
+    expect(todayStr()).toBe("2026-05-01");
   });
 });

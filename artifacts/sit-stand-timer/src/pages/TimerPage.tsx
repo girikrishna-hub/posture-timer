@@ -32,6 +32,12 @@ export function todayStr(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+export function msUntilMidnight(): number {
+  const now = new Date();
+  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
+  return midnight.getTime() - now.getTime();
+}
+
 export function goalLabelClass(footerGoalMet: boolean, goalMetOnLoad: boolean | null): string {
   return `flex items-center gap-1 transition-colors duration-500 ${
     footerGoalMet
@@ -497,12 +503,6 @@ export default function TimerPage() {
 
   // Reset celebration/badge state at midnight so a new day starts clean
   useEffect(() => {
-    function msUntilMidnight(): number {
-      const now = new Date();
-      const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
-      return midnight.getTime() - now.getTime();
-    }
-
     let dayTimer: ReturnType<typeof setTimeout>;
 
     function scheduleMidnightReset() {

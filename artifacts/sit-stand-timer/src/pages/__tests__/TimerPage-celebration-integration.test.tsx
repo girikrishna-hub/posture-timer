@@ -284,6 +284,136 @@ describe("TimerPage — hint wiggle guard on reload", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Scenario 5 — midnight reset: celebration state clears when clock rolls over
+// ---------------------------------------------------------------------------
+
+describe("TimerPage — midnight reset clears daily progress", () => {
+  it("goalAchieved resets to false after midnight fires, hiding the badge", () => {
+    // Set the clock to 23:59:59 on April 30
+    const almostMidnight = new Date(2026, 3, 30, 23, 59, 59, 0);
+    vi.useFakeTimers({ now: almostMidnight.getTime() });
+
+    // Seed localStorage: user already celebrated today (April 30)
+    localStorage.setItem(CELEBRATION_KEY, "2026-04-30");
+    localStorage.setItem(BADGE_HINT_KEY, "2026-04-30");
+
+    // Goal is achieved — badge should be visible
+    _mockTodayStats = buildStats(60, 60);
+
+    act(() => {
+      renderPage();
+    });
+
+    // Before midnight: badge is present (goalAchieved=true from localStorage)
+    expect(
+      screen.getByRole("button", { name: /replay goal celebration/i }),
+    ).toBeInTheDocument();
+
+    // Advance past midnight (~1001 ms): midnight reset fires
+    act(() => {
+      vi.advanceTimersByTime(1001);
+    });
+
+    // After midnight reset: goalAchieved=false → badge is no longer rendered
+    expect(
+      screen.queryByRole("button", { name: /replay goal celebration/i }),
+    ).toBeNull();
+  });
+
+  it("after midnight reset, crossing the goal on the new day shows badge WITH pop-in (skipBadgePopInRef cleared)", () => {
+    const almostMidnight = new Date(2026, 3, 30, 23, 59, 59, 0);
+    vi.useFakeTimers({ now: almostMidnight.getTime() });
+
+    // April 30: goal was achieved and CELEBRATION_KEY stored for that day
+    localStorage.setItem(CELEBRATION_KEY, "2026-04-30");
+
+    // Start with stats just below goal on April 30
+    _mockTodayStats = buildStats(50, 60);
+
+    const { unmount, rerender } = render(<TimerPage />);
+
+    // Advance past midnight — midnight reset fires, goalAchieved → false
+    act(() => {
+      vi.advanceTimersByTime(1001);
+    });
+
+    // Unmount the April 30 session
+    act(() => {
+      unmount();
+    });
+
+    // It is now May 1
+    expect(todayStr()).toBe("2026-05-01");
+    // localStorage still has the stale "2026-04-30" key
+    expect(localStorage.getItem(CELEBRATION_KEY)).toBe("2026-04-30");
+
+    // Remount on May 1 with stats just below goal so prevGoalPercentRef can cross
+    _mockTodayStats = buildStats(50, 60);
+    const { rerender: rerenderMay1 } = render(<TimerPage />);
+
+    // Cross the goal on May 1 — this triggers the celebration
+    act(() => {
+      _mockTodayStats = buildStats(60, 60);
+      rerenderMay1(<TimerPage />);
+    });
+
+    // Wait for the celebration timeout (2000 ms) to expire → badge becomes visible
+    act(() => {
+      vi.advanceTimersByTime(2100);
+    });
+
+    // Fresh mount on May 1: skipBadgePopInRef is false (ls "2026-04-30" ≠ todayStr "2026-05-01")
+    // → badge pop-in animation plays
+    const badgeAfter = screen.getByRole("button", { name: /replay goal celebration/i });
+    expect(badgeAfter.style.animation).toContain("badge-pop-in");
+  });
+
+  it("reloading on the new day after midnight reset schedules badge-hint on first mount (hintScheduledRef initialises false)", () => {
+    // Simulate midnight passing: clock advances to May 1, localStorage still has April 30 dates
+    vi.useFakeTimers({ now: new Date(2026, 3, 30, 23, 59, 59, 0).getTime() });
+
+    localStorage.setItem(CELEBRATION_KEY, "2026-04-30");
+    localStorage.setItem(BADGE_HINT_KEY, "2026-04-30");
+
+    // Mount on April 30 — midnight reset fires
+    _mockTodayStats = buildStats(60, 60);
+    const { unmount } = render(<TimerPage />);
+
+    act(() => {
+      vi.advanceTimersByTime(1001); // cross midnight — now May 1
+    });
+
+    act(() => {
+      unmount();
+    });
+
+    // It is now May 1 — BADGE_HINT_KEY is stale
+    expect(todayStr()).toBe("2026-05-01");
+    expect(localStorage.getItem(BADGE_HINT_KEY)).toBe("2026-04-30"); // not yet "2026-05-01"
+
+    // User crossed the goal on May 1 (simulated by writing CELEBRATION_KEY for today)
+    localStorage.setItem(CELEBRATION_KEY, "2026-05-01");
+
+    // Reload: goalAchieved=true from CELEBRATION_KEY, hintScheduledRef starts false
+    // because BADGE_HINT_KEY "2026-04-30" ≠ todayStr() "2026-05-01"
+    _mockTodayStats = buildStats(60, 60);
+    act(() => {
+      render(<TimerPage />);
+    });
+
+    // The hint-scheduling effect fires (showBadgeHint was true on first render),
+    // writing today's date to BADGE_HINT_KEY — the same observable signal the
+    // existing "schedules badge hint" test verifies.
+    expect(localStorage.getItem(BADGE_HINT_KEY)).toBe("2026-05-01");
+
+    // Badge is still visible (goal achieved on May 1)
+    expect(
+      screen.getByRole("button", { name: /replay goal celebration/i }),
+    ).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // End-to-end chained scenario — cross goal mid-session → unmount → remount
 // This is the primary regression guard for the "no replay on reload" story.
 // ---------------------------------------------------------------------------
