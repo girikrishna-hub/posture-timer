@@ -582,18 +582,21 @@ export default function TimerPage() {
       )}
 
       {soundBanner.shown && (
-        <div
-          role="status"
+        <button
+          type="button"
+          onClick={toggleSound}
           aria-live="polite"
+          aria-label={soundBanner.message === "Sound on" ? "Sound on — tap to mute" : "Sound off — tap to unmute"}
           className={[
             "fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-card border border-border shadow-lg rounded-2xl px-4 py-2.5 text-sm font-medium text-foreground flex items-center gap-2",
-            "transition-all duration-300 ease-out",
+            "transition-all duration-300 ease-out cursor-pointer hover:bg-muted active:scale-95",
             soundBanner.visible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2",
           ].join(" ")}
         >
           <span>{soundBanner.message === "Sound on" ? "🔔" : "🔇"}</span>
           {soundBanner.message}
-        </div>
+          <span className="text-xs text-muted-foreground font-normal">tap to undo</span>
+        </button>
       )}
 
       {canInstall && (
