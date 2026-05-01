@@ -36,6 +36,7 @@ import html2canvas from "html2canvas";
 
 // ─── Goal celebration (shared localStorage key with TimerPage) ───────────────
 const CELEBRATION_KEY = "sit-stand-goal-celebrated";
+const BADGE_HINT_KEY = "sit-stand-badge-hint";
 
 function getCelebratedDate(): string {
   try { return localStorage.getItem(CELEBRATION_KEY) ?? ""; } catch { return ""; }
@@ -45,9 +46,70 @@ function saveCelebratedDate(date: string): void {
   try { localStorage.setItem(CELEBRATION_KEY, date); } catch { /* ignore */ }
 }
 
+function getBadgeHintDate(): string {
+  try { return localStorage.getItem(BADGE_HINT_KEY) ?? ""; } catch { return ""; }
+}
+
+function saveBadgeHintDate(date: string): void {
+  try { localStorage.setItem(BADGE_HINT_KEY, date); } catch { /* ignore */ }
+}
+
 function todayStr(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// ─── Dashboard Trophy Badge ──────────────────────────────────────────────────
+function DashboardTrophyBadge({
+  delayed,
+  skipPopIn,
+  onReplay,
+  showHint,
+  onHintShown,
+}: {
+  delayed: boolean;
+  skipPopIn: boolean;
+  onReplay: () => void;
+  showHint: boolean;
+  onHintShown: () => void;
+}) {
+  const popInDelay = delayed ? 2.1 : 0;
+  const wiggleDelay = popInDelay + 0.8;
+  const popInPart = skipPopIn ? "" : `dashboard-badge-pop-in 0.5s ${popInDelay}s cubic-bezier(0.34,1.56,0.64,1) both`;
+  const hintPart = showHint ? `dashboard-badge-hint-wiggle 0.7s ${wiggleDelay}s ease-in-out 1 both` : "";
+  const animation = [popInPart, hintPart].filter(Boolean).join(", ") || undefined;
+
+  const handleAnimationEnd = (e: React.AnimationEvent<HTMLButtonElement>) => {
+    if (e.animationName === "dashboard-badge-hint-wiggle") {
+      onHintShown();
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={onReplay}
+      className="absolute flex items-center justify-center w-7 h-7 rounded-full bg-emerald-500 dark:bg-emerald-600 shadow-md ring-2 ring-background hover:bg-emerald-400 dark:hover:bg-emerald-500 active:scale-90 transition-transform cursor-pointer"
+      style={{
+        right: 0,
+        top: "50%",
+        transform: animation ? undefined : "translateY(-50%) translateX(50%)",
+        animation,
+      }}
+      onAnimationEnd={handleAnimationEnd}
+      title="Tap to replay celebration"
+      aria-label="Replay goal celebration"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        className="w-4 h-4 text-white"
+      >
+        <path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+      </svg>
+    </button>
+  );
 }
 
 // ─── Color constants ────────────────────────────────────────────────────────
@@ -323,6 +385,11 @@ function OverviewTab() {
   const { data: summary, isLoading: sumLoading } = useGetMetricsSummary();
   const { data: todayStats } = useGetTodayStats();
   const [celebrating, setCelebrating] = useState(false);
+  const [goalAchieved, setGoalAchieved] = useState(() => getCelebratedDate() === todayStr());
+  const freshAchievementRef = useRef(false);
+  const skipBadgePopInRef = useRef(getCelebratedDate() === todayStr());
+  const [badgeHintShown, setBadgeHintShown] = useState(() => getBadgeHintDate() === todayStr());
+  const hintScheduledRef = useRef(getBadgeHintDate() === todayStr());
   const prevGoalPercentRef = useRef<number | null>(null);
   const celebrationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [previewing, setPreviewing] = useState(false);
@@ -448,6 +515,8 @@ function OverviewTab() {
     if (getCelebratedDate() === today) return;
 
     saveCelebratedDate(today);
+    freshAchievementRef.current = true;
+    setGoalAchieved(true);
     playGoalCelebrationTone();
     goalCelebrationBanner.show();
     setCelebrating(true);
@@ -455,10 +524,65 @@ function OverviewTab() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [goalPercent]);
 
+  // ── Schedule badge hint exactly once (before animation fires) ─────────────
+  const showBadgeHint = goalAchieved && !badgeHintShown && !hintScheduledRef.current;
+  useEffect(() => {
+    if (showBadgeHint) {
+      saveBadgeHintDate(todayStr());
+      hintScheduledRef.current = true;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showBadgeHint]);
+
+  function handleBadgeHintShown() {
+    setBadgeHintShown(true);
+  }
+
+  function onReplayCelebration() {
+    if (!goalAchieved || celebrating) return;
+    freshAchievementRef.current = false;
+    skipBadgePopInRef.current = false;
+    playGoalCelebrationTone();
+    if (celebrationTimerRef.current) clearTimeout(celebrationTimerRef.current);
+    setCelebrating(true);
+    celebrationTimerRef.current = setTimeout(() => setCelebrating(false), 2000);
+  }
+
   useEffect(() => {
     return () => {
       if (celebrationTimerRef.current) clearTimeout(celebrationTimerRef.current);
     };
+  }, []);
+
+  // ── Midnight reset: clear badge/celebration state when the day rolls over ──
+  useEffect(() => {
+    function msUntilMidnight(): number {
+      const now = new Date();
+      const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
+      return midnight.getTime() - now.getTime();
+    }
+
+    let dayTimer: ReturnType<typeof setTimeout>;
+
+    function scheduleMidnightReset() {
+      dayTimer = setTimeout(() => {
+        setCelebrating(false);
+        setGoalAchieved(false);
+        freshAchievementRef.current = false;
+        skipBadgePopInRef.current = false;
+        setBadgeHintShown(false);
+        hintScheduledRef.current = false;
+        if (celebrationTimerRef.current) {
+          clearTimeout(celebrationTimerRef.current);
+          celebrationTimerRef.current = null;
+        }
+        prevGoalPercentRef.current = null;
+        scheduleMidnightReset();
+      }, msUntilMidnight());
+    }
+
+    scheduleMidnightReset();
+    return () => clearTimeout(dayTimer);
   }, []);
 
   if (sumLoading || weekLoading) {
@@ -533,7 +657,16 @@ function OverviewTab() {
               {formatMinutes(Math.floor(todayStats.standingMinutes + todayStats.walkingMinutes + cappedElapsedMinutes))} / {formatMinutes(goalMinutes)}
             </span>
           </div>
-          <div className="relative">
+          <div className="relative pr-4 overflow-visible">
+            {goalAchieved && !celebrating && (
+              <DashboardTrophyBadge
+                delayed={freshAchievementRef.current}
+                skipPopIn={skipBadgePopInRef.current}
+                onReplay={onReplayCelebration}
+                showHint={showBadgeHint}
+                onHintShown={handleBadgeHintShown}
+              />
+            )}
             {celebrating && (
               <>
                 <span className="absolute inset-0 rounded-full pointer-events-none" style={{ animation: "goal-pulse 0.7s ease-out forwards", background: "transparent", border: "2px solid #10b981", borderRadius: 4 }} />
