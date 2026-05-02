@@ -14,6 +14,8 @@ import {
 import {
   getCelebratedDate,
   saveCelebratedDate,
+  getBadgeHintDate,
+  saveBadgeHintDate,
   useGoalCelebration,
 } from "@/hooks/useGoalCelebration";
 
@@ -840,6 +842,90 @@ describe("getCelebratedDate / saveCelebratedDate — localStorage deduplication 
     expect(alreadyCelebrated).toBe(false);
     // Effective gate: crossing AND NOT already celebrated → celebration fires
     expect(crossingDetected && !alreadyCelebrated).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getBadgeHintDate / saveBadgeHintDate — localStorage deduplication helpers
+//
+// These unit tests cover the two localStorage accessors that power the
+// badge-hint-wiggle deduplication guard:
+//
+//   const hintShown = getBadgeHintDate() === todayStr();
+//   if (!hintShown) {
+//     saveBadgeHintDate(todayStr());
+//   }
+//
+// They verify: correct reads/writes, roundtrip fidelity, and that the boolean
+// expression used as the guard evaluates as expected for the three key states
+// (key absent, key = today, key = yesterday).
+// ---------------------------------------------------------------------------
+
+describe("getBadgeHintDate / saveBadgeHintDate — localStorage deduplication helpers", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it("getBadgeHintDate returns an empty string when BADGE_HINT_KEY is absent", () => {
+    expect(getBadgeHintDate()).toBe("");
+  });
+
+  it("getBadgeHintDate returns the stored date string when BADGE_HINT_KEY is set", () => {
+    const date = "2026-05-01";
+    localStorage.setItem(BADGE_HINT_KEY, date);
+    expect(getBadgeHintDate()).toBe(date);
+  });
+
+  it("saveBadgeHintDate writes the given date to BADGE_HINT_KEY in localStorage", () => {
+    const date = "2026-05-01";
+    saveBadgeHintDate(date);
+    expect(localStorage.getItem(BADGE_HINT_KEY)).toBe(date);
+  });
+
+  it("getBadgeHintDate reflects a value written by saveBadgeHintDate (roundtrip)", () => {
+    const date = todayStr();
+    saveBadgeHintDate(date);
+    expect(getBadgeHintDate()).toBe(date);
+  });
+
+  it("deduplication guard evaluates to false when BADGE_HINT_KEY is absent — first hint is allowed", () => {
+    const today = todayStr();
+    // Nothing written yet: getBadgeHintDate() returns "" ≠ today
+    expect(getBadgeHintDate() === today).toBe(false);
+  });
+
+  it("deduplication guard evaluates to true after saveBadgeHintDate(today) — re-showing hint is blocked", () => {
+    const today = todayStr();
+    saveBadgeHintDate(today);
+    // Guard fires: getBadgeHintDate() === today
+    expect(getBadgeHintDate() === today).toBe(true);
+  });
+
+  it("deduplication guard evaluates to false when BADGE_HINT_KEY holds yesterday's date — new-day hint is allowed", () => {
+    // Simulate: key was written on April 30, it is now May 1
+    vi.useFakeTimers({ now: new Date(2026, 4, 1, 0, 0, 1, 0).getTime() });
+    localStorage.setItem(BADGE_HINT_KEY, "2026-04-30");
+
+    const today = todayStr(); // "2026-05-01"
+    expect(getBadgeHintDate() === today).toBe(false);
+
+    vi.useRealTimers();
+  });
+
+  it("saveBadgeHintDate overwrites a stale date — guard evaluates to true for the new date", () => {
+    // Old entry from yesterday
+    localStorage.setItem(BADGE_HINT_KEY, "2026-04-30");
+
+    // Save today's date (as the hint effect would do)
+    const today = todayStr();
+    saveBadgeHintDate(today);
+
+    expect(getBadgeHintDate()).toBe(today);
+    expect(getBadgeHintDate() === today).toBe(true);
   });
 });
 
