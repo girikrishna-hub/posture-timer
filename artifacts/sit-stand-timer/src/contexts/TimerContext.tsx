@@ -174,6 +174,8 @@ interface TimerContextValue {
   isLoading: boolean;
   stateSource: StateSource;
   isInLockWindow: () => boolean;
+  /** True once the active session has been loaded from the server API. */
+  initialized: boolean;
 }
 
 export type { GpsStatus };
@@ -727,6 +729,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
         isLoading: startSessionMutation.isPending || endSessionMutation.isPending,
         stateSource,
         isInLockWindow,
+        initialized,
       }}
     >
       {children}
