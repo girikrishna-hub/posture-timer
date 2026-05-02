@@ -1109,3 +1109,75 @@ describe("midnight reset — BroadcastChannel message triggers reset on separate
     expect(hook1.result.current.goalAchieved).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------------------
+// useGoalCelebration — showBadgeHint effect writes BADGE_HINT_KEY on first play
+//
+// The `showBadgeHint` effect (lines 147-155 of useGoalCelebration.ts) calls
+// saveBadgeHintDate(todayStr()) the moment the hint is first scheduled so that
+// a reload mid-animation won't replay the wiggle.  This suite verifies that
+// the integration between the hook's derived `showBadgeHint` value and that
+// effect actually persists the correct date to localStorage.
+//
+// Strategy:
+//   • Seed CELEBRATION_KEY with today so goalAchieved initialises to true.
+//   • Leave BADGE_HINT_KEY absent so badgeHintShown starts false.
+//   • Render the hook — showBadgeHint becomes true immediately, the effect
+//     fires, and saveBadgeHintDate(todayStr()) is called.
+//   • Assert BADGE_HINT_KEY === todayStr().
+//   • Re-render multiple times and confirm the value is still today's date
+//     (written exactly once; the in-session hintScheduledRef guard prevents
+//     any further writes after the first render).
+// ---------------------------------------------------------------------------
+
+describe("useGoalCelebration — showBadgeHint effect persists BADGE_HINT_KEY", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it("writes todayStr() to BADGE_HINT_KEY the first time the badge hint plays", () => {
+    // Seed: goal already achieved today so goalAchieved starts true.
+    saveCelebratedDate(todayStr());
+    // BADGE_HINT_KEY is intentionally absent — badgeHintShown initialises false.
+
+    // Render the hook with a goal-met percentage.
+    renderHook(() =>
+      useGoalCelebration({ liveGoalPercent: 100 }),
+    );
+
+    // The showBadgeHint effect must have fired and persisted today's date.
+    expect(localStorage.getItem(BADGE_HINT_KEY)).toBe(todayStr());
+  });
+
+  it("BADGE_HINT_KEY is written only once even after multiple re-renders", () => {
+    saveCelebratedDate(todayStr());
+
+    const setItemSpy = vi.spyOn(Storage.prototype, "setItem");
+
+    const { rerender } = renderHook(() =>
+      useGoalCelebration({ liveGoalPercent: 100 }),
+    );
+
+    // Count how many times BADGE_HINT_KEY was written on the first render.
+    const writesAfterMount = setItemSpy.mock.calls.filter(
+      ([key]) => key === BADGE_HINT_KEY,
+    ).length;
+    expect(writesAfterMount).toBe(1);
+
+    // Re-render several times — hintScheduledRef should block further writes.
+    rerender();
+    rerender();
+    rerender();
+
+    const writesAfterRerenders = setItemSpy.mock.calls.filter(
+      ([key]) => key === BADGE_HINT_KEY,
+    ).length;
+    expect(writesAfterRerenders).toBe(1);
+
+    setItemSpy.mockRestore();
+  });
+});
