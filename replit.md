@@ -43,6 +43,8 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
   - **Dashboard**: Overview (summary cards + weekly Recharts bar chart), Daily timeline, Monthly heatmap calendar, Sessions log with pagination and CSV export
   - Bottom nav: Timer ↔ Dashboard tabs
   - **Walking mode**: Auto-detect walking via Geolocation `watchPosition` speed (0.3–3.5 m/s). Opt-in toggle in Settings (requests location permission on toggle-on, shows permission status). 15s debounce to start, 15s to stop. Null-speed fallback derives speed from haversine distance between consecutive fixes. On stop: walking session ends to idle (no forced sitting). Preference persisted in localStorage. Teal color theme. GPS status indicator in header (requesting/active/denied states).
+  - **Google Fit Assisted Mode**: Polls Google Fit intraday steps every 2 min. Detects drift (walking ≥30 steps/min, standing 2–29, sitting=0). Fires NudgeModal (15s countdown) when drift detected; auto-corrects after countdown or if user confirms. Lock windows prevent auto-correction for 15m after manual sit or 10m after manual stand. Analytics stored in DB (nudge_count, auto_correction_count, user_accepted, user_cancelled). Settings toggle + Connect/Disconnect button.
+  - **Server-side Web Push**: VAPID push subscriptions stored in `push_subscriptions` table. Server schedules sit/stand reminder push notifications (mirrors frontend timer logic). Frontend `usePushSubscription` subscribes on notification permission grant; `usePushSchedule` reschedules on every mode switch. SW handles `push` events and shows notifications when app is backgrounded.
 
 ### Key Files
 - `lib/api-spec/openapi.yaml` — OpenAPI contract (sessions, settings, stats, metrics)
@@ -57,9 +59,18 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 - `artifacts/sit-stand-timer/src/contexts/TimerContext.tsx` — timer state machine, reminder logic, audio, notifications
 - `artifacts/sit-stand-timer/src/utils/audio.ts` — Web Audio API tone generation
 - `artifacts/sit-stand-timer/src/pages/TimerPage.tsx` — main timer UI
-- `artifacts/sit-stand-timer/src/pages/SettingsPage.tsx` — settings sliders UI
+- `artifacts/sit-stand-timer/src/pages/SettingsPage.tsx` — settings sliders UI + Google Fit connect/disconnect
 - `artifacts/sit-stand-timer/src/pages/DashboardPage.tsx` — analytics dashboard (Overview/Daily/Monthly/Sessions tabs)
 - `artifacts/sit-stand-timer/src/components/BottomNav.tsx` — Timer/Dashboard bottom navigation
+- `artifacts/sit-stand-timer/src/hooks/useFitbitDrift.ts` — Google Fit drift detection + NudgeModal logic
+- `artifacts/sit-stand-timer/src/hooks/usePushSubscription.ts` — subscribes to Web Push on permission grant
+- `artifacts/sit-stand-timer/src/hooks/usePushSchedule.ts` — reschedules server push on every mode switch
+- `artifacts/sit-stand-timer/src/components/NudgeModal.tsx` — countdown modal for drift nudge / auto-correction
+- `lib/db/src/schema/fitbit.ts` — fitbit_connections + fitbit_analytics tables
+- `lib/db/src/schema/pushSubscriptions.ts` — push_subscriptions table
+- `artifacts/api-server/src/services/pushService.ts` — VAPID setup, subscription CRUD, sendPushToAll
+- `artifacts/api-server/src/services/pushScheduler.ts` — server-side sit/stand push notification scheduler
+- `artifacts/api-server/src/routes/push.ts` — /push/* endpoints (vapid-public-key, subscribe, schedule)
 
 ### Rest Classification Logic
 Rest sessions are auto-classified on end:

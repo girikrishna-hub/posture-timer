@@ -227,6 +227,50 @@ export interface FitbitEventBody {
   reason?: string;
 }
 
+export interface VapidPublicKey {
+  publicKey: string;
+}
+
+export type PushSubscribeBodyKeys = {
+  p256dh: string;
+  auth: string;
+};
+
+export interface PushSubscribeBody {
+  endpoint: string;
+  keys: PushSubscribeBodyKeys;
+}
+
+export interface PushUnsubscribeBody {
+  endpoint: string;
+}
+
+export type PushScheduleBodyMode =
+  (typeof PushScheduleBodyMode)[keyof typeof PushScheduleBodyMode];
+
+export const PushScheduleBodyMode = {
+  sitting: "sitting",
+  standing: "standing",
+  resting: "resting",
+  walking: "walking",
+  idle: "idle",
+} as const;
+
+export interface PushScheduleBody {
+  mode: PushScheduleBodyMode;
+  elapsedSeconds?: number;
+  sittingAlertMinutes?: number;
+  standingMinMinutes?: number;
+  standingMaxMinutes?: number;
+  reminderIntervalMinutes?: number;
+  remindersCount?: number;
+}
+
+export interface PushScheduleResult {
+  ok: boolean;
+  scheduled: boolean;
+}
+
 export type ListSessionsParams = {
   /**
    * Filter sessions from this date (YYYY-MM-DD)

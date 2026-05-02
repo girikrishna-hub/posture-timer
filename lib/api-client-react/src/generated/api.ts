@@ -29,6 +29,10 @@ import type {
   HandleFitbitCallbackParams,
   HealthStatus,
   ListSessionsParams,
+  PushScheduleBody,
+  PushScheduleResult,
+  PushSubscribeBody,
+  PushUnsubscribeBody,
   Session,
   SessionList,
   Settings,
@@ -36,6 +40,7 @@ import type {
   SummaryMetrics,
   TodayStats,
   UpdateSettingsBody,
+  VapidPublicKey,
   WeeklyStats,
 } from "./api.schemas";
 
@@ -1584,4 +1589,418 @@ export const useRecordFitbitEvent = <
   TContext
 > => {
   return useMutation(getRecordFitbitEventMutationOptions(options));
+};
+
+/**
+ * @summary Get the VAPID public key for push subscription
+ */
+export const getGetVapidPublicKeyUrl = () => {
+  return `/api/push/vapid-public-key`;
+};
+
+export const getVapidPublicKey = async (
+  options?: RequestInit,
+): Promise<VapidPublicKey> => {
+  return customFetch<VapidPublicKey>(getGetVapidPublicKeyUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetVapidPublicKeyQueryKey = () => {
+  return [`/api/push/vapid-public-key`] as const;
+};
+
+export const getGetVapidPublicKeyQueryOptions = <
+  TData = Awaited<ReturnType<typeof getVapidPublicKey>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getVapidPublicKey>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetVapidPublicKeyQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getVapidPublicKey>>
+  > = ({ signal }) => getVapidPublicKey({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getVapidPublicKey>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetVapidPublicKeyQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getVapidPublicKey>>
+>;
+export type GetVapidPublicKeyQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get the VAPID public key for push subscription
+ */
+
+export function useGetVapidPublicKey<
+  TData = Awaited<ReturnType<typeof getVapidPublicKey>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getVapidPublicKey>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetVapidPublicKeyQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Register a push subscription
+ */
+export const getSubscribePushUrl = () => {
+  return `/api/push/subscribe`;
+};
+
+export const subscribePush = async (
+  pushSubscribeBody: PushSubscribeBody,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getSubscribePushUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(pushSubscribeBody),
+  });
+};
+
+export const getSubscribePushMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof subscribePush>>,
+    TError,
+    { data: BodyType<PushSubscribeBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof subscribePush>>,
+  TError,
+  { data: BodyType<PushSubscribeBody> },
+  TContext
+> => {
+  const mutationKey = ["subscribePush"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof subscribePush>>,
+    { data: BodyType<PushSubscribeBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return subscribePush(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SubscribePushMutationResult = NonNullable<
+  Awaited<ReturnType<typeof subscribePush>>
+>;
+export type SubscribePushMutationBody = BodyType<PushSubscribeBody>;
+export type SubscribePushMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Register a push subscription
+ */
+export const useSubscribePush = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof subscribePush>>,
+    TError,
+    { data: BodyType<PushSubscribeBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof subscribePush>>,
+  TError,
+  { data: BodyType<PushSubscribeBody> },
+  TContext
+> => {
+  return useMutation(getSubscribePushMutationOptions(options));
+};
+
+/**
+ * @summary Remove a push subscription
+ */
+export const getUnsubscribePushUrl = () => {
+  return `/api/push/subscribe`;
+};
+
+export const unsubscribePush = async (
+  pushUnsubscribeBody: PushUnsubscribeBody,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getUnsubscribePushUrl(), {
+    ...options,
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(pushUnsubscribeBody),
+  });
+};
+
+export const getUnsubscribePushMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unsubscribePush>>,
+    TError,
+    { data: BodyType<PushUnsubscribeBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof unsubscribePush>>,
+  TError,
+  { data: BodyType<PushUnsubscribeBody> },
+  TContext
+> => {
+  const mutationKey = ["unsubscribePush"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof unsubscribePush>>,
+    { data: BodyType<PushUnsubscribeBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return unsubscribePush(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UnsubscribePushMutationResult = NonNullable<
+  Awaited<ReturnType<typeof unsubscribePush>>
+>;
+export type UnsubscribePushMutationBody = BodyType<PushUnsubscribeBody>;
+export type UnsubscribePushMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Remove a push subscription
+ */
+export const useUnsubscribePush = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unsubscribePush>>,
+    TError,
+    { data: BodyType<PushUnsubscribeBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof unsubscribePush>>,
+  TError,
+  { data: BodyType<PushUnsubscribeBody> },
+  TContext
+> => {
+  return useMutation(getUnsubscribePushMutationOptions(options));
+};
+
+/**
+ * @summary Start server-side push notification schedule
+ */
+export const getSchedulePushUrl = () => {
+  return `/api/push/schedule`;
+};
+
+export const schedulePush = async (
+  pushScheduleBody: PushScheduleBody,
+  options?: RequestInit,
+): Promise<PushScheduleResult> => {
+  return customFetch<PushScheduleResult>(getSchedulePushUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(pushScheduleBody),
+  });
+};
+
+export const getSchedulePushMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof schedulePush>>,
+    TError,
+    { data: BodyType<PushScheduleBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof schedulePush>>,
+  TError,
+  { data: BodyType<PushScheduleBody> },
+  TContext
+> => {
+  const mutationKey = ["schedulePush"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof schedulePush>>,
+    { data: BodyType<PushScheduleBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return schedulePush(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SchedulePushMutationResult = NonNullable<
+  Awaited<ReturnType<typeof schedulePush>>
+>;
+export type SchedulePushMutationBody = BodyType<PushScheduleBody>;
+export type SchedulePushMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Start server-side push notification schedule
+ */
+export const useSchedulePush = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof schedulePush>>,
+    TError,
+    { data: BodyType<PushScheduleBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof schedulePush>>,
+  TError,
+  { data: BodyType<PushScheduleBody> },
+  TContext
+> => {
+  return useMutation(getSchedulePushMutationOptions(options));
+};
+
+/**
+ * @summary Cancel the active push schedule
+ */
+export const getCancelPushScheduleUrl = () => {
+  return `/api/push/schedule`;
+};
+
+export const cancelPushSchedule = async (
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getCancelPushScheduleUrl(), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getCancelPushScheduleMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cancelPushSchedule>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof cancelPushSchedule>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["cancelPushSchedule"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof cancelPushSchedule>>,
+    void
+  > = () => {
+    return cancelPushSchedule(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CancelPushScheduleMutationResult = NonNullable<
+  Awaited<ReturnType<typeof cancelPushSchedule>>
+>;
+
+export type CancelPushScheduleMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Cancel the active push schedule
+ */
+export const useCancelPushSchedule = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cancelPushSchedule>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof cancelPushSchedule>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getCancelPushScheduleMutationOptions(options));
 };

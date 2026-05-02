@@ -5,6 +5,7 @@ import settingsRouter from "./settings";
 import statsRouter from "./stats";
 import metricsRouter from "./metrics";
 import fitbitRouter from "./fitbit";
+import pushRouter from "./push";
 
 const router: IRouter = Router();
 
@@ -14,5 +15,6 @@ router.use(settingsRouter);
 router.use(statsRouter);
 router.use(metricsRouter);
 router.use(fitbitRouter);
+router.use(pushRouter);
 
 export default router;

@@ -7,6 +7,8 @@ import { useEffect, useRef, useState } from "react";
 import { useFitbitDrift } from "@/hooks/useFitbitDrift";
 import { NudgeModal } from "@/components/NudgeModal";
 import { useBanner } from "@/hooks/useBanner";
+import { usePushSubscription } from "@/hooks/usePushSubscription";
+import { usePushSchedule } from "@/hooks/usePushSchedule";
 import {
   useGoalCelebration,
   CELEBRATION_KEY,
@@ -364,7 +366,11 @@ export default function TimerPage() {
     }
   }, [notificationPermission, requestNotificationPermission]);
 
+  usePushSubscription(notificationPermission);
+
   const { data: settingsData } = useGetSettings();
+
+  usePushSchedule(settingsData);
   const sittingAlertMinutes = settingsData?.sittingAlertMinutes ?? 45;
   const standingMinMinutes = settingsData?.standingMinMinutes ?? 10;
   const remindersCount = settingsData?.remindersCount ?? 3;

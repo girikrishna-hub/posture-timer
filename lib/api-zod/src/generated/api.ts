@@ -340,3 +340,61 @@ export const RecordFitbitEventBody = zod.object({
   toMode: zod.enum(["sitting", "standing", "resting", "walking"]),
   reason: zod.string().optional(),
 });
+
+/**
+ * @summary Get the VAPID public key for push subscription
+ */
+export const GetVapidPublicKeyResponse = zod.object({
+  publicKey: zod.string(),
+});
+
+/**
+ * @summary Register a push subscription
+ */
+export const SubscribePushBody = zod.object({
+  endpoint: zod.string(),
+  keys: zod.object({
+    p256dh: zod.string(),
+    auth: zod.string(),
+  }),
+});
+
+/**
+ * @summary Remove a push subscription
+ */
+export const UnsubscribePushBody = zod.object({
+  endpoint: zod.string(),
+});
+
+/**
+ * @summary Start server-side push notification schedule
+ */
+export const schedulePushBodyElapsedSecondsDefault = 0;
+export const schedulePushBodySittingAlertMinutesDefault = 45;
+export const schedulePushBodyStandingMinMinutesDefault = 10;
+export const schedulePushBodyStandingMaxMinutesDefault = 15;
+export const schedulePushBodyReminderIntervalMinutesDefault = 1;
+export const schedulePushBodyRemindersCountDefault = 3;
+
+export const SchedulePushBody = zod.object({
+  mode: zod.enum(["sitting", "standing", "resting", "walking", "idle"]),
+  elapsedSeconds: zod.number().default(schedulePushBodyElapsedSecondsDefault),
+  sittingAlertMinutes: zod
+    .number()
+    .default(schedulePushBodySittingAlertMinutesDefault),
+  standingMinMinutes: zod
+    .number()
+    .default(schedulePushBodyStandingMinMinutesDefault),
+  standingMaxMinutes: zod
+    .number()
+    .default(schedulePushBodyStandingMaxMinutesDefault),
+  reminderIntervalMinutes: zod
+    .number()
+    .default(schedulePushBodyReminderIntervalMinutesDefault),
+  remindersCount: zod.number().default(schedulePushBodyRemindersCountDefault),
+});
+
+export const SchedulePushResponse = zod.object({
+  ok: zod.boolean(),
+  scheduled: zod.boolean(),
+});

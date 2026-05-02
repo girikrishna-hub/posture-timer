@@ -18,6 +18,8 @@ tags:
     description: Aggregated statistics and summaries
   - name: fitbit
     description: Fitbit OAuth connection and assisted-mode data
+  - name: push
+    description: Web Push notification subscription and server-side scheduling
 paths:
   /healthz:
     get:
@@ -330,6 +332,73 @@ paths:
       responses:
         "201":
           description: Event recorded
+
+  /push/vapid-public-key:
+    get:
+      operationId: getVapidPublicKey
+      tags: [push]
+      summary: Get the VAPID public key for push subscription
+      responses:
+        "200":
+          description: VAPID public key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VapidPublicKey"
+
+  /push/subscribe:
+    post:
+      operationId: subscribePush
+      tags: [push]
+      summary: Register a push subscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PushSubscribeBody"
+      responses:
+        "201":
+          description: Subscription saved
+    delete:
+      operationId: unsubscribePush
+      tags: [push]
+      summary: Remove a push subscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PushUnsubscribeBody"
+      responses:
+        "204":
+          description: Subscription removed
+
+  /push/schedule:
+    post:
+      operationId: schedulePush
+      tags: [push]
+      summary: Start server-side push notification schedule
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PushScheduleBody"
+      responses:
+        "200":
+          description: Schedule started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PushScheduleResult"
+    delete:
+      operationId: cancelPushSchedule
+      tags: [push]
+      summary: Cancel the active push schedule
+      responses:
+        "200":
+          description: Schedule cancelled
 
 components:
   schemas:
@@ -759,3 +828,76 @@ components:
         - eventType
         - fromMode
         - toMode
+
+    VapidPublicKey:
+      type: object
+      properties:
+        publicKey:
+          type: string
+      required:
+        - publicKey
+
+    PushSubscribeBody:
+      type: object
+      properties:
+        endpoint:
+          type: string
+        keys:
+          type: object
+          properties:
+            p256dh:
+              type: string
+            auth:
+              type: string
+          required:
+            - p256dh
+            - auth
+      required:
+        - endpoint
+        - keys
+
+    PushUnsubscribeBody:
+      type: object
+      properties:
+        endpoint:
+          type: string
+      required:
+        - endpoint
+
+    PushScheduleBody:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum: [sitting, standing, resting, walking, idle]
+        elapsedSeconds:
+          type: integer
+          default: 0
+        sittingAlertMinutes:
+          type: integer
+          default: 45
+        standingMinMinutes:
+          type: integer
+          default: 10
+        standingMaxMinutes:
+          type: integer
+          default: 15
+        reminderIntervalMinutes:
+          type: integer
+          default: 1
+        remindersCount:
+          type: integer
+          default: 3
+      required:
+        - mode
+
+    PushScheduleResult:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        scheduled:
+          type: boolean
+      required:
+        - ok
+        - scheduled
