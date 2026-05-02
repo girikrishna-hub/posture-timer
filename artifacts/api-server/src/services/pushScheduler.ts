@@ -65,7 +65,7 @@ function scheduleNext(
 
     logger.info({ userId, currentMode, nextDelaySecs, title }, "Scheduling push");
     activeTimers.set(userId, setTimeout(() => {
-      void sendPushToUser(userId, { title, body }).catch((err: unknown) =>
+      void sendPushToUser(userId, { title, body, type: "posture", tag: "timer-reminder" }).catch((err: unknown) =>
         logger.error({ err }, "Push send failed"),
       );
       scheduleNext(userId, { ...params, elapsedSeconds: 0 }, "sitting", nextReminders);
@@ -107,7 +107,7 @@ function scheduleNext(
 
     logger.info({ userId, currentMode, nextDelaySecs, title }, "Scheduling push");
     activeTimers.set(userId, setTimeout(() => {
-      void sendPushToUser(userId, { title, body }).catch((err: unknown) =>
+      void sendPushToUser(userId, { title, body, type: "posture", tag: "timer-reminder" }).catch((err: unknown) =>
         logger.error({ err }, "Push send failed"),
       );
       scheduleNext(userId, { ...params, elapsedSeconds: 0 }, nextMode, nextReminders);

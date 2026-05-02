@@ -190,7 +190,9 @@ self.addEventListener("push", (event: PushEvent) => {
     : {};
 
   if (data.type === "bladder") {
-    // Bladder reminder — server-side push, mirrors the SW message notification
+    // ── Bladder reminder ─────────────────────────────────────────────────────
+    // Independent of posture: uses tag "bladder-reminder" so the OS never
+    // replaces a posture notification with this one, or vice versa.
     if (data.logId) bladderPendingLogId = data.logId;
     event.waitUntil(
       self.registration.showNotification(data.title ?? "Time to void", {
@@ -210,17 +212,21 @@ self.addEventListener("push", (event: PushEvent) => {
     return;
   }
 
-  // Default — posture timer notification
-  event.waitUntil(
-    self.registration.showNotification(data.title ?? "Timer Alert", {
-      body: data.body ?? "Time to switch your posture.",
-      icon: "/favicon.svg",
-      badge: "/favicon.svg",
-      tag: "timer-reminder",
-      renotify: true,
-      data: { url: "/" },
-    } as NotificationOptions),
-  );
+  if (data.type === "posture" || data.type == null) {
+    // ── Posture timer notification ────────────────────────────────────────────
+    // Independent of bladder: uses tag "timer-reminder" so both can be visible
+    // in the OS notification centre simultaneously without replacing each other.
+    event.waitUntil(
+      self.registration.showNotification(data.title ?? "Timer Alert", {
+        body: data.body ?? "Time to switch your posture.",
+        icon: "/favicon.svg",
+        badge: "/favicon.svg",
+        tag: "timer-reminder",
+        renotify: true,
+        data: { url: "/" },
+      } as NotificationOptions),
+    );
+  }
 });
 
 // Navigate an existing window to the given URL (or open a new one).
