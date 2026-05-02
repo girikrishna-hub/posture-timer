@@ -204,3 +204,80 @@ describe("DashboardPage — CSV export success banner", () => {
     expect(screen.getByText(/export failed/i)).toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Scenario: failed export shows the error banner
+// ---------------------------------------------------------------------------
+
+describe("DashboardPage — CSV export error banner", () => {
+  it("shows the 'Export failed. Please try again.' banner when the fetch fails", async () => {
+    mockFetchFailure();
+
+    act(() => { renderPage(); });
+    act(() => { navigateToSessionsTab(); });
+
+    // Banner should not be present before export
+    expect(screen.queryByText(/export failed/i)).toBeNull();
+
+    // Click "Export CSV"
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /export csv/i }));
+    });
+
+    // Error banner should now be visible
+    const bannerText = screen.getByText(/Export failed\. Please try again\./i);
+    expect(bannerText).toBeInTheDocument();
+    // Confirm it is the red error banner, not the success banner
+    const bannerContainer = bannerText.closest("div");
+    expect(bannerContainer?.className).toMatch(/red/);
+  });
+
+  it("the error banner has a dismiss button that removes it when clicked", async () => {
+    vi.useFakeTimers();
+    mockFetchFailure();
+
+    act(() => { renderPage(); });
+    act(() => { navigateToSessionsTab(); });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /export csv/i }));
+    });
+
+    // Banner is present
+    expect(screen.getByText(/Export failed\. Please try again\./i)).toBeInTheDocument();
+
+    // Click the dismiss button
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: /dismiss/i }));
+    });
+
+    // After the 350 ms fade-out transition the banner unmounts
+    act(() => {
+      vi.advanceTimersByTime(400);
+    });
+
+    expect(screen.queryByText(/Export failed\. Please try again\./i)).toBeNull();
+  });
+
+  it("the error banner auto-dismisses after 5 seconds", async () => {
+    vi.useFakeTimers();
+    mockFetchFailure();
+
+    act(() => { renderPage(); });
+    act(() => { navigateToSessionsTab(); });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /export csv/i }));
+    });
+
+    // Banner is visible
+    expect(screen.getByText(/Export failed\. Please try again\./i)).toBeInTheDocument();
+
+    // Advance past the 5 000 ms auto-dismiss duration + 350 ms fade-out
+    act(() => {
+      vi.advanceTimersByTime(5000 + 400);
+    });
+
+    expect(screen.queryByText(/Export failed\. Please try again\./i)).toBeNull();
+  });
+});
