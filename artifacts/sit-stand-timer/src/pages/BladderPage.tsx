@@ -202,6 +202,7 @@ export default function BladderPage() {
     suggestion,
     toggle,
     respond,
+    recordUnscheduledVoid,
     applyIntervalSuggestion,
   } = useBladder();
 
@@ -316,13 +317,24 @@ export default function BladderPage() {
 
         {/* Countdown / pending response */}
         {enabled && !pendingLog && (
-          <div className="rounded-2xl border border-border bg-card px-4 py-5 text-center space-y-1">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
-              Next void in
-            </p>
-            <p className="text-5xl font-bold tabular-nums text-blue-600 dark:text-blue-400 leading-none">
-              {countdown}
-            </p>
+          <div className="rounded-2xl border border-border bg-card px-4 py-5 text-center space-y-4">
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">
+                Next void in
+              </p>
+              <p className="text-5xl font-bold tabular-nums text-blue-600 dark:text-blue-400 leading-none">
+                {countdown}
+              </p>
+            </div>
+            {nextVoidAt && (
+              <button
+                type="button"
+                onClick={recordUnscheduledVoid}
+                className="w-full rounded-xl border border-border bg-muted/40 hover:bg-muted active:scale-95 text-sm font-medium text-muted-foreground py-2.5 transition-all"
+              >
+                I went early
+              </button>
+            )}
           </div>
         )}
 
@@ -377,16 +389,24 @@ function LogList() {
 
   if (todayLogs.length === 0) return null;
 
-  const statusLabel: Record<string, string> = {
-    done_on_time: "✓ Done",
-    delayed: "⏱ Delayed",
-    leakage: "⚠ Leakage",
+  const getStatusLabel = (log: (typeof todayLogs)[number]): string => {
+    if (log.unscheduled) return "↩ Went early";
+    const labels: Record<string, string> = {
+      done_on_time: "✓ Done",
+      delayed: "⏱ Delayed",
+      leakage: "⚠ Leakage",
+    };
+    return labels[log.status] ?? log.status;
   };
 
-  const statusColor: Record<string, string> = {
-    done_on_time: "text-emerald-600 dark:text-emerald-400",
-    delayed: "text-amber-600 dark:text-amber-400",
-    leakage: "text-red-600 dark:text-red-400",
+  const getStatusColor = (log: (typeof todayLogs)[number]): string => {
+    if (log.unscheduled) return "text-muted-foreground";
+    const colors: Record<string, string> = {
+      done_on_time: "text-emerald-600 dark:text-emerald-400",
+      delayed: "text-amber-600 dark:text-amber-400",
+      leakage: "text-red-600 dark:text-red-400",
+    };
+    return colors[log.status] ?? "";
   };
 
   return (
@@ -398,8 +418,8 @@ function LogList() {
             <span className="text-muted-foreground tabular-nums">
               {new Date(log.scheduledAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
             </span>
-            <span className={`font-medium ${statusColor[log.status] ?? ""}`}>
-              {statusLabel[log.status] ?? log.status}
+            <span className={`font-medium ${getStatusColor(log)}`}>
+              {getStatusLabel(log)}
             </span>
           </div>
         ))}

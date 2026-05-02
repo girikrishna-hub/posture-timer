@@ -23,6 +23,8 @@ export interface BladderLog {
   respondedAt?: string;
   status: BladderStatus;
   intervalMinutes: number;
+  /** True when the user voided ahead of schedule (not prompted by a reminder). */
+  unscheduled?: boolean;
 }
 
 // ─── Storage helpers ────────────────────────────────────────────────────────
@@ -150,7 +152,7 @@ export interface BladderDaySummary {
 export type BladderSuggestion = "increase" | "decrease" | null;
 
 export function computeDaySummary(logs: BladderLog[], date: string): BladderDaySummary {
-  const day = logs.filter((l) => l.date === date && l.status !== "pending");
+  const day = logs.filter((l) => l.date === date && l.status !== "pending" && !l.unscheduled);
   const totalCycles = day.length;
   const onTimeCount  = day.filter((l) => l.status === "done_on_time").length;
   const delayedCount = day.filter((l) => l.status === "delayed").length;
@@ -177,7 +179,7 @@ export function computeSuggestion(
     );
   }
   const dayLogs = past3.map((date) =>
-    logs.filter((l) => l.date === date && l.status !== "pending"),
+    logs.filter((l) => l.date === date && l.status !== "pending" && !l.unscheduled),
   );
   if (dayLogs.some((d) => d.length === 0)) return null;
   if (dayLogs.some((d) => d.some((l) => l.status === "leakage"))) {
@@ -231,6 +233,7 @@ export function computeMaxSafeInterval(logs: BladderLog[], date: string): number
     .filter(
       (l) =>
         l.date === date &&
+        !l.unscheduled &&
         (l.status === "done_on_time" || l.status === "delayed" || l.status === "leakage"),
     )
     .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
@@ -254,7 +257,7 @@ export function computeMaxSafeInterval(logs: BladderLog[], date: string): number
  * Full daily aggregate computed purely from the raw log array.
  */
 export function computeDailyAggregate(logs: BladderLog[], date: string): BladderDailyAggregate {
-  const day = logs.filter((l) => l.date === date && l.status !== "pending");
+  const day = logs.filter((l) => l.date === date && l.status !== "pending" && !l.unscheduled);
   const leakageCount = day.filter((l) => l.status === "leakage").length;
   // missed = auto-resolved delayed (no respondedAt written by the user)
   const missedCount  = day.filter((l) => l.status === "delayed" && !l.respondedAt).length;
@@ -353,6 +356,8 @@ interface BladderContextValue {
   guidance: BladderGuidance;
   toggle: () => void;
   respond: (status: Exclude<BladderStatus, "pending">) => void;
+  /** Record a void that happened ahead of schedule and restart the cycle from now. */
+  recordUnscheduledVoid: () => void;
   applyIntervalSuggestion: () => void;
 }
 
@@ -557,6 +562,24 @@ export function BladderProvider({ children }: { children: React.ReactNode }) {
     [commitLogs],
   );
 
+  // ── recordUnscheduledVoid — log an early void and restart the cycle ────────
+  const recordUnscheduledVoid = useCallback(() => {
+    const now = new Date();
+    const log: BladderLog = {
+      id: crypto.randomUUID(),
+      date: todayStr(),
+      scheduledAt: now.toISOString(),
+      respondedAt: now.toISOString(),
+      status: "done_on_time",
+      intervalMinutes: intervalRef.current,
+      unscheduled: true,
+    };
+    const existing = loadLogs();
+    commitLogs([...existing, log]);
+    // Reset the cycle clock from right now
+    startSchedule();
+  }, [commitLogs, startSchedule]);
+
   // ── setIntervalMinutes ─────────────────────────────────────────────────────
   const setIntervalMinutes = useCallback(
     (v: number) => {
@@ -686,6 +709,7 @@ export function BladderProvider({ children }: { children: React.ReactNode }) {
         guidance,
         toggle,
         respond,
+        recordUnscheduledVoid,
         applyIntervalSuggestion,
       }}
     >
