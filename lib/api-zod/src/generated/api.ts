@@ -398,3 +398,18 @@ export const SchedulePushResponse = zod.object({
   ok: zod.boolean(),
   scheduled: zod.boolean(),
 });
+
+/**
+ * @summary Schedule a bladder-reminder server-side push notification
+ */
+export const ScheduleBladderPushBody = zod.object({
+  delayMs: zod
+    .number()
+    .describe("Milliseconds from now until the bladder reminder should fire"),
+  logId: zod.string().describe("ID of the pending bladder log entry"),
+});
+
+export const ScheduleBladderPushResponse = zod.object({
+  ok: zod.boolean(),
+  scheduled: zod.boolean(),
+});

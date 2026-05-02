@@ -7,6 +7,8 @@ import {
 import {
   schedulePushNotifications,
   cancelPushSchedule,
+  scheduleBladderPush,
+  cancelBladderPush,
 } from "../services/pushScheduler";
 import { requireAuth } from "../middlewares/requireAuth";
 
@@ -77,6 +79,23 @@ router.post("/push/schedule", requireAuth, (req, res) => {
 
 router.delete("/push/schedule", requireAuth, (req, res) => {
   cancelPushSchedule(req.userId);
+  return res.json({ ok: true });
+});
+
+router.post("/push/bladder-schedule", requireAuth, (req, res) => {
+  const { delayMs, logId } = req.body as { delayMs?: number; logId?: string };
+
+  if (typeof delayMs !== "number" || delayMs < 0 || !logId) {
+    return res.status(400).json({ error: "delayMs (number ≥ 0) and logId are required" });
+  }
+
+  scheduleBladderPush(req.userId, delayMs, logId);
+  req.log.info({ delayMs, logId }, "Bladder push scheduled");
+  return res.json({ ok: true, scheduled: true });
+});
+
+router.delete("/push/bladder-schedule", requireAuth, (req, res) => {
+  cancelBladderPush(req.userId);
   return res.json({ ok: true });
 });
 

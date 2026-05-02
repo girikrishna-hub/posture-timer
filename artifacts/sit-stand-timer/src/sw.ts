@@ -179,14 +179,47 @@ self.addEventListener("message", (event: ExtendableMessageEvent) => {
 });
 
 self.addEventListener("push", (event: PushEvent) => {
-  const data = event.data ? (event.data.json() as { title?: string; body?: string }) : {};
+  const data = event.data
+    ? (event.data.json() as {
+        title?: string;
+        body?: string;
+        type?: string;
+        tag?: string;
+        logId?: string;
+      })
+    : {};
+
+  if (data.type === "bladder") {
+    // Bladder reminder — server-side push, mirrors the SW message notification
+    if (data.logId) bladderPendingLogId = data.logId;
+    event.waitUntil(
+      self.registration.showNotification(data.title ?? "Time to void", {
+        body: data.body ?? "Go now. Do not delay.",
+        icon: "/favicon.svg",
+        badge: "/favicon.svg",
+        tag: "bladder-reminder",
+        renotify: true,
+        requireInteraction: true,
+        data: { url: "/bladder", logId: bladderPendingLogId },
+        actions: [
+          { action: "done", title: "✓ Done" },
+          { action: "snooze", title: "⏱ Snooze 5 min" },
+        ],
+      } as NotificationOptions),
+    );
+    return;
+  }
+
+  // Default — posture timer notification
   event.waitUntil(
     self.registration.showNotification(data.title ?? "Timer Alert", {
       body: data.body ?? "Time to switch your posture.",
       icon: "/favicon.svg",
       badge: "/favicon.svg",
+      tag: "timer-reminder",
+      renotify: true,
       data: { url: "/" },
-    } as NotificationOptions)
+    } as NotificationOptions),
   );
 });
 

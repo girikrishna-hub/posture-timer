@@ -123,3 +123,42 @@ export function cancelPushSchedule(userId: string): void {
   clearActive(userId);
   logger.info({ userId }, "Push schedule cancelled");
 }
+
+// ─── Bladder push ─────────────────────────────────────────────────────────────
+// Separate per-user timer for bladder reminders. Unlike posture, bladder uses a
+// single one-shot push rather than a repeating schedule.
+
+const bladderTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+export function scheduleBladderPush(userId: string, delayMs: number, logId: string): void {
+  const existing = bladderTimers.get(userId);
+  if (existing !== undefined) clearTimeout(existing);
+
+  const clampedDelay = Math.max(delayMs, 0);
+  logger.info({ userId, delayMs: clampedDelay, logId }, "Bladder push scheduled");
+
+  bladderTimers.set(
+    userId,
+    setTimeout(() => {
+      bladderTimers.delete(userId);
+      void sendPushToUser(userId, {
+        title: "Time to void",
+        body: "Go now. Do not delay.",
+        tag: "bladder-reminder",
+        type: "bladder",
+        logId,
+      }).catch((err: unknown) =>
+        logger.error({ err }, "Bladder push send failed"),
+      );
+    }, clampedDelay),
+  );
+}
+
+export function cancelBladderPush(userId: string): void {
+  const t = bladderTimers.get(userId);
+  if (t !== undefined) {
+    clearTimeout(t);
+    bladderTimers.delete(userId);
+    logger.info({ userId }, "Bladder push cancelled");
+  }
+}

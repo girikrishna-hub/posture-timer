@@ -7,6 +7,7 @@
  */
 
 export * from "./activeSessionResponse";
+export * from "./bladderPushScheduleBody";
 export * from "./dailyMetric";
 export * from "./dailyMetricsResponse";
 export * from "./dayStats";

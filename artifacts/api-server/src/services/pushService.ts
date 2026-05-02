@@ -16,6 +16,9 @@ export { vapidPublicKey };
 export interface PushPayload {
   title: string;
   body: string;
+  type?: "posture" | "bladder";
+  tag?: string;
+  logId?: string;
 }
 
 export async function saveSubscription(

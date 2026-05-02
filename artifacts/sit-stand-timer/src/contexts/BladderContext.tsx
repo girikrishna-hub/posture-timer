@@ -6,6 +6,10 @@ import React, {
   useRef,
   useState,
 } from "react";
+import {
+  scheduleBladderPush,
+  cancelBladderPush,
+} from "@workspace/api-client-react";
 import { useTimer } from "@/contexts/TimerContext";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -447,6 +451,13 @@ export function BladderProvider({ children }: { children: React.ReactNode }) {
     // Keep SW in sync — always schedule relative to now so the notification
     // fires at the correct absolute time even if the SW was cleared.
     scheduleSWBladder(remaining, "");
+
+    // Also schedule a server-side Web Push so the notification can reach the
+    // lock screen even when the browser is fully closed. Best-effort only.
+    void scheduleBladderPush({
+      delayMs: remaining,
+      logId: crypto.randomUUID(),
+    }).catch(() => { /* best-effort */ });
   }, []);
 
   // Stable fireCycle that uses refs so scheduleTimer's closure stays fresh.
@@ -488,6 +499,7 @@ export function BladderProvider({ children }: { children: React.ReactNode }) {
   const stopSchedule = useCallback(() => {
     if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
     cancelSWBladder();
+    void cancelBladderPush().catch(() => { /* best-effort */ });
     saveNextVoidAt(null);
     setNextVoidAt(null);
   }, []);
@@ -500,6 +512,7 @@ export function BladderProvider({ children }: { children: React.ReactNode }) {
   const pauseSchedule = useCallback(() => {
     if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
     cancelSWBladder();
+    void cancelBladderPush().catch(() => { /* best-effort */ });
     setNextVoidAt(null); // clear visual countdown; stored deadline is preserved
   }, []);
 

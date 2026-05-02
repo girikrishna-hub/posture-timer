@@ -400,6 +400,32 @@ paths:
         "200":
           description: Schedule cancelled
 
+  /push/bladder-schedule:
+    post:
+      operationId: scheduleBladderPush
+      tags: [push]
+      summary: Schedule a bladder-reminder server-side push notification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BladderPushScheduleBody"
+      responses:
+        "200":
+          description: Bladder push scheduled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PushScheduleResult"
+    delete:
+      operationId: cancelBladderPush
+      tags: [push]
+      summary: Cancel the active bladder push schedule
+      responses:
+        "200":
+          description: Bladder push cancelled
+
 components:
   schemas:
     HealthStatus:
@@ -901,3 +927,16 @@ components:
       required:
         - ok
         - scheduled
+
+    BladderPushScheduleBody:
+      type: object
+      properties:
+        delayMs:
+          type: integer
+          description: Milliseconds from now until the bladder reminder should fire
+        logId:
+          type: string
+          description: ID of the pending bladder log entry
+      required:
+        - delayMs
+        - logId

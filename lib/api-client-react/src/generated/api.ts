@@ -18,6 +18,7 @@ import type {
 
 import type {
   ActiveSessionResponse,
+  BladderPushScheduleBody,
   DailyMetricsResponse,
   EndSessionBody,
   FitbitAnalyticsSummary,
@@ -2003,4 +2004,171 @@ export const useCancelPushSchedule = <
   TContext
 > => {
   return useMutation(getCancelPushScheduleMutationOptions(options));
+};
+
+/**
+ * @summary Schedule a bladder-reminder server-side push notification
+ */
+export const getScheduleBladderPushUrl = () => {
+  return `/api/push/bladder-schedule`;
+};
+
+export const scheduleBladderPush = async (
+  bladderPushScheduleBody: BladderPushScheduleBody,
+  options?: RequestInit,
+): Promise<PushScheduleResult> => {
+  return customFetch<PushScheduleResult>(getScheduleBladderPushUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(bladderPushScheduleBody),
+  });
+};
+
+export const getScheduleBladderPushMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof scheduleBladderPush>>,
+    TError,
+    { data: BodyType<BladderPushScheduleBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof scheduleBladderPush>>,
+  TError,
+  { data: BodyType<BladderPushScheduleBody> },
+  TContext
+> => {
+  const mutationKey = ["scheduleBladderPush"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof scheduleBladderPush>>,
+    { data: BodyType<BladderPushScheduleBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return scheduleBladderPush(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ScheduleBladderPushMutationResult = NonNullable<
+  Awaited<ReturnType<typeof scheduleBladderPush>>
+>;
+export type ScheduleBladderPushMutationBody = BodyType<BladderPushScheduleBody>;
+export type ScheduleBladderPushMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Schedule a bladder-reminder server-side push notification
+ */
+export const useScheduleBladderPush = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof scheduleBladderPush>>,
+    TError,
+    { data: BodyType<BladderPushScheduleBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof scheduleBladderPush>>,
+  TError,
+  { data: BodyType<BladderPushScheduleBody> },
+  TContext
+> => {
+  return useMutation(getScheduleBladderPushMutationOptions(options));
+};
+
+/**
+ * @summary Cancel the active bladder push schedule
+ */
+export const getCancelBladderPushUrl = () => {
+  return `/api/push/bladder-schedule`;
+};
+
+export const cancelBladderPush = async (
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getCancelBladderPushUrl(), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getCancelBladderPushMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cancelBladderPush>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof cancelBladderPush>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["cancelBladderPush"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof cancelBladderPush>>,
+    void
+  > = () => {
+    return cancelBladderPush(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CancelBladderPushMutationResult = NonNullable<
+  Awaited<ReturnType<typeof cancelBladderPush>>
+>;
+
+export type CancelBladderPushMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Cancel the active bladder push schedule
+ */
+export const useCancelBladderPush = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cancelBladderPush>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof cancelBladderPush>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getCancelBladderPushMutationOptions(options));
 };

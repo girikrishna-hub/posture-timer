@@ -271,6 +271,13 @@ export interface PushScheduleResult {
   scheduled: boolean;
 }
 
+export interface BladderPushScheduleBody {
+  /** Milliseconds from now until the bladder reminder should fire */
+  delayMs: number;
+  /** ID of the pending bladder log entry */
+  logId: string;
+}
+
 export type ListSessionsParams = {
   /**
    * Filter sessions from this date (YYYY-MM-DD)
