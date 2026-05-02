@@ -34,6 +34,7 @@ export function BottomNav() {
   const [onTimer]     = useRoute("/");
   const [onDashboard] = useRoute("/dashboard");
   const [onBladder]   = useRoute("/bladder");
+  const [onBladderStats] = useRoute("/bladder/stats");
   const { signOut }   = useClerk();
   const { user }      = useUser();
 
@@ -63,7 +64,7 @@ export function BottomNav() {
       <Link
         href="/bladder"
         className={`flex-1 flex flex-col items-center justify-center py-3 gap-1 text-xs font-medium transition-colors ${
-          onBladder ? "text-blue-600 dark:text-blue-400" : "text-muted-foreground hover:text-foreground"
+          onBladder || onBladderStats ? "text-blue-600 dark:text-blue-400" : "text-muted-foreground hover:text-foreground"
         }`}
       >
         <BladderIcon />

@@ -11,6 +11,7 @@ import TimerPage from "@/pages/TimerPage";
 import SettingsPage from "@/pages/SettingsPage";
 import DashboardPage from "@/pages/DashboardPage";
 import BladderPage from "@/pages/BladderPage";
+import BladderStatsPage from "@/pages/BladderStatsPage";
 import SignInPage from "@/pages/SignInPage";
 import SignUpPage from "@/pages/SignUpPage";
 import LandingPage from "@/pages/LandingPage";
@@ -122,6 +123,7 @@ function AppShell() {
                       <Route path="/" component={TimerPage} />
                       <Route path="/settings" component={SettingsPage} />
                       <Route path="/dashboard" component={DashboardPage} />
+                      <Route path="/bladder/stats" component={BladderStatsPage} />
                       <Route path="/bladder" component={BladderPage} />
                       <Route component={NotFound} />
                     </Switch>

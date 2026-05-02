@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { Link } from "wouter";
 import { useBladder, MIN_INTERVAL, MAX_INTERVAL } from "@/contexts/BladderContext";
 import { useTimer } from "@/contexts/TimerContext";
 import { Button } from "@/components/ui/button";
@@ -327,6 +328,24 @@ export default function BladderPage() {
         {enabled && pendingLog && (
           <ResponseCard onRespond={handleRespond} />
         )}
+
+        {/* Statistics link */}
+        <Link
+          href="/bladder/stats"
+          className="flex items-center justify-between rounded-2xl border border-border bg-card px-4 py-3.5 hover:bg-muted/40 transition-colors"
+        >
+          <div className="flex items-center gap-2.5">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600 dark:text-blue-400">
+              <line x1="18" y1="20" x2="18" y2="10" />
+              <line x1="12" y1="20" x2="12" y2="4" />
+              <line x1="6" y1="20" x2="6" y2="14" />
+            </svg>
+            <span className="text-sm font-medium text-foreground">Statistics</span>
+          </div>
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground">
+            <path d="m9 18 6-6-6-6" />
+          </svg>
+        </Link>
 
         {/* Today's summary */}
         <SummaryCard
