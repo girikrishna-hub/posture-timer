@@ -31,33 +31,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { playGoalCelebrationTone } from "@/utils/audio";
 import html2canvas from "html2canvas";
-
-// ─── Goal celebration (shared localStorage key with TimerPage) ───────────────
-const CELEBRATION_KEY = "sit-stand-goal-celebrated";
-const BADGE_HINT_KEY = "sit-stand-badge-hint";
-
-function getCelebratedDate(): string {
-  try { return localStorage.getItem(CELEBRATION_KEY) ?? ""; } catch { return ""; }
-}
-
-function saveCelebratedDate(date: string): void {
-  try { localStorage.setItem(CELEBRATION_KEY, date); } catch { /* ignore */ }
-}
-
-function getBadgeHintDate(): string {
-  try { return localStorage.getItem(BADGE_HINT_KEY) ?? ""; } catch { return ""; }
-}
-
-function saveBadgeHintDate(date: string): void {
-  try { localStorage.setItem(BADGE_HINT_KEY, date); } catch { /* ignore */ }
-}
-
-function todayStr(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
+import { useGoalCelebration } from "@/hooks/useGoalCelebration";
 
 // ─── Dashboard Trophy Badge ──────────────────────────────────────────────────
 function DashboardTrophyBadge({
@@ -388,6 +363,9 @@ function OverviewTab({
   goalMet,
   goalMinutes,
   cappedElapsedMinutes,
+  skipBadgePopIn,
+  showBadgeHint,
+  onBadgeHintShown,
   onReplayCelebration,
 }: {
   celebrating: boolean;
@@ -397,13 +375,13 @@ function OverviewTab({
   goalMet: boolean;
   goalMinutes: number;
   cappedElapsedMinutes: number;
+  skipBadgePopIn: boolean;
+  showBadgeHint: boolean;
+  onBadgeHintShown: () => void;
   onReplayCelebration: () => void;
 }) {
   const { data: summary, isLoading: sumLoading } = useGetMetricsSummary();
   const { data: todayStats } = useGetTodayStats();
-  const skipBadgePopInRef = useRef(getCelebratedDate() === todayStr());
-  const [badgeHintShown, setBadgeHintShown] = useState(() => getBadgeHintDate() === todayStr());
-  const hintScheduledRef = useRef(getBadgeHintDate() === todayStr());
   const [previewing, setPreviewing] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [previewImgUrl, setPreviewImgUrl] = useState<string | null>(null);
@@ -495,42 +473,6 @@ function OverviewTab({
     }
   }, [previewBlob, handleClosePreview, toast]);
 
-  // ── Schedule badge hint exactly once (when goal first achieved) ──────────
-  const showBadgeHint = goalAchieved && !badgeHintShown && !hintScheduledRef.current;
-  useEffect(() => {
-    if (showBadgeHint) {
-      saveBadgeHintDate(todayStr());
-      hintScheduledRef.current = true;
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showBadgeHint]);
-
-  function handleBadgeHintShown() {
-    setBadgeHintShown(true);
-  }
-
-  // ── Midnight reset: clear badge hint state when the day rolls over ─────────
-  useEffect(() => {
-    function msUntilMidnight(): number {
-      const now = new Date();
-      const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
-      return midnight.getTime() - now.getTime();
-    }
-
-    let dayTimer: ReturnType<typeof setTimeout>;
-
-    function scheduleMidnightReset() {
-      dayTimer = setTimeout(() => {
-        skipBadgePopInRef.current = false;
-        setBadgeHintShown(false);
-        hintScheduledRef.current = false;
-        scheduleMidnightReset();
-      }, msUntilMidnight());
-    }
-
-    scheduleMidnightReset();
-    return () => clearTimeout(dayTimer);
-  }, []);
 
   if (sumLoading || weekLoading) {
     return (
@@ -608,10 +550,10 @@ function OverviewTab({
             {goalAchieved && !celebrating && (
               <DashboardTrophyBadge
                 delayed={freshAchievement}
-                skipPopIn={skipBadgePopInRef.current}
+                skipPopIn={skipBadgePopIn}
                 onReplay={onReplayCelebration}
                 showHint={showBadgeHint}
-                onHintShown={handleBadgeHintShown}
+                onHintShown={onBadgeHintShown}
               />
             )}
             {celebrating && (
@@ -1119,11 +1061,6 @@ export default function DashboardPage() {
   // ── Goal celebration (lifted from OverviewTab so it fires on any active tab) ─
   const { mode, elapsedSeconds } = useTimer();
   const { data: todayStats } = useGetTodayStats();
-  const [celebrating, setCelebrating] = useState(false);
-  const [goalAchieved, setGoalAchieved] = useState(() => getCelebratedDate() === todayStr());
-  const freshAchievementRef = useRef(false);
-  const prevGoalPercentRef = useRef<number | null>(null);
-  const celebrationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const goalCelebrationBanner = useBanner(5000);
 
   const goalMinutes = todayStats?.goalMinutes ?? 120;
@@ -1142,66 +1079,19 @@ export default function DashboardPage() {
     : 0;
   const goalMet = goalPercent >= 100;
 
-  // ── Celebration: fire once per day when goal crosses 100% (any tab) ─────────
-  useEffect(() => {
-    if (!todayStats) return;
-    const prev = prevGoalPercentRef.current;
-    prevGoalPercentRef.current = goalPercent;
-
-    if (prev === null || prev >= 100 || goalPercent < 100) return;
-
-    const todayDate = todayStr();
-    if (getCelebratedDate() === todayDate) return;
-
-    saveCelebratedDate(todayDate);
-    freshAchievementRef.current = true;
-    setGoalAchieved(true);
-    playGoalCelebrationTone();
-    goalCelebrationBanner.show();
-    setCelebrating(true);
-    celebrationTimerRef.current = setTimeout(() => setCelebrating(false), 2000);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [goalPercent]);
-
-  const onReplayCelebration = useCallback(() => {
-    if (!goalAchieved || celebrating) return;
-    freshAchievementRef.current = false;
-    playGoalCelebrationTone();
-    if (celebrationTimerRef.current) clearTimeout(celebrationTimerRef.current);
-    setCelebrating(true);
-    celebrationTimerRef.current = setTimeout(() => setCelebrating(false), 2000);
-  }, [goalAchieved, celebrating]);
-
-  useEffect(() => {
-    return () => {
-      if (celebrationTimerRef.current) clearTimeout(celebrationTimerRef.current);
-    };
-  }, []);
-
-  // ── Midnight reset: clear celebration state when day rolls over ──────────────
-  useEffect(() => {
-    function msUntilMidnight(): number {
-      const now = new Date();
-      const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
-      return midnight.getTime() - now.getTime();
-    }
-    let dayTimer: ReturnType<typeof setTimeout>;
-    function scheduleMidnightReset() {
-      dayTimer = setTimeout(() => {
-        setCelebrating(false);
-        setGoalAchieved(false);
-        freshAchievementRef.current = false;
-        if (celebrationTimerRef.current) {
-          clearTimeout(celebrationTimerRef.current);
-          celebrationTimerRef.current = null;
-        }
-        prevGoalPercentRef.current = null;
-        scheduleMidnightReset();
-      }, msUntilMidnight());
-    }
-    scheduleMidnightReset();
-    return () => clearTimeout(dayTimer);
-  }, []);
+  const {
+    celebrating,
+    goalAchieved,
+    freshAchievementRef,
+    skipBadgePopInRef,
+    showBadgeHint,
+    handleBadgeHintShown,
+    replayCelebration: onReplayCelebration,
+  } = useGoalCelebration({
+    liveGoalPercent: goalPercent,
+    todayStatsLoaded: !!todayStats,
+    onCelebrate: () => goalCelebrationBanner.show(),
+  });
 
   function handleMonthDayClick(date: Date) {
     setDailyDate(date);
@@ -1261,6 +1151,9 @@ export default function DashboardPage() {
             goalMet={goalMet}
             goalMinutes={goalMinutes}
             cappedElapsedMinutes={cappedElapsedMinutes}
+            skipBadgePopIn={skipBadgePopInRef.current}
+            showBadgeHint={showBadgeHint}
+            onBadgeHintShown={handleBadgeHintShown}
             onReplayCelebration={onReplayCelebration}
           />
         )}

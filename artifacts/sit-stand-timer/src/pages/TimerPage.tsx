@@ -1,42 +1,31 @@
 import { useTimer, type TimerMode } from "@/contexts/TimerContext";
 import { useGetTodayStats, useGetSettings, getGetTodayStatsQueryKey } from "@workspace/api-client-react";
-import { playGoalCelebrationTone, isSoundEnabled, setSoundEnabled } from "@/utils/audio";
+import { isSoundEnabled, setSoundEnabled } from "@/utils/audio";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useEffect, useRef, useState } from "react";
 import { useFitbitDrift } from "@/hooks/useFitbitDrift";
 import { NudgeModal } from "@/components/NudgeModal";
 import { useBanner } from "@/hooks/useBanner";
+import {
+  useGoalCelebration,
+  CELEBRATION_KEY,
+  BADGE_HINT_KEY,
+  todayStr,
+  msUntilMidnight,
+  shouldTriggerGoalCelebration,
+  computeGoalMetOnLoad,
+} from "@/hooks/useGoalCelebration";
 
-export const CELEBRATION_KEY = "sit-stand-goal-celebrated";
-export const BADGE_HINT_KEY = "sit-stand-badge-hint";
-
-function getCelebratedDate(): string {
-  try { return localStorage.getItem(CELEBRATION_KEY) ?? ""; } catch { return ""; }
-}
-
-function saveCelebratedDate(date: string): void {
-  try { localStorage.setItem(CELEBRATION_KEY, date); } catch { /* ignore */ }
-}
-
-function getBadgeHintDate(): string {
-  try { return localStorage.getItem(BADGE_HINT_KEY) ?? ""; } catch { return ""; }
-}
-
-function saveBadgeHintDate(date: string): void {
-  try { localStorage.setItem(BADGE_HINT_KEY, date); } catch { /* ignore */ }
-}
-
-export function todayStr(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-export function msUntilMidnight(): number {
-  const now = new Date();
-  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
-  return midnight.getTime() - now.getTime();
-}
+// Re-export utilities so existing tests importing from this module still work.
+export {
+  CELEBRATION_KEY,
+  BADGE_HINT_KEY,
+  todayStr,
+  msUntilMidnight,
+  shouldTriggerGoalCelebration,
+  computeGoalMetOnLoad,
+};
 
 export function goalLabelClass(footerGoalMet: boolean, goalMetOnLoad: boolean | null): string {
   return `flex items-center gap-1 transition-colors duration-500 ${
@@ -44,35 +33,6 @@ export function goalLabelClass(footerGoalMet: boolean, goalMetOnLoad: boolean | 
       ? `text-emerald-600 dark:text-emerald-400 font-medium${goalMetOnLoad === false ? " goal-label-appear" : ""}`
       : ""
   }`;
-}
-
-/**
- * Pure predicate that mirrors the prevGoalPercentRef crossing check inside
- * TimerPage. Returns true only when the goal threshold is crossed for the
- * first time this session (prev < 100 → current >= 100).
- *
- * - prev === null  → first render; stats just loaded. Never celebrate here;
- *   the goalMetOnLoad effect handles the initial state instead.
- * - prev >= 100    → already over the line; no new crossing.
- * - current < 100  → hasn't reached the goal yet.
- */
-export function shouldTriggerGoalCelebration(
-  prev: number | null,
-  current: number,
-): boolean {
-  if (prev === null) return false;
-  if (prev >= 100) return false;
-  if (current < 100) return false;
-  return true;
-}
-
-/**
- * Pure function that mirrors the hasSetGoalMetOnLoad one-shot initialisation.
- * Returns the value that goalMetOnLoad should be set to when todayStats first
- * resolves (i.e. whether the goal was already met at page load).
- */
-export function computeGoalMetOnLoad(liveGoalPercent: number): boolean {
-  return liveGoalPercent >= 100;
 }
 
 interface BeforeInstallPromptEvent extends Event {
@@ -435,132 +395,20 @@ export default function TimerPage() {
     ? Math.min(100, ((completedStandingMinutes + completedWalkingMinutes + cappedElapsedMinutes) / goalMinutes) * 100)
     : todayStats?.goalProgressPercent ?? 0;
 
-  // Celebration: fire once per day when goal crosses from <100 to >=100
-  const [celebrating, setCelebrating] = useState(false);
-  const [goalAchieved, setGoalAchieved] = useState(() => getCelebratedDate() === todayStr());
-  // true = badge was just earned this session (animate in after celebration delay)
-  // false = badge loaded from localStorage (animate in immediately on mount)
-  const freshAchievementRef = useRef(false);
-  // true = goal was already achieved when the page loaded (from localStorage), so
-  // skip the badge-pop-in animation to prevent it replaying on every reload.
-  // Cleared to false on first replay so subsequent appearances still animate.
-  const skipBadgePopInRef = useRef(getCelebratedDate() === todayStr());
-  // Track whether the hint wiggle has already been shown today (state) or
-  // at least scheduled this session (ref). State initialises from localStorage
-  // so a page reload after the hint played still suppresses it.
-  const [badgeHintShown, setBadgeHintShown] = useState(() => getBadgeHintDate() === todayStr());
-  // Ref acts as an in-session guard: set true when the hint is first scheduled
-  // so the wiggle never replays even if the badge unmounts before animationEnd.
-  const hintScheduledRef = useRef(getBadgeHintDate() === todayStr());
-
-  // showBadgeHint stays true for the entire first mount of TrophyBadge so the
-  // CSS animation can play; it flips false after animationEnd (state) or on the
-  // next badge mount within the same session (ref).
-  const showBadgeHint = goalAchieved && !badgeHintShown && !hintScheduledRef.current;
-
-  // Persist the hint date immediately when scheduled — before the animation
-  // completes — so a reload mid-animation won't replay the wiggle.
-  useEffect(() => {
-    if (showBadgeHint) {
-      saveBadgeHintDate(todayStr());
-      hintScheduledRef.current = true;
-      // State intentionally NOT updated here so TrophyBadge keeps showHint=true
-      // for its current mount and the CSS animation can run to completion.
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showBadgeHint]);
-
-  function handleBadgeHintShown() {
-    setBadgeHintShown(true);
-  }
-  const celebrationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const prevGoalPercentRef = useRef<number | null>(null);
-  // Track whether the goal was already met when stats first loaded so we can
-  // skip the appear animation on reload. null = stats not yet available.
-  // Set exactly once (via hasSetGoalMetOnLoad guard) when todayStats first resolves.
-  const [goalMetOnLoad, setGoalMetOnLoad] = useState<boolean | null>(null);
-  const hasSetGoalMetOnLoad = useRef(false);
-
-  useEffect(() => {
-    const prev = prevGoalPercentRef.current;
-    prevGoalPercentRef.current = liveGoalPercent;
-
-    // Only fire when crossing the 100% threshold (not on initial load when already >=100)
-    if (!shouldTriggerGoalCelebration(prev, liveGoalPercent)) return;
-
-    const today = todayStr();
-    if (getCelebratedDate() === today) return;
-    saveCelebratedDate(today);
-    freshAchievementRef.current = true;
-    setGoalAchieved(true);
-    playGoalCelebrationTone();
-    setCelebrating(true);
-    celebrationTimerRef.current = setTimeout(() => {
-      setCelebrating(false);
-    }, 2000);
-  }, [liveGoalPercent]);
-
-  // Capture once — when todayStats first resolves — whether the goal was
-  // already met at load time. This lets us skip the footer appear animation
-  // on page reload while still playing it for mid-session crossings.
-  useEffect(() => {
-    if (todayStats && !hasSetGoalMetOnLoad.current) {
-      hasSetGoalMetOnLoad.current = true;
-      setGoalMetOnLoad(computeGoalMetOnLoad(liveGoalPercent));
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [todayStats]);
-
-  useEffect(() => {
-    return () => {
-      if (celebrationTimerRef.current) clearTimeout(celebrationTimerRef.current);
-    };
-  }, []);
-
-  function replayCelebration() {
-    if (!goalAchieved || celebrating) return;
-    // After first display the badge should pop back in immediately (no delay)
-    freshAchievementRef.current = false;
-    // Allow the pop-in animation for replays, even if it was skipped on page load
-    skipBadgePopInRef.current = false;
-    playGoalCelebrationTone();
-    if (celebrationTimerRef.current) clearTimeout(celebrationTimerRef.current);
-    setCelebrating(true);
-    celebrationTimerRef.current = setTimeout(() => {
-      setCelebrating(false);
-    }, 2000);
-  }
-
-  // Reset celebration/badge state at midnight so a new day starts clean
-  useEffect(() => {
-    let dayTimer: ReturnType<typeof setTimeout>;
-
-    function scheduleMidnightReset() {
-      dayTimer = setTimeout(() => {
-        // Clear state for the new day
-        setCelebrating(false);
-        setGoalAchieved(false);
-        freshAchievementRef.current = false;
-        skipBadgePopInRef.current = false;
-        setBadgeHintShown(false);
-        hintScheduledRef.current = false;
-        if (celebrationTimerRef.current) {
-          clearTimeout(celebrationTimerRef.current);
-          celebrationTimerRef.current = null;
-        }
-        // Also reset the prev-goal ref so the crossing logic works fresh
-        prevGoalPercentRef.current = null;
-        // Reset on-load snapshot so next-day goal crossing animates correctly
-        hasSetGoalMetOnLoad.current = false;
-        setGoalMetOnLoad(null);
-        // Schedule the next midnight reset
-        scheduleMidnightReset();
-      }, msUntilMidnight());
-    }
-
-    scheduleMidnightReset();
-    return () => clearTimeout(dayTimer);
-  }, []);
+  // Goal celebration — shared hook handles all state, effects, and midnight reset
+  const {
+    celebrating,
+    goalAchieved,
+    freshAchievementRef,
+    skipBadgePopInRef,
+    showBadgeHint,
+    handleBadgeHintShown,
+    replayCelebration,
+    goalMetOnLoad,
+  } = useGoalCelebration({
+    liveGoalPercent,
+    todayStatsLoaded: !!todayStats,
+  });
 
   const nextActionSeconds =
     mode === "sitting"
