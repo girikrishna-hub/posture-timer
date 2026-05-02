@@ -355,6 +355,7 @@ export default function TimerPage() {
     const next = !soundEnabled;
     setSoundEnabled(next);
     setSoundEnabledState(next);
+    autoSwitchBanner.hide();
     soundBanner.show(next ? "Sound on" : "Sound off");
   }
 
@@ -443,6 +444,7 @@ export default function TimerPage() {
   const showAutoSwitchToast = (toMode: string, reason: string, fromMode: string) => {
     const label = toMode === "sitting" ? "Sitting" : toMode === "standing" ? "Standing" : "Walking";
     autoSwitchPrevModeRef.current = isUndoableMode(fromMode) ? fromMode : null;
+    soundBanner.hide();
     autoSwitchBanner.show(`Auto-switched to ${label} — ${reason}`);
   };
 
@@ -458,6 +460,7 @@ export default function TimerPage() {
     autoSwitchPrevModeRef.current = null;
     void switchMode(prev, "manual");
     const prevLabel = prev === "sitting" ? "Sitting" : prev === "standing" ? "Standing" : prev === "walking" ? "Walking" : "Resting";
+    soundBanner.hide();
     autoSwitchBanner.show(`Switched back to ${prevLabel}`);
   };
 
