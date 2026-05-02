@@ -1209,4 +1209,28 @@ describe("useGoalCelebration — showBadgeHint effect persists BADGE_HINT_KEY", 
 
     setItemSpy.mockRestore();
   });
+
+  it("does NOT call saveBadgeHintDate when BADGE_HINT_KEY already holds today's date", () => {
+    // Seed: goal achieved today and badge hint already shown today.
+    saveCelebratedDate(todayStr());
+    saveBadgeHintDate(todayStr());
+
+    // Spy before rendering so we capture every setItem call from the hook.
+    const setItemSpy = vi.spyOn(Storage.prototype, "setItem");
+
+    const { result } = renderHook(() =>
+      useGoalCelebration({ liveGoalPercent: 100 }),
+    );
+
+    // badgeHintShown initialises true (BADGE_HINT_KEY === todayStr()), so
+    // showBadgeHint must be false and the effect must not write again.
+    expect(result.current.showBadgeHint).toBe(false);
+
+    const badgeHintWrites = setItemSpy.mock.calls.filter(
+      ([key]) => key === BADGE_HINT_KEY,
+    ).length;
+    expect(badgeHintWrites).toBe(0);
+
+    setItemSpy.mockRestore();
+  });
 });
