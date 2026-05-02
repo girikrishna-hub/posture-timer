@@ -5,8 +5,9 @@ import { ClerkProvider, Show, ClerkLoaded, ClerkLoading, useClerk } from "@clerk
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { TimerProvider } from "@/contexts/TimerContext";
+import { TimerProvider, useTimer } from "@/contexts/TimerContext";
 import { BladderProvider } from "@/contexts/BladderContext";
+import { usePushSubscription } from "@/hooks/usePushSubscription";
 import TimerPage from "@/pages/TimerPage";
 import SettingsPage from "@/pages/SettingsPage";
 import DashboardPage from "@/pages/DashboardPage";
@@ -17,6 +18,12 @@ import SignUpPage from "@/pages/SignUpPage";
 import LandingPage from "@/pages/LandingPage";
 import NotFound from "@/pages/not-found";
 import { BottomNav } from "@/components/BottomNav";
+
+function PushSubscriptionRegistrar() {
+  const { notificationPermission } = useTimer();
+  usePushSubscription(notificationPermission);
+  return null;
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -118,6 +125,7 @@ function AppShell() {
             <ClerkLoaded>
               <Show when="signed-in">
                 <TimerProvider>
+                  <PushSubscriptionRegistrar />
                   <BladderProvider>
                     <Switch>
                       <Route path="/" component={TimerPage} />
