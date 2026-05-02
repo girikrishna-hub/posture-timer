@@ -1108,6 +1108,35 @@ describe("midnight reset — BroadcastChannel message triggers reset on separate
     // hook1 (sender) does not receive its own message — state is unchanged.
     expect(hook1.result.current.goalAchieved).toBe(true);
   });
+
+  it("unrecognised BroadcastChannel message leaves goalAchieved unchanged on both hook instances", () => {
+    // Mount two hook instances — simulating two open browser tabs.
+    const hook1 = renderHook(() =>
+      useGoalCelebration({ liveGoalPercent: 110 }),
+    );
+    const hook2 = renderHook(() =>
+      useGoalCelebration({ liveGoalPercent: 110 }),
+    );
+
+    // Both hooks start with goalAchieved=true because CELEBRATION_KEY === today.
+    expect(hook1.result.current.goalAchieved).toBe(true);
+    expect(hook2.result.current.goalAchieved).toBe(true);
+
+    // Two hook instances created one BroadcastChannel each.
+    expect(busInstances).toHaveLength(2);
+    const [channel1] = busInstances; // hook1's channel — the "sending tab"
+
+    // Post an unrecognised payload through hook1's channel.
+    // The in-memory bus delivers it to hook2 (sender excluded per spec).
+    // hook2's onmessage guard (`if (ev.data === "midnight-reset")`) must block doReset().
+    act(() => {
+      channel1.postMessage("some-other-message");
+    });
+
+    // Neither hook should have reset — the guard must have blocked the call.
+    expect(hook1.result.current.goalAchieved).toBe(true);
+    expect(hook2.result.current.goalAchieved).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
