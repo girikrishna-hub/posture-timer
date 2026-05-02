@@ -869,6 +869,7 @@ function SessionsTab() {
   const [sortDesc, setSortDesc] = useState(true);
   const [exporting, setExporting] = useState(false);
   const exportErrorBanner = useBanner(5000);
+  const exportSuccessBanner = useBanner(4000);
 
   const { data, isLoading } = useListSessions({
     limit: PAGE_SIZE,
@@ -901,7 +902,10 @@ function SessionsTab() {
       a.download = "sit-stand-sessions.csv";
       a.click();
       URL.revokeObjectURL(url);
+      exportErrorBanner.dismiss();
+      exportSuccessBanner.show();
     } catch {
+      exportSuccessBanner.dismiss();
       exportErrorBanner.show();
     } finally {
       setExporting(false);
@@ -926,6 +930,24 @@ function SessionsTab() {
 
   return (
     <div className="p-4 pb-24 space-y-4">
+      {exportSuccessBanner.shown && (
+        <div
+          className={[
+            "flex items-center gap-3 rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40 px-4 py-3 text-emerald-700 dark:text-emerald-300",
+            "transition-all duration-300 ease-out",
+            exportSuccessBanner.visible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2",
+          ].join(" ")}
+        >
+          <span className="text-sm font-medium">CSV exported successfully.</span>
+          <button
+            onClick={exportSuccessBanner.dismiss}
+            className="ml-auto text-emerald-400 hover:text-emerald-600 dark:hover:text-emerald-200"
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       {exportErrorBanner.shown && (
         <div
           className={[
