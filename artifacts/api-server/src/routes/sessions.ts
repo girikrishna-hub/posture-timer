@@ -7,6 +7,7 @@ import {
   EndSessionBody,
   ListSessionsQueryParams,
 } from "@workspace/api-zod";
+import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
@@ -36,7 +37,7 @@ function formatSession(s: typeof sessionsTable.$inferSelect) {
   };
 }
 
-router.post("/sessions", async (req, res) => {
+router.post("/sessions", requireAuth, async (req, res) => {
   const parse = StartSessionBody.safeParse(req.body);
   if (!parse.success) {
     res.status(400).json({ error: "Invalid request body", details: parse.error.issues });
@@ -48,6 +49,7 @@ router.post("/sessions", async (req, res) => {
   const [session] = await db
     .insert(sessionsTable)
     .values({
+      userId: req.userId,
       mode,
       startedAt: startedAt ?? new Date(),
       ...(restType != null ? { restType } : {}),
@@ -57,11 +59,14 @@ router.post("/sessions", async (req, res) => {
   res.status(201).json(formatSession(session));
 });
 
-router.get("/sessions/export", async (_req, res) => {
+router.get("/sessions/export", requireAuth, async (req, res) => {
   const sessions = await db
     .select()
     .from(sessionsTable)
-    .where(isNotNull(sessionsTable.endedAt))
+    .where(and(
+      eq(sessionsTable.userId, req.userId),
+      isNotNull(sessionsTable.endedAt),
+    ))
     .orderBy(desc(sessionsTable.startedAt));
 
   const header = "date,mode,rest_type,started_at,ended_at,duration_minutes\n";
@@ -85,18 +90,21 @@ router.get("/sessions/export", async (_req, res) => {
   res.send(header + rows);
 });
 
-router.get("/sessions/active", async (req, res) => {
+router.get("/sessions/active", requireAuth, async (req, res) => {
   const [active] = await db
     .select()
     .from(sessionsTable)
-    .where(isNull(sessionsTable.endedAt))
+    .where(and(
+      eq(sessionsTable.userId, req.userId),
+      isNull(sessionsTable.endedAt),
+    ))
     .orderBy(desc(sessionsTable.startedAt))
     .limit(1);
 
   res.json({ session: active ? formatSession(active) : null });
 });
 
-router.get("/sessions", async (req, res) => {
+router.get("/sessions", requireAuth, async (req, res) => {
   const rawQuery = {
     ...req.query,
     from:
@@ -111,30 +119,26 @@ router.get("/sessions", async (req, res) => {
   }
   const { from, to, limit, offset } = queryResult.data;
 
-  const conditions = [];
-  if (from) {
-    conditions.push(gte(sessionsTable.startedAt, from));
-  }
+  const conditions: ReturnType<typeof eq>[] = [eq(sessionsTable.userId, req.userId)];
+  if (from) conditions.push(gte(sessionsTable.startedAt, from));
   if (to) {
     const toEnd = new Date(to);
     toEnd.setHours(23, 59, 59, 999);
     conditions.push(lte(sessionsTable.startedAt, toEnd));
   }
 
-  const query = db
+  const sessions = await db
     .select()
     .from(sessionsTable)
-    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .where(and(...conditions))
     .orderBy(desc(sessionsTable.startedAt))
     .limit(limit)
     .offset(offset);
 
-  const sessions = await query;
-
   const countResult = await db
     .select()
     .from(sessionsTable)
-    .where(conditions.length > 0 ? and(...conditions) : undefined);
+    .where(and(...conditions));
 
   res.json({
     sessions: sessions.map(formatSession),
@@ -142,7 +146,7 @@ router.get("/sessions", async (req, res) => {
   });
 });
 
-router.patch("/sessions/:id", async (req, res) => {
+router.patch("/sessions/:id", requireAuth, async (req, res) => {
   const paramsResult = EndSessionParams.safeParse(req.params);
   if (!paramsResult.success) {
     res.status(400).json({ error: "Invalid session id" });
@@ -161,7 +165,7 @@ router.patch("/sessions/:id", async (req, res) => {
   const [existing] = await db
     .select()
     .from(sessionsTable)
-    .where(eq(sessionsTable.id, id))
+    .where(and(eq(sessionsTable.id, id), eq(sessionsTable.userId, req.userId)))
     .limit(1);
 
   if (!existing) {
@@ -182,7 +186,7 @@ router.patch("/sessions/:id", async (req, res) => {
   const [updated] = await db
     .update(sessionsTable)
     .set({ endedAt, durationSeconds, restType })
-    .where(eq(sessionsTable.id, id))
+    .where(and(eq(sessionsTable.id, id), eq(sessionsTable.userId, req.userId)))
     .returning();
 
   res.json(formatSession(updated));

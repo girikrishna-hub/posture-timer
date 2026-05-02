@@ -1,17 +1,23 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, settingsTable } from "@workspace/db";
 import { UpdateSettingsBody } from "@workspace/api-zod";
+import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
-async function getOrCreateSettings() {
-  const [existing] = await db.select().from(settingsTable).limit(1);
+async function getOrCreateSettings(userId: string) {
+  const [existing] = await db
+    .select()
+    .from(settingsTable)
+    .where(eq(settingsTable.userId, userId))
+    .limit(1);
   if (existing) return existing;
 
   const [created] = await db
     .insert(settingsTable)
     .values({
+      userId,
       dailyStandingGoalMinutes: 120,
       sittingAlertMinutes: 45,
       standingMinMinutes: 10,
@@ -36,24 +42,24 @@ function formatSettings(s: typeof settingsTable.$inferSelect) {
   };
 }
 
-router.get("/settings", async (_req, res) => {
-  const settings = await getOrCreateSettings();
+router.get("/settings", requireAuth, async (req, res) => {
+  const settings = await getOrCreateSettings(req.userId);
   res.json(formatSettings(settings));
 });
 
-router.patch("/settings", async (req, res) => {
+router.patch("/settings", requireAuth, async (req, res) => {
   const parse = UpdateSettingsBody.safeParse(req.body);
   if (!parse.success) {
     res.status(400).json({ error: "Invalid request body", details: parse.error.issues });
     return;
   }
 
-  const settings = await getOrCreateSettings();
+  const settings = await getOrCreateSettings(req.userId);
 
   const [updated] = await db
     .update(settingsTable)
     .set(parse.data)
-    .where(eq(settingsTable.id, settings.id))
+    .where(and(eq(settingsTable.id, settings.id), eq(settingsTable.userId, req.userId)))
     .returning();
 
   res.json(formatSettings(updated));

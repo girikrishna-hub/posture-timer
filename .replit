@@ -73,3 +73,4 @@ externalPort = 3000
 VAPID_PUBLIC_KEY = "BA5SKJaKR_nQEdiE7GIaR5I5KUITIEGPD5xJCfWj6aPF3ySSlxRcF1vqUDVQjmYicaN0v6tmXoyL8nIbndJjnUg"
 VAPID_PRIVATE_KEY = "jYiP_lU9cW0WoX8qg1zprC2YoPZPdYSKbp9oASGwn2s"
 VAPID_SUBJECT = "mailto:admin@posture-timer.replit.app"
+VITE_CLERK_PUBLISHABLE_KEY = "pk_test_dGlkeS10dXJ0bGUtMjEuY2xlcmsuYWNjb3VudHMuZGV2JA"

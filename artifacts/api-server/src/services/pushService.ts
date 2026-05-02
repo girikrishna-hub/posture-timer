@@ -3,9 +3,9 @@ import { db, pushSubscriptionsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
 
-const vapidPublicKey = process.env["VAPID_PUBLIC_KEY"] ?? "";
+const vapidPublicKey  = process.env["VAPID_PUBLIC_KEY"]  ?? "";
 const vapidPrivateKey = process.env["VAPID_PRIVATE_KEY"] ?? "";
-const vapidSubject = process.env["VAPID_SUBJECT"] ?? "mailto:admin@example.com";
+const vapidSubject    = process.env["VAPID_SUBJECT"]     ?? "mailto:admin@example.com";
 
 if (vapidPublicKey && vapidPrivateKey) {
   webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
@@ -19,16 +19,17 @@ export interface PushPayload {
 }
 
 export async function saveSubscription(
+  userId: string,
   endpoint: string,
   p256dh: string,
   auth: string,
 ): Promise<void> {
   await db
     .insert(pushSubscriptionsTable)
-    .values({ endpoint, p256dh, auth })
+    .values({ userId, endpoint, p256dh, auth })
     .onConflictDoUpdate({
       target: pushSubscriptionsTable.endpoint,
-      set: { p256dh, auth },
+      set: { userId, p256dh, auth },
     });
 }
 
@@ -38,9 +39,10 @@ export async function deleteSubscription(endpoint: string): Promise<void> {
     .where(eq(pushSubscriptionsTable.endpoint, endpoint));
 }
 
-export async function sendPushToAll(payload: PushPayload): Promise<void> {
-  const subs = await db.select().from(pushSubscriptionsTable);
-
+async function sendToSubscriptions(
+  subs: { endpoint: string; p256dh: string; auth: string }[],
+  payload: PushPayload,
+): Promise<void> {
   const results = await Promise.allSettled(
     subs.map((sub) =>
       webpush.sendNotification(
@@ -54,10 +56,19 @@ export async function sendPushToAll(payload: PushPayload): Promise<void> {
     const r = results[i];
     if (r.status === "rejected") {
       const err = r.reason as { statusCode?: number };
-      logger.warn({ endpoint: subs[i].endpoint, statusCode: err?.statusCode }, "Push failed");
-      if (err?.statusCode === 410 || err?.statusCode === 404) {
-        await deleteSubscription(subs[i].endpoint).catch(() => { /* ignore */ });
+      logger.warn({ endpoint: subs[i]?.endpoint, statusCode: err?.statusCode }, "Push failed");
+      const ep = subs[i]?.endpoint;
+      if (ep && (err?.statusCode === 410 || err?.statusCode === 404)) {
+        await deleteSubscription(ep).catch(() => { /* ignore */ });
       }
     }
   }
+}
+
+export async function sendPushToUser(userId: string, payload: PushPayload): Promise<void> {
+  const subs = await db
+    .select()
+    .from(pushSubscriptionsTable)
+    .where(eq(pushSubscriptionsTable.userId, userId));
+  await sendToSubscriptions(subs, payload);
 }

@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import crypto from "crypto";
 import { db, fitbitConnectionsTable, fitbitAnalyticsTable } from "@workspace/db";
-import { desc, sql } from "drizzle-orm";
+import { desc, eq, sql, and } from "drizzle-orm";
 import {
   getFitbitAuthUrl,
   exchangeCodeForTokens,
@@ -10,15 +10,14 @@ import {
   getCachedIntradayData,
   triggerPoll,
 } from "../services/fitbitPoller";
+import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
-const pendingStates = new Set<string>();
+// state → userId — lets the OAuth callback look up who initiated the flow
+const pendingStates = new Map<string, string>();
 
 function getRedirectUri(req: { headers: Record<string, string | string[] | undefined>; hostname: string }): string {
-  // REPLIT_DOMAINS is set in both dev and production and contains the canonical
-  // public domain(s). Fall back to x-forwarded-host (Replit proxy header) and
-  // finally req.hostname.
   const replitDomains = process.env["REPLIT_DOMAINS"];
   const forwardedHost = req.headers["x-forwarded-host"];
   const domain =
@@ -29,10 +28,11 @@ function getRedirectUri(req: { headers: Record<string, string | string[] | undef
   return `https://${domain}/api/fitbit/callback`;
 }
 
-router.get("/fitbit/status", async (req, res) => {
+router.get("/fitbit/status", requireAuth, async (req, res) => {
   const rows = await db
     .select()
     .from(fitbitConnectionsTable)
+    .where(eq(fitbitConnectionsTable.userId, req.userId))
     .orderBy(desc(fitbitConnectionsTable.id))
     .limit(1);
 
@@ -48,16 +48,16 @@ router.get("/fitbit/status", async (req, res) => {
   });
 });
 
-router.get("/fitbit/auth-url", (req, res) => {
+router.get("/fitbit/auth-url", requireAuth, (req, res) => {
   const state = crypto.randomBytes(16).toString("hex");
-  pendingStates.add(state);
+  pendingStates.set(state, req.userId);
   setTimeout(() => pendingStates.delete(state), 10 * 60 * 1000);
 
   const redirectUri = getRedirectUri(req);
   const clientId = process.env["GOOGLE_FIT_CLIENT_ID"] ?? "";
   req.log.info(
     { hasClientId: clientId.length > 0, redirectUri },
-    "Google Fit auth-url requested"
+    "Google Fit auth-url requested",
   );
   const url = getFitbitAuthUrl(redirectUri, state);
   return res.json({ url });
@@ -70,35 +70,40 @@ router.get("/fitbit/callback", async (req, res) => {
     return res.status(400).send("Missing code parameter");
   }
 
-  if (state && !pendingStates.has(state)) {
-    req.log.warn({ state }, "Fitbit OAuth state mismatch");
-  }
+  const userId = state ? pendingStates.get(state) : undefined;
   if (state) pendingStates.delete(state);
+
+  if (!userId) {
+    req.log.warn({ state }, "Fitbit OAuth state missing or expired");
+    const appUrl = `https://${process.env["REPLIT_DEV_DOMAIN"] ?? req.hostname}/`;
+    return res.redirect(`${appUrl}?fitbit=error`);
+  }
 
   try {
     const redirectUri = getRedirectUri(req);
-    await exchangeCodeForTokens(code, redirectUri);
+    await exchangeCodeForTokens(code, redirectUri, userId);
     triggerPoll();
-    const appUrl =
-      `https://${process.env["REPLIT_DEV_DOMAIN"] ?? req.hostname}/`;
+    const appUrl = `https://${process.env["REPLIT_DEV_DOMAIN"] ?? req.hostname}/`;
     return res.redirect(`${appUrl}?fitbit=connected`);
   } catch (err) {
     req.log.error({ err }, "Fitbit callback error");
-    const appUrl =
-      `https://${process.env["REPLIT_DEV_DOMAIN"] ?? req.hostname}/`;
+    const appUrl = `https://${process.env["REPLIT_DEV_DOMAIN"] ?? req.hostname}/`;
     return res.redirect(`${appUrl}?fitbit=error`);
   }
 });
 
-router.delete("/fitbit/disconnect", async (_req, res) => {
-  await db.delete(fitbitConnectionsTable);
+router.delete("/fitbit/disconnect", requireAuth, async (req, res) => {
+  await db
+    .delete(fitbitConnectionsTable)
+    .where(eq(fitbitConnectionsTable.userId, req.userId));
   return res.status(204).send();
 });
 
-router.get("/fitbit/intraday", async (_req, res) => {
+router.get("/fitbit/intraday", requireAuth, async (req, res) => {
   const rows = await db
     .select()
     .from(fitbitConnectionsTable)
+    .where(eq(fitbitConnectionsTable.userId, req.userId))
     .limit(1);
 
   if (rows.length === 0) {
@@ -121,13 +126,14 @@ router.get("/fitbit/intraday", async (_req, res) => {
   });
 });
 
-router.get("/fitbit/analytics", async (_req, res) => {
+router.get("/fitbit/analytics", requireAuth, async (req, res) => {
   const rows = await db
     .select({
       eventType: fitbitAnalyticsTable.eventType,
       count: sql<number>`count(*)::int`,
     })
     .from(fitbitAnalyticsTable)
+    .where(eq(fitbitAnalyticsTable.userId, req.userId))
     .groupBy(fitbitAnalyticsTable.eventType);
 
   const totals = {
@@ -139,17 +145,15 @@ router.get("/fitbit/analytics", async (_req, res) => {
 
   for (const row of rows) {
     if (row.eventType === "nudge") totals.nudgeCount = row.count;
-    if (row.eventType === "auto_correction")
-      totals.autoCorrectionCount = row.count;
+    if (row.eventType === "auto_correction") totals.autoCorrectionCount = row.count;
     if (row.eventType === "user_accepted") totals.userAcceptedCount = row.count;
-    if (row.eventType === "user_cancelled")
-      totals.userCancelledCount = row.count;
+    if (row.eventType === "user_cancelled") totals.userCancelledCount = row.count;
   }
 
   return res.json(totals);
 });
 
-router.post("/fitbit/analytics/event", async (req, res) => {
+router.post("/fitbit/analytics/event", requireAuth, async (req, res) => {
   const { eventType, fromMode, toMode, reason } = req.body as {
     eventType: string;
     fromMode: string;
@@ -165,6 +169,7 @@ router.post("/fitbit/analytics/event", async (req, res) => {
   }
 
   await db.insert(fitbitAnalyticsTable).values({
+    userId: req.userId,
     eventType: eventType as "nudge" | "auto_correction" | "user_accepted" | "user_cancelled",
     fromMode: fromMode as "sitting" | "standing" | "resting" | "walking",
     toMode: toMode as "sitting" | "standing" | "resting" | "walking",

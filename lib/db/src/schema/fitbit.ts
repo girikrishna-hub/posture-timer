@@ -10,6 +10,7 @@ import { z } from "zod/v4";
 
 export const fitbitConnectionsTable = pgTable("fitbit_connections", {
   id: serial("id").primaryKey(),
+  userId: text("user_id").notNull().default(""),
   accessToken: text("access_token").notNull(),
   refreshToken: text("refresh_token").notNull(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
@@ -21,6 +22,7 @@ export const fitbitConnectionsTable = pgTable("fitbit_connections", {
 
 export const fitbitAnalyticsTable = pgTable("fitbit_analytics", {
   id: serial("id").primaryKey(),
+  userId: text("user_id").notNull().default(""),
   eventType: text("event_type", {
     enum: ["nudge", "auto_correction", "user_accepted", "user_cancelled"],
   }).notNull(),

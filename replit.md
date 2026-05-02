@@ -15,6 +15,7 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - **Validation**: Zod (`zod/v4`), `drizzle-zod`
 - **API codegen**: Orval (from OpenAPI spec)
 - **Build**: esbuild (CJS bundle)
+- **Authentication**: Clerk (Replit-managed, `@clerk/react` + `@clerk/express`)
 
 ## Key Commands
 
@@ -69,11 +70,22 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 - `artifacts/sit-stand-timer/src/components/NudgeModal.tsx` — countdown modal for drift nudge / auto-correction
 - `lib/db/src/schema/fitbit.ts` — fitbit_connections + fitbit_analytics tables
 - `lib/db/src/schema/pushSubscriptions.ts` — push_subscriptions table
-- `artifacts/api-server/src/services/pushService.ts` — VAPID setup, subscription CRUD, sendPushToAll
-- `artifacts/api-server/src/services/pushScheduler.ts` — server-side sit/stand push notification scheduler
+- `artifacts/api-server/src/services/pushService.ts` — VAPID setup, subscription CRUD, sendPushToUser(userId)
+- `artifacts/api-server/src/services/pushScheduler.ts` — per-user push scheduler keyed by userId Map
 - `artifacts/api-server/src/routes/push.ts` — /push/* endpoints (vapid-public-key, subscribe, schedule)
 - `artifacts/sit-stand-timer/src/contexts/BladderContext.tsx` — BladderProvider: timer, logs, analytics, SW integration
 - `artifacts/sit-stand-timer/src/pages/BladderPage.tsx` — Bladder Schedule UI (toggle, slider, countdown, response card, summary)
+
+### Authentication (Clerk)
+- **Provider**: Replit-managed Clerk (`pk_test_*` dev key, `pk_live_*` prod key auto-swapped)
+- **Frontend**: `ClerkProvider` wraps app; `Show when="signed-in/out"` gates content; `ClerkLoading/ClerkLoaded` for init state
+- **Routes**: `/sign-in/*?` and `/sign-up/*?` public; all app routes protected inside `ClerkLoaded` + `Show when="signed-in"`
+- **Landing page**: `/` shows `LandingPage` for unauthenticated users, `TimerPage` for authenticated
+- **Backend**: `clerkMiddleware` in `app.ts` + `requireAuth` middleware sets `req.userId`; all routes require auth
+- **Data isolation**: All DB tables have `userId text not null default ''`; all queries filter by `req.userId`
+- **Proxy**: `/api/__clerk` proxy middleware (production only) routes Clerk FAPI through the app domain
+- **Cache invalidation**: `ClerkQueryClientCacheInvalidator` clears TanStack Query cache on user switch
+- **Key files**: `artifacts/api-server/src/middlewares/requireAuth.ts`, `artifacts/api-server/src/middlewares/clerkProxyMiddleware.ts`, `artifacts/sit-stand-timer/src/pages/LandingPage.tsx`, `SignInPage.tsx`, `SignUpPage.tsx`
 
 ### Rest Classification Logic
 Rest sessions are auto-classified on end:

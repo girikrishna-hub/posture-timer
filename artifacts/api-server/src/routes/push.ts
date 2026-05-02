@@ -8,6 +8,7 @@ import {
   schedulePushNotifications,
   cancelPushSchedule,
 } from "../services/pushScheduler";
+import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
@@ -15,7 +16,7 @@ router.get("/push/vapid-public-key", (_req, res) => {
   return res.json({ publicKey: vapidPublicKey });
 });
 
-router.post("/push/subscribe", async (req, res) => {
+router.post("/push/subscribe", requireAuth, async (req, res) => {
   const { endpoint, keys } = req.body as {
     endpoint?: string;
     keys?: { p256dh?: string; auth?: string };
@@ -25,18 +26,18 @@ router.post("/push/subscribe", async (req, res) => {
     return res.status(400).json({ error: "Missing subscription fields" });
   }
 
-  await saveSubscription(endpoint, keys.p256dh, keys.auth);
+  await saveSubscription(req.userId, endpoint, keys.p256dh, keys.auth);
   return res.status(201).json({ ok: true });
 });
 
-router.delete("/push/subscribe", async (req, res) => {
+router.delete("/push/subscribe", requireAuth, async (req, res) => {
   const { endpoint } = req.body as { endpoint?: string };
   if (!endpoint) return res.status(400).json({ error: "Missing endpoint" });
   await deleteSubscription(endpoint);
   return res.status(204).send();
 });
 
-router.post("/push/schedule", (req, res) => {
+router.post("/push/schedule", requireAuth, (req, res) => {
   const {
     mode,
     elapsedSeconds = 0,
@@ -56,11 +57,11 @@ router.post("/push/schedule", (req, res) => {
   };
 
   if (mode !== "sitting" && mode !== "standing") {
-    cancelPushSchedule();
+    cancelPushSchedule(req.userId);
     return res.json({ ok: true, scheduled: false });
   }
 
-  schedulePushNotifications({
+  schedulePushNotifications(req.userId, {
     mode,
     elapsedSeconds,
     sittingAlertMinutes,
@@ -74,8 +75,8 @@ router.post("/push/schedule", (req, res) => {
   return res.json({ ok: true, scheduled: true });
 });
 
-router.delete("/push/schedule", (_req, res) => {
-  cancelPushSchedule();
+router.delete("/push/schedule", requireAuth, (req, res) => {
+  cancelPushSchedule(req.userId);
   return res.json({ ok: true });
 });
 

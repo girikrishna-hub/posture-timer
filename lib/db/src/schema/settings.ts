@@ -1,9 +1,10 @@
-import { pgTable, serial, integer, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
 export const settingsTable = pgTable("settings", {
   id: serial("id").primaryKey(),
+  userId: text("user_id").notNull().default(""),
   dailyStandingGoalMinutes: integer("daily_standing_goal_minutes").notNull().default(120),
   sittingAlertMinutes: integer("sitting_alert_minutes").notNull().default(45),
   standingMinMinutes: integer("standing_min_minutes").notNull().default(10),

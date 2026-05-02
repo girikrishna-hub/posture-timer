@@ -1,5 +1,5 @@
 import { db, fitbitConnectionsTable } from "@workspace/db";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/auth";
@@ -26,6 +26,7 @@ export function getFitbitAuthUrl(redirectUri: string, state: string): string {
 export async function exchangeCodeForTokens(
   code: string,
   redirectUri: string,
+  userId: string,
 ): Promise<void> {
   const clientId = process.env["GOOGLE_FIT_CLIENT_ID"] ?? "";
   const clientSecret = process.env["GOOGLE_FIT_CLIENT_SECRET"] ?? "";
@@ -64,15 +65,18 @@ export async function exchangeCodeForTokens(
 
   const expiresAt = new Date(Date.now() + data.expires_in * 1000);
 
-  await db.delete(fitbitConnectionsTable);
+  await db
+    .delete(fitbitConnectionsTable)
+    .where(eq(fitbitConnectionsTable.userId, userId));
   await db.insert(fitbitConnectionsTable).values({
+    userId,
     accessToken: data.access_token,
     refreshToken: data.refresh_token,
     expiresAt,
     scope: data.scope ?? FIT_SCOPE,
   });
 
-  logger.info("Google Fit tokens stored");
+  logger.info({ userId }, "Google Fit tokens stored");
 }
 
 export async function refreshAccessToken(): Promise<string | null> {
@@ -114,8 +118,11 @@ export async function refreshAccessToken(): Promise<string | null> {
   };
 
   const expiresAt = new Date(Date.now() + data.expires_in * 1000);
-  await db.delete(fitbitConnectionsTable);
+  await db
+    .delete(fitbitConnectionsTable)
+    .where(eq(fitbitConnectionsTable.userId, conn.userId));
   await db.insert(fitbitConnectionsTable).values({
+    userId: conn.userId,
     accessToken: data.access_token,
     refreshToken: data.refresh_token ?? conn.refreshToken,
     expiresAt,

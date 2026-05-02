@@ -1,4 +1,4 @@
-import { sendPushToAll } from "./pushService";
+import { sendPushToUser } from "./pushService";
 import { logger } from "../lib/logger";
 
 interface ScheduleParams {
@@ -11,17 +11,24 @@ interface ScheduleParams {
   remindersCount: number;
 }
 
-let activeTimer: ReturnType<typeof setTimeout> | null = null;
+// Per-user timer map
+const activeTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-function clearActive(): void {
-  if (activeTimer !== null) {
-    clearTimeout(activeTimer);
-    activeTimer = null;
+function clearActive(userId: string): void {
+  const t = activeTimers.get(userId);
+  if (t !== undefined) {
+    clearTimeout(t);
+    activeTimers.delete(userId);
   }
 }
 
-function scheduleNext(params: ScheduleParams, currentMode: "sitting" | "standing", remindersFired: number): void {
-  clearActive();
+function scheduleNext(
+  userId: string,
+  params: ScheduleParams,
+  currentMode: "sitting" | "standing",
+  remindersFired: number,
+): void {
+  clearActive(userId);
 
   const {
     sittingAlertMinutes,
@@ -54,17 +61,16 @@ function scheduleNext(params: ScheduleParams, currentMode: "sitting" | "standing
       return;
     }
 
-    if (nextDelaySecs <= 0) {
-      nextDelaySecs = 5;
-    }
+    if (nextDelaySecs <= 0) nextDelaySecs = 5;
 
-    logger.info({ currentMode, nextDelaySecs, title }, "Scheduling push notification");
-    activeTimer = setTimeout(() => {
-      void sendPushToAll({ title, body }).catch((err: unknown) =>
+    logger.info({ userId, currentMode, nextDelaySecs, title }, "Scheduling push");
+    activeTimers.set(userId, setTimeout(() => {
+      void sendPushToUser(userId, { title, body }).catch((err: unknown) =>
         logger.error({ err }, "Push send failed"),
       );
-      scheduleNext({ ...params, elapsedSeconds: 0 }, "sitting", nextReminders);
-    }, nextDelaySecs * 1000);
+      scheduleNext(userId, { ...params, elapsedSeconds: 0 }, "sitting", nextReminders);
+    }, nextDelaySecs * 1000));
+
   } else {
     const minSecs = standingMinMinutes * 60;
     const maxSecs = standingMaxMinutes * 60;
@@ -89,32 +95,31 @@ function scheduleNext(params: ScheduleParams, currentMode: "sitting" | "standing
       nextReminders = remindersFired + 1;
       nextMode = "standing";
     } else {
-      nextDelaySecs = maxSecs - (standingMinMinutes * 60) - (remindersFired - 1) * intervalSecs;
+      nextDelaySecs =
+        maxSecs - standingMinMinutes * 60 - (remindersFired - 1) * intervalSecs;
       title = "Final reminder — please sit down";
       body = `Maximum standing time of ${standingMaxMinutes} minutes reached.`;
       nextReminders = 0;
       nextMode = "sitting";
     }
 
-    if (nextDelaySecs <= 0) {
-      nextDelaySecs = 5;
-    }
+    if (nextDelaySecs <= 0) nextDelaySecs = 5;
 
-    logger.info({ currentMode, nextDelaySecs, title }, "Scheduling push notification");
-    activeTimer = setTimeout(() => {
-      void sendPushToAll({ title, body }).catch((err: unknown) =>
+    logger.info({ userId, currentMode, nextDelaySecs, title }, "Scheduling push");
+    activeTimers.set(userId, setTimeout(() => {
+      void sendPushToUser(userId, { title, body }).catch((err: unknown) =>
         logger.error({ err }, "Push send failed"),
       );
-      scheduleNext({ ...params, elapsedSeconds: 0 }, nextMode, nextReminders);
-    }, nextDelaySecs * 1000);
+      scheduleNext(userId, { ...params, elapsedSeconds: 0 }, nextMode, nextReminders);
+    }, nextDelaySecs * 1000));
   }
 }
 
-export function schedulePushNotifications(params: ScheduleParams): void {
-  scheduleNext(params, params.mode, 0);
+export function schedulePushNotifications(userId: string, params: ScheduleParams): void {
+  scheduleNext(userId, params, params.mode, 0);
 }
 
-export function cancelPushSchedule(): void {
-  clearActive();
-  logger.info("Push schedule cancelled");
+export function cancelPushSchedule(userId: string): void {
+  clearActive(userId);
+  logger.info({ userId }, "Push schedule cancelled");
 }

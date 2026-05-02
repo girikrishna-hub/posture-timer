@@ -1,4 +1,5 @@
 import { Link, useRoute } from "wouter";
+import { useClerk, useUser } from "@clerk/react";
 
 const TimerIcon = () => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -22,10 +23,22 @@ const BladderIcon = () => (
   </svg>
 );
 
+const UserIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+  </svg>
+);
+
 export function BottomNav() {
-  const [onTimer]    = useRoute("/");
+  const [onTimer]     = useRoute("/");
   const [onDashboard] = useRoute("/dashboard");
-  const [onBladder]  = useRoute("/bladder");
+  const [onBladder]   = useRoute("/bladder");
+  const { signOut }   = useClerk();
+  const { user }      = useUser();
+
+  const initials = user?.firstName?.charAt(0)?.toUpperCase() ?? user?.emailAddresses?.[0]?.emailAddress?.charAt(0)?.toUpperCase() ?? "U";
+  const avatarUrl = user?.imageUrl;
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border flex">
@@ -56,6 +69,24 @@ export function BottomNav() {
         <BladderIcon />
         <span>Bladder</span>
       </Link>
+      <button
+        onClick={() => void signOut({ redirectUrl: "/" })}
+        className="flex-1 flex flex-col items-center justify-center py-3 gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+        title="Sign out"
+      >
+        {avatarUrl ? (
+          <img
+            src={avatarUrl}
+            alt={initials}
+            className="w-[22px] h-[22px] rounded-full object-cover"
+          />
+        ) : (
+          <div className="w-[22px] h-[22px] rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
+            {initials}
+          </div>
+        )}
+        <span>Sign out</span>
+      </button>
     </nav>
   );
 }
