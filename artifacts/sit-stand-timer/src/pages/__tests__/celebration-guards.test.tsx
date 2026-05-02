@@ -1137,6 +1137,44 @@ describe("midnight reset — BroadcastChannel message triggers reset on separate
     expect(hook1.result.current.goalAchieved).toBe(true);
     expect(hook2.result.current.goalAchieved).toBe(true);
   });
+
+  it("unrecognised message from a third standalone channel leaves goalAchieved unchanged on both hook instances", () => {
+    // Mount two hook instances — simulating two open browser tabs.
+    const hook1 = renderHook(() =>
+      useGoalCelebration({ liveGoalPercent: 110 }),
+    );
+    const hook2 = renderHook(() =>
+      useGoalCelebration({ liveGoalPercent: 110 }),
+    );
+
+    // Both hooks start with goalAchieved=true because CELEBRATION_KEY === today.
+    expect(hook1.result.current.goalAchieved).toBe(true);
+    expect(hook2.result.current.goalAchieved).toBe(true);
+
+    // hook1 and hook2 each created one BroadcastChannel instance.
+    expect(busInstances).toHaveLength(2);
+
+    // Create a third BroadcastChannel that belongs to neither hook — this
+    // simulates an independent sender (e.g. a service worker or a third tab
+    // that posts an unrecognised payload).  Because it is not owned by hook1
+    // or hook2, BOTH hook instances are receivers when it posts a message.
+    const thirdChannel = new BroadcastChannel(MIDNIGHT_CHANNEL_NAME);
+    expect(busInstances).toHaveLength(3);
+
+    // Post an unrecognised payload from the third channel.
+    // Both hook1 and hook2 will receive it (neither is the sender).
+    // Their onmessage guard (`if (ev.data === "midnight-reset")`) must block doReset().
+    act(() => {
+      thirdChannel.postMessage("unknown-payload");
+    });
+
+    // Neither hook should have reset — the guard must have blocked the call
+    // even though the message arrived from an external sender channel.
+    expect(hook1.result.current.goalAchieved).toBe(true);
+    expect(hook2.result.current.goalAchieved).toBe(true);
+
+    thirdChannel.close();
+  });
 });
 
 // ---------------------------------------------------------------------------
