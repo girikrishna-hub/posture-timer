@@ -106,6 +106,29 @@ self.addEventListener("message", (event: ExtendableMessageEvent) => {
 
   // ── Bladder notifications ─────────────────────────────────────────────────
 
+  // Immediate bladder notification — mirrors posture's SHOW_NOTIFICATION.
+  // Called from the page when fireCycle fires so the SW context (not the page)
+  // shows the notification; more reliable when the tab is backgrounded.
+  if (event.data?.type === "SHOW_BLADDER_NOTIFICATION") {
+    const { logId } = event.data as { type: string; logId?: string };
+    if (logId) bladderPendingLogId = logId;
+    event.waitUntil(
+      self.registration.showNotification("Time to void", {
+        body: "Go now. Do not delay.",
+        icon: "/favicon.svg",
+        badge: "/favicon.svg",
+        tag: "bladder-reminder",
+        renotify: true,
+        requireInteraction: true,
+        data: { url: "/bladder", logId: bladderPendingLogId },
+        actions: [
+          { action: "done", title: "✓ Done" },
+          { action: "snooze", title: "⏱ Snooze 5 min" },
+        ],
+      } as NotificationOptions)
+    );
+  }
+
   if (event.data?.type === "SCHEDULE_BLADDER_NOTIFICATION") {
     const { delayMs, logId } = event.data as {
       type: string;
@@ -125,8 +148,22 @@ self.addEventListener("message", (event: ExtendableMessageEvent) => {
         new Promise<void>((resolve) => {
           bladderAlertTimer = setTimeout(() => {
             bladderAlertTimer = null;
-            showBladderNotification(bladderPendingLogId);
-            resolve();
+            void self.registration
+              .showNotification("Time to void", {
+                body: "Go now. Do not delay.",
+                icon: "/favicon.svg",
+                badge: "/favicon.svg",
+                tag: "bladder-reminder",
+                renotify: true,
+                requireInteraction: true,
+                data: { url: "/bladder", logId: bladderPendingLogId },
+                actions: [
+                  { action: "done", title: "✓ Done" },
+                  { action: "snooze", title: "⏱ Snooze 5 min" },
+                ],
+              } as NotificationOptions)
+              .then(resolve)
+              .catch(resolve);
           }, delayMs);
         })
       );

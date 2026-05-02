@@ -120,24 +120,15 @@ function cancelSWBladder() {
   }).catch(() => { /* ignore */ });
 }
 
-function showBladderNotificationNow() {
+function showBladderNotificationNow(logId: string) {
   if (!("serviceWorker" in navigator)) return;
   if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+  // Post a SHOW_BLADDER_NOTIFICATION message so the SW shows the notification
+  // from its own context rather than from the page.  This is more reliable when
+  // the tab is backgrounded — the SW wakes up, handles the message with
+  // event.waitUntil(), and shows the alert regardless of page throttling.
   navigator.serviceWorker.ready.then((reg) => {
-    const opts = {
-      body: "Go now. Do not delay.",
-      icon: "/favicon.svg",
-      badge: "/favicon.svg",
-      tag: "bladder-reminder",
-      renotify: true,
-      requireInteraction: true,
-      data: { url: "/bladder" },
-      actions: [
-        { action: "done", title: "✓ Done" },
-        { action: "snooze", title: "⏱ Snooze 5 min" },
-      ],
-    };
-    reg.showNotification("Time to void", opts as NotificationOptions).catch(() => { /* ignore */ });
+    reg.active?.postMessage({ type: "SHOW_BLADDER_NOTIFICATION", logId });
   }).catch(() => { /* ignore */ });
 }
 
@@ -472,7 +463,7 @@ export function BladderProvider({ children }: { children: React.ReactNode }) {
       savePending(log);
       setPendingLog(log);
 
-      showBladderNotificationNow();
+      showBladderNotificationNow(log.id);
 
       // Compute and persist the NEXT void deadline immediately so a crash or
       // refresh between now and the user's response preserves the schedule.
