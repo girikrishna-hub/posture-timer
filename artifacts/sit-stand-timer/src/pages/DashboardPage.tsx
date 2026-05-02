@@ -1086,12 +1086,17 @@ export default function DashboardPage() {
     skipBadgePopInRef,
     showBadgeHint,
     handleBadgeHintShown,
-    replayCelebration: onReplayCelebration,
+    replayCelebration,
   } = useGoalCelebration({
     liveGoalPercent: goalPercent,
     todayStatsLoaded: !!todayStats,
     onCelebrate: () => goalCelebrationBanner.show(),
   });
+
+  const onReplayCelebration = useCallback(() => {
+    replayCelebration();
+    goalCelebrationBanner.show();
+  }, [replayCelebration, goalCelebrationBanner]);
 
   function handleMonthDayClick(date: Date) {
     setDailyDate(date);
