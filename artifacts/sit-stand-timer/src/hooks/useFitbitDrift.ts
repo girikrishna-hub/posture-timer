@@ -51,7 +51,7 @@ function deriveSignal(minutes: StepMinute[]): { signal: string; zeroRun: number;
 }
 
 interface UseFitbitDriftOptions {
-  onAutoSwitch?: (toMode: string, reason: string) => void;
+  onAutoSwitch?: (toMode: string, reason: string, fromMode: string) => void;
 }
 
 export function useFitbitDrift({ onAutoSwitch }: UseFitbitDriftOptions = {}) {
@@ -138,7 +138,7 @@ export function useFitbitDrift({ onAutoSwitch }: UseFitbitDriftOptions = {}) {
           reason,
         });
         await switchMode("walking", "fitbit_auto");
-        onAutoSwitchRef.current?.("walking", reason);
+        onAutoSwitchRef.current?.("walking", reason, currentMode);
         return;
       }
 

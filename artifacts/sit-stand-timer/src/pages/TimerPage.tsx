@@ -425,9 +425,32 @@ export default function TimerPage() {
 
   // Auto-switch toast
   const autoSwitchBanner = useBanner<string>(4000);
-  const showAutoSwitchToast = (toMode: string, reason: string) => {
+  const autoSwitchPrevModeRef = useRef<"sitting" | "standing" | "resting" | "walking" | null>(null);
+
+  const UNDOABLE_MODES = ["sitting", "standing", "resting", "walking"] as const;
+  type UndoableMode = typeof UNDOABLE_MODES[number];
+  const isUndoableMode = (m: string): m is UndoableMode =>
+    (UNDOABLE_MODES as readonly string[]).includes(m);
+
+  const showAutoSwitchToast = (toMode: string, reason: string, fromMode: string) => {
     const label = toMode === "sitting" ? "Sitting" : toMode === "standing" ? "Standing" : "Walking";
+    autoSwitchPrevModeRef.current = isUndoableMode(fromMode) ? fromMode : null;
     autoSwitchBanner.show(`Auto-switched to ${label} — ${reason}`);
+  };
+
+  useEffect(() => {
+    if (!autoSwitchBanner.shown) {
+      autoSwitchPrevModeRef.current = null;
+    }
+  }, [autoSwitchBanner.shown]);
+
+  const handleAutoSwitchUndo = () => {
+    const prev = autoSwitchPrevModeRef.current;
+    if (!prev) return;
+    autoSwitchPrevModeRef.current = null;
+    void switchMode(prev, "manual");
+    const prevLabel = prev === "sitting" ? "Sitting" : prev === "standing" ? "Standing" : prev === "walking" ? "Walking" : "Resting";
+    autoSwitchBanner.show(`Switched back to ${prevLabel}`);
   };
 
   // Hook handles switchMode internally; onAutoSwitch is only for UI feedback
@@ -445,18 +468,23 @@ export default function TimerPage() {
       <NudgeModal nudge={nudge} onConfirm={handleNudgeConfirm} onCancel={cancelNudge} />
 
       {autoSwitchBanner.shown && (
-        <div
-          role="status"
+        <button
+          type="button"
+          onClick={handleAutoSwitchUndo}
           aria-live="polite"
+          aria-label={`${autoSwitchBanner.message} — tap to undo`}
           className={[
             "fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-card border border-border shadow-lg rounded-2xl px-4 py-2.5 text-sm font-medium text-foreground flex items-center gap-2",
-            "transition-all duration-300 ease-out",
+            "transition-all duration-300 ease-out cursor-pointer hover:bg-muted active:scale-95",
             autoSwitchBanner.visible ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-2",
           ].join(" ")}
         >
           <span>🤖</span>
           {autoSwitchBanner.message}
-        </div>
+          {autoSwitchPrevModeRef.current && (
+            <span className="text-xs text-muted-foreground font-normal">tap to undo</span>
+          )}
+        </button>
       )}
 
       {soundBanner.shown && (
