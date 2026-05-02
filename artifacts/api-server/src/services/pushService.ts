@@ -73,5 +73,12 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
     .select()
     .from(pushSubscriptionsTable)
     .where(eq(pushSubscriptionsTable.userId, userId));
+
+  if (subs.length === 0) {
+    logger.warn({ userId, type: payload.type ?? "posture" }, "Push fire: no subscriptions found for user — notification not delivered");
+    return;
+  }
+
+  logger.info({ userId, type: payload.type ?? "posture", subscriptionCount: subs.length }, "Push fire: sending to subscriptions");
   await sendToSubscriptions(subs, payload);
 }
