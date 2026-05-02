@@ -3,9 +3,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { TimerProvider } from "@/contexts/TimerContext";
+import { BladderProvider } from "@/contexts/BladderContext";
 import TimerPage from "@/pages/TimerPage";
 import SettingsPage from "@/pages/SettingsPage";
 import DashboardPage from "@/pages/DashboardPage";
+import BladderPage from "@/pages/BladderPage";
 import NotFound from "@/pages/not-found";
 import { BottomNav } from "@/components/BottomNav";
 
@@ -25,6 +27,7 @@ function Router() {
         <Route path="/" component={TimerPage} />
         <Route path="/settings" component={SettingsPage} />
         <Route path="/dashboard" component={DashboardPage} />
+        <Route path="/bladder" component={BladderPage} />
         <Route component={NotFound} />
       </Switch>
       <BottomNav />
@@ -38,7 +41,9 @@ function App() {
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
           <TimerProvider>
-            <Router />
+            <BladderProvider>
+              <Router />
+            </BladderProvider>
           </TimerProvider>
         </WouterRouter>
         <Toaster />

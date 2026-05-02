@@ -15,9 +15,17 @@ const ChartIcon = () => (
   </svg>
 );
 
+const BladderIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2C8 2 5 6 5 10c0 5 4 10 7 12 3-2 7-7 7-12 0-4-3-8-7-8z" />
+    <circle cx="12" cy="10" r="2" fill="currentColor" stroke="none" />
+  </svg>
+);
+
 export function BottomNav() {
-  const [onTimer] = useRoute("/");
+  const [onTimer]    = useRoute("/");
   const [onDashboard] = useRoute("/dashboard");
+  const [onBladder]  = useRoute("/bladder");
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border flex">
@@ -38,6 +46,15 @@ export function BottomNav() {
       >
         <ChartIcon />
         <span>Dashboard</span>
+      </Link>
+      <Link
+        href="/bladder"
+        className={`flex-1 flex flex-col items-center justify-center py-3 gap-1 text-xs font-medium transition-colors ${
+          onBladder ? "text-blue-600 dark:text-blue-400" : "text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        <BladderIcon />
+        <span>Bladder</span>
       </Link>
     </nav>
   );

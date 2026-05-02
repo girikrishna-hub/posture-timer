@@ -45,6 +45,7 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
   - **Walking mode**: Auto-detect walking via Geolocation `watchPosition` speed (0.3–3.5 m/s). Opt-in toggle in Settings (requests location permission on toggle-on, shows permission status). 15s debounce to start, 15s to stop. Null-speed fallback derives speed from haversine distance between consecutive fixes. On stop: walking session ends to idle (no forced sitting). Preference persisted in localStorage. Teal color theme. GPS status indicator in header (requesting/active/denied states).
   - **Google Fit Assisted Mode**: Polls Google Fit intraday steps every 2 min. Detects drift (walking ≥30 steps/min, standing 2–29, sitting=0). Fires NudgeModal (15s countdown) when drift detected; auto-corrects after countdown or if user confirms. Lock windows prevent auto-correction for 15m after manual sit or 10m after manual stand. Analytics stored in DB (nudge_count, auto_correction_count, user_accepted, user_cancelled). Settings toggle + Connect/Disconnect button.
   - **Server-side Web Push**: VAPID push subscriptions stored in `push_subscriptions` table. Server schedules sit/stand reminder push notifications (mirrors frontend timer logic). Frontend `usePushSubscription` subscribes on notification permission grant; `usePushSchedule` reschedules on every mode switch. SW handles `push` events and shows notifications when app is backgrounded.
+  - **Bladder Schedule Mode** (`/bladder`): Parallel independent timer for disciplined medical voiding reminders. Toggle ON/OFF, configurable interval 45–120 min (step 15, default 60), all state in localStorage. When timer fires: SW notification ("Time to void / Go now. Do not delay.") with "✓ Done" and "⏱ Snooze 5 min" action buttons; in-app response card with Done / Delayed / Leakage buttons. Each cycle logged with timestamp + status. Daily summary card (cycles, % on-time, delayed, leakage, avg interval). Smart progression: 3 clean days → suggest +15 min; any leakage → suggest -15 min. Runs in parallel alongside posture timer — both can be active simultaneously.
 
 ### Key Files
 - `lib/api-spec/openapi.yaml` — OpenAPI contract (sessions, settings, stats, metrics)
@@ -71,6 +72,8 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 - `artifacts/api-server/src/services/pushService.ts` — VAPID setup, subscription CRUD, sendPushToAll
 - `artifacts/api-server/src/services/pushScheduler.ts` — server-side sit/stand push notification scheduler
 - `artifacts/api-server/src/routes/push.ts` — /push/* endpoints (vapid-public-key, subscribe, schedule)
+- `artifacts/sit-stand-timer/src/contexts/BladderContext.tsx` — BladderProvider: timer, logs, analytics, SW integration
+- `artifacts/sit-stand-timer/src/pages/BladderPage.tsx` — Bladder Schedule UI (toggle, slider, countdown, response card, summary)
 
 ### Rest Classification Logic
 Rest sessions are auto-classified on end:
