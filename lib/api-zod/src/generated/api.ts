@@ -26,6 +26,12 @@ export const StartSessionBody = zod.object({
     .describe(
       "Optional override for session start time (used for offline sync)",
     ),
+  restType: zod
+    .enum(["nap", "sleep"])
+    .nullish()
+    .describe(
+      "Optional explicit rest type; only meaningful when mode is resting",
+    ),
 });
 
 /**

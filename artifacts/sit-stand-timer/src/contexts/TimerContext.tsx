@@ -36,6 +36,7 @@ interface OfflineStartOp {
   mode: "sitting" | "standing" | "resting" | "walking";
   startedAt: string;
   endedAt?: string;
+  restType?: "nap" | "sleep";
 }
 
 type OfflineOp = OfflineEndOp | OfflineStartOp;
@@ -159,13 +160,14 @@ const LOCK_WINDOW_MS: Partial<Record<TimerMode, number>> = {
 
 interface TimerContextValue {
   mode: TimerMode;
+  restType: "nap" | "sleep" | null;
   elapsedSeconds: number;
   reminderCount: number;
   inReminderPhase: boolean;
   activeSessionId: number | null;
   notificationPermission: NotificationPermission;
   requestNotificationPermission: () => Promise<void>;
-  switchMode: (newMode: "sitting" | "standing" | "resting" | "walking", source?: StateSource) => Promise<void>;
+  switchMode: (newMode: "sitting" | "standing" | "resting" | "walking", source?: StateSource, restType?: "nap" | "sleep") => Promise<void>;
   endCurrentSession: () => Promise<void>;
   gpsStatus: GpsStatus;
   isLoading: boolean;
@@ -183,6 +185,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
 
   const [mode, setMode] = useState<TimerMode>("idle");
+  const [restType, setRestType] = useState<"nap" | "sleep" | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [reminderCount, setReminderCount] = useState(0);
   const [inReminderPhase, setInReminderPhase] = useState(false);
@@ -245,11 +248,12 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const doStartSession = useCallback(
-    async (sessionMode: string, startedAt?: string): Promise<{ id: number }> => {
+    async (sessionMode: string, startedAt?: string, sessionRestType?: "nap" | "sleep"): Promise<{ id: number }> => {
       return startMutationRef.current.mutateAsync({
         data: {
           mode: sessionMode as "sitting" | "standing" | "resting" | "walking",
           ...(startedAt ? { startedAt } : {}),
+          ...(sessionRestType != null ? { restType: sessionRestType } : {}),
         },
       });
     },
@@ -265,6 +269,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
           (Date.now() - new Date(active.startedAt).getTime()) / 1000
         );
         setMode(active.mode as TimerMode);
+        setRestType((active.restType as "nap" | "sleep" | null) ?? null);
         setElapsedSeconds(elapsed);
         setActiveSessionId(active.id);
       }
@@ -283,7 +288,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
           if (op.type === "endSession") {
             await doEndSession(op.sessionId, op.endedAt);
           } else {
-            const session = await doStartSession(op.mode, op.startedAt);
+            const session = await doStartSession(op.mode, op.startedAt, op.restType);
             if (op.endedAt) {
               await doEndSession(session.id, op.endedAt);
             }
@@ -306,7 +311,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   }, [doEndSession, doStartSession, queryClient]);
 
   const switchMode = useCallback(
-    async (newMode: "sitting" | "standing" | "resting" | "walking", source: StateSource = "manual") => {
+    async (newMode: "sitting" | "standing" | "resting" | "walking", source: StateSource = "manual", newRestType?: "nap" | "sleep") => {
       const currentId = activeSessionIdRef.current;
       const currentMode = modeRef.current;
 
@@ -341,25 +346,27 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Start new session
+      const sessionRestType = newMode === "resting" ? newRestType : undefined;
       if (navigator.onLine) {
         try {
-          const newSession = await doStartSession(newMode, transitionTime);
+          const newSession = await doStartSession(newMode, transitionTime, sessionRestType);
           setActiveSessionId(newSession.id);
           pendingLocalQueueIdRef.current = null;
         } catch {
           const opId = crypto.randomUUID();
-          saveQueueOp({ id: opId, type: "startSession", mode: newMode, startedAt: transitionTime });
+          saveQueueOp({ id: opId, type: "startSession", mode: newMode, startedAt: transitionTime, ...(sessionRestType ? { restType: sessionRestType } : {}) });
           pendingLocalQueueIdRef.current = opId;
           setActiveSessionId(OFFLINE_SESSION_SENTINEL);
         }
       } else {
         const opId = crypto.randomUUID();
-        saveQueueOp({ id: opId, type: "startSession", mode: newMode, startedAt: transitionTime });
+        saveQueueOp({ id: opId, type: "startSession", mode: newMode, startedAt: transitionTime, ...(sessionRestType ? { restType: sessionRestType } : {}) });
         pendingLocalQueueIdRef.current = opId;
         setActiveSessionId(OFFLINE_SESSION_SENTINEL);
       }
 
       setMode(newMode);
+      setRestType(newMode === "resting" ? (newRestType ?? null) : null);
       setElapsedSeconds(0);
       setReminderCount(0);
       setInReminderPhase(false);
@@ -625,6 +632,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     <TimerContext.Provider
       value={{
         mode,
+        restType,
         elapsedSeconds,
         reminderCount,
         inReminderPhase,

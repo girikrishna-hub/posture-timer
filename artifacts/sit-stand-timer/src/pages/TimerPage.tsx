@@ -188,11 +188,11 @@ function ModeIcon({ mode }: { mode: TimerMode }) {
   );
 }
 
-function getModeLabel(mode: TimerMode): string {
+function getModeLabel(mode: TimerMode, restType?: "nap" | "sleep" | null): string {
   switch (mode) {
     case "sitting": return "Sitting";
     case "standing": return "Standing";
-    case "resting": return "Resting";
+    case "resting": return restType === "sleep" ? "Sleeping" : "Resting";
     case "walking": return "Walking";
     default: return "Ready";
   }
@@ -252,7 +252,7 @@ export function TrophyBadge({ delayed, skipPopIn, onReplay, showHint, onHintShow
   );
 }
 
-function GoalProgressRing({ mode, goalPercent, celebrating, goalAchieved, badgeDelayed, skipBadgePopIn, showBadgeHint, onBadgeHintShown, onReplayCelebration }: { mode: TimerMode; goalPercent: number; celebrating: boolean; goalAchieved: boolean; badgeDelayed: boolean; skipBadgePopIn: boolean; showBadgeHint: boolean; onBadgeHintShown: () => void; onReplayCelebration: () => void }) {
+function GoalProgressRing({ mode, restType, goalPercent, celebrating, goalAchieved, badgeDelayed, skipBadgePopIn, showBadgeHint, onBadgeHintShown, onReplayCelebration }: { mode: TimerMode; restType: "nap" | "sleep" | null; goalPercent: number; celebrating: boolean; goalAchieved: boolean; badgeDelayed: boolean; skipBadgePopIn: boolean; showBadgeHint: boolean; onBadgeHintShown: () => void; onReplayCelebration: () => void }) {
   const clampedPercent = Math.max(0, Math.min(goalPercent, 100));
   const dashOffset = CIRCUMFERENCE * (1 - clampedPercent / 100);
   const goalMet = goalPercent >= 100;
@@ -353,7 +353,7 @@ function GoalProgressRing({ mode, goalPercent, celebrating, goalAchieved, badgeD
               <ModeIcon mode={mode} />
             </div>
             <span className={`text-sm font-semibold tracking-widest uppercase mt-1 transition-colors duration-500 ${getModeColor(mode)}`}>
-              {getModeLabel(mode)}
+              {getModeLabel(mode, restType)}
             </span>
             <span
               className={`text-xs font-medium mt-1 tabular-nums transition-colors duration-500 ${goalMet ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`}
@@ -370,6 +370,7 @@ function GoalProgressRing({ mode, goalPercent, celebrating, goalAchieved, badgeD
 export default function TimerPage() {
   const {
     mode,
+    restType,
     elapsedSeconds,
     reminderCount,
     inReminderPhase,
@@ -716,6 +717,7 @@ export default function TimerPage() {
       <main className="flex-1 flex flex-col items-center justify-center px-6 gap-8">
         <GoalProgressRing
           mode={mode}
+          restType={restType}
           goalPercent={liveGoalPercent}
           celebrating={celebrating}
           goalAchieved={goalAchieved}
@@ -792,15 +794,26 @@ export default function TimerPage() {
               >
                 I'm Standing
               </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="w-full h-12 text-sm font-medium rounded-2xl"
-                onClick={() => switchMode("resting")}
-                disabled={isLoading}
-              >
-                Rest / Sleep
-              </Button>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="h-12 text-sm font-medium rounded-2xl"
+                  onClick={() => switchMode("resting", "manual", "nap")}
+                  disabled={isLoading}
+                >
+                  Rest
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="h-12 text-sm font-medium rounded-2xl"
+                  onClick={() => switchMode("resting", "manual", "sleep")}
+                  disabled={isLoading}
+                >
+                  Sleep
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="space-y-3">
@@ -812,15 +825,26 @@ export default function TimerPage() {
               >
                 {mode === "sitting" ? "I'm Standing" : "I'm Sitting"}
               </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                className="w-full h-12 text-sm font-medium rounded-2xl"
-                onClick={() => switchMode("resting")}
-                disabled={isLoading}
-              >
-                Rest / Sleep
-              </Button>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="h-12 text-sm font-medium rounded-2xl"
+                  onClick={() => switchMode("resting", "manual", "nap")}
+                  disabled={isLoading}
+                >
+                  Rest
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="h-12 text-sm font-medium rounded-2xl"
+                  onClick={() => switchMode("resting", "manual", "sleep")}
+                  disabled={isLoading}
+                >
+                  Sleep
+                </Button>
+              </div>
             </div>
           )}
         </div>

@@ -47,6 +47,8 @@ export interface StartSessionBody {
   mode: SessionMode;
   /** Optional override for session start time (used for offline sync) */
   startedAt?: string;
+  /** Optional explicit rest type; only meaningful when mode is resting */
+  restType?: RestType | null;
 }
 
 export interface EndSessionBody {

@@ -43,11 +43,15 @@ router.post("/sessions", async (req, res) => {
     return;
   }
 
-  const { mode, startedAt } = parse.data;
+  const { mode, startedAt, restType } = parse.data;
 
   const [session] = await db
     .insert(sessionsTable)
-    .values({ mode, startedAt: startedAt ?? new Date() })
+    .values({
+      mode,
+      startedAt: startedAt ?? new Date(),
+      ...(restType != null ? { restType } : {}),
+    })
     .returning();
 
   res.status(201).json(formatSession(session));

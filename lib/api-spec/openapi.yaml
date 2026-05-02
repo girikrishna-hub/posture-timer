@@ -408,6 +408,9 @@ components:
           type: string
           format: date-time
           description: Optional override for session start time (used for offline sync)
+        restType:
+          $ref: "#/components/schemas/RestType"
+          description: Optional explicit rest type; only meaningful when mode is resting
       required:
         - mode
 

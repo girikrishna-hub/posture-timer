@@ -5,10 +5,13 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { RestType } from "./restType";
 import type { SessionMode } from "./sessionMode";
 
 export interface StartSessionBody {
   mode: SessionMode;
   /** Optional override for session start time (used for offline sync) */
   startedAt?: Date;
+  /** Optional explicit rest type; only meaningful when mode is resting */
+  restType?: RestType | null;
 }
