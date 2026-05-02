@@ -41,7 +41,7 @@ const KEY_PENDING      = "bladder_pending_log";
 const KEY_NEXT_VOID_AT = "bladder_next_void_at";
 
 export const DEFAULT_INTERVAL = 60;
-export const MIN_INTERVAL     = 45;
+export const MIN_INTERVAL     = 30;
 export const MAX_INTERVAL     = 120;
 
 function todayStr(): string {
