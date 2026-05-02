@@ -46,6 +46,35 @@ export function goalLabelClass(footerGoalMet: boolean, goalMetOnLoad: boolean | 
   }`;
 }
 
+/**
+ * Pure predicate that mirrors the prevGoalPercentRef crossing check inside
+ * TimerPage. Returns true only when the goal threshold is crossed for the
+ * first time this session (prev < 100 → current >= 100).
+ *
+ * - prev === null  → first render; stats just loaded. Never celebrate here;
+ *   the goalMetOnLoad effect handles the initial state instead.
+ * - prev >= 100    → already over the line; no new crossing.
+ * - current < 100  → hasn't reached the goal yet.
+ */
+export function shouldTriggerGoalCelebration(
+  prev: number | null,
+  current: number,
+): boolean {
+  if (prev === null) return false;
+  if (prev >= 100) return false;
+  if (current < 100) return false;
+  return true;
+}
+
+/**
+ * Pure function that mirrors the hasSetGoalMetOnLoad one-shot initialisation.
+ * Returns the value that goalMetOnLoad should be set to when todayStats first
+ * resolves (i.e. whether the goal was already met at page load).
+ */
+export function computeGoalMetOnLoad(liveGoalPercent: number): boolean {
+  return liveGoalPercent >= 100;
+}
+
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
@@ -456,7 +485,7 @@ export default function TimerPage() {
     prevGoalPercentRef.current = liveGoalPercent;
 
     // Only fire when crossing the 100% threshold (not on initial load when already >=100)
-    if (prev === null || prev >= 100 || liveGoalPercent < 100) return;
+    if (!shouldTriggerGoalCelebration(prev, liveGoalPercent)) return;
 
     const today = todayStr();
     if (getCelebratedDate() === today) return;
@@ -476,7 +505,7 @@ export default function TimerPage() {
   useEffect(() => {
     if (todayStats && !hasSetGoalMetOnLoad.current) {
       hasSetGoalMetOnLoad.current = true;
-      setGoalMetOnLoad(liveGoalPercent >= 100);
+      setGoalMetOnLoad(computeGoalMetOnLoad(liveGoalPercent));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todayStats]);

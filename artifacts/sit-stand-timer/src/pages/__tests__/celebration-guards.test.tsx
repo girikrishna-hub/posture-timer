@@ -7,6 +7,8 @@ import {
   BADGE_HINT_KEY,
   todayStr,
   msUntilMidnight,
+  shouldTriggerGoalCelebration,
+  computeGoalMetOnLoad,
 } from "@/pages/TimerPage";
 
 // ---------------------------------------------------------------------------
@@ -502,5 +504,177 @@ describe("midnight reset — localStorage guards clear for the new day", () => {
     // Advance 1.5 s — now it's May 1
     vi.advanceTimersByTime(1500);
     expect(todayStr()).toBe("2026-05-01");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// shouldTriggerGoalCelebration — prevGoalPercentRef crossing threshold logic
+// ---------------------------------------------------------------------------
+
+describe("shouldTriggerGoalCelebration — threshold crossing logic", () => {
+  // --- Reload / first-load scenarios (prev === null) ----------------------
+
+  it("returns false when prev is null and current >= 100 (reload with goal already met)", () => {
+    // This is the key regression guard: on page reload, prevGoalPercentRef
+    // starts as null and the first stats update should NOT fire a celebration
+    // even if liveGoalPercent is already at or past 100%.
+    expect(shouldTriggerGoalCelebration(null, 100)).toBe(false);
+  });
+
+  it("returns false when prev is null and current > 100 (reload, well past goal)", () => {
+    expect(shouldTriggerGoalCelebration(null, 150)).toBe(false);
+  });
+
+  it("returns false when prev is null and current < 100 (reload, goal not yet met)", () => {
+    expect(shouldTriggerGoalCelebration(null, 80)).toBe(false);
+  });
+
+  // --- Already-over-the-line scenarios (prev >= 100) ----------------------
+
+  it("returns false when prev >= 100 and current >= 100 (subsequent poll, still at goal)", () => {
+    // A stat refresh while the goal is already met must not re-trigger the banner.
+    expect(shouldTriggerGoalCelebration(100, 100)).toBe(false);
+  });
+
+  it("returns false when prev > 100 and current > 100 (well past goal on both readings)", () => {
+    expect(shouldTriggerGoalCelebration(120, 130)).toBe(false);
+  });
+
+  it("returns false when prev >= 100 and current < 100 (should never happen in practice, but handled)", () => {
+    expect(shouldTriggerGoalCelebration(100, 90)).toBe(false);
+  });
+
+  // --- Genuine mid-session crossing scenarios (prev < 100 → current >= 100)
+
+  it("returns true when prev < 100 and current === 100 (exact threshold crossing)", () => {
+    // This is the only case that should fire the celebration.
+    expect(shouldTriggerGoalCelebration(99, 100)).toBe(true);
+  });
+
+  it("returns true when prev < 100 and current > 100 (crossing with overshoot)", () => {
+    expect(shouldTriggerGoalCelebration(95, 110)).toBe(true);
+  });
+
+  it("returns true when prev is 0 and current is 100 (first session of the day hitting 100)", () => {
+    expect(shouldTriggerGoalCelebration(0, 100)).toBe(true);
+  });
+
+  // --- Still-below-goal scenarios -----------------------------------------
+
+  it("returns false when prev < 100 and current < 100 (below goal throughout)", () => {
+    expect(shouldTriggerGoalCelebration(50, 80)).toBe(false);
+  });
+
+  it("returns false when prev < 100 and current < 100 near the edge (99 → 99.9)", () => {
+    expect(shouldTriggerGoalCelebration(99, 99.9)).toBe(false);
+  });
+
+  // --- Effect sequence: reload-then-update (core regression scenario) ------
+
+  it("simulates reload: stats arrive at 100% then another update arrives — celebration never fires (zero celebrations)", () => {
+    // Reload: prevGoalPercentRef starts as null, first stats deliver 100%.
+    let prevGoalPercent: number | null = null;
+    const celebrationCount = { n: 0 };
+
+    function processUpdate(current: number) {
+      if (shouldTriggerGoalCelebration(prevGoalPercent, current)) {
+        celebrationCount.n++;
+      }
+      prevGoalPercent = current;
+    }
+
+    // First update on reload — goal already at 100%, should NOT celebrate.
+    processUpdate(100);
+    expect(celebrationCount.n).toBe(0);
+
+    // Subsequent poll update — still at 100%, should NOT celebrate again.
+    processUpdate(100);
+    expect(celebrationCount.n).toBe(0);
+
+    // Another poll at 105% — still no new celebration.
+    processUpdate(105);
+    expect(celebrationCount.n).toBe(0);
+  });
+
+  it("simulates live session: starts below 100%, crosses to 100%, further updates do not re-celebrate", () => {
+    let prevGoalPercent: number | null = null;
+    const celebrationCount = { n: 0 };
+
+    function processUpdate(current: number) {
+      if (shouldTriggerGoalCelebration(prevGoalPercent, current)) {
+        celebrationCount.n++;
+      }
+      prevGoalPercent = current;
+    }
+
+    // Page load — stats arrive at 60%, no crossing.
+    processUpdate(60);
+    expect(celebrationCount.n).toBe(0);
+
+    // Progress to 80% — still below goal.
+    processUpdate(80);
+    expect(celebrationCount.n).toBe(0);
+
+    // Cross the 100% line — celebration fires exactly once.
+    processUpdate(100);
+    expect(celebrationCount.n).toBe(1);
+
+    // Further progress to 110% — no second celebration.
+    processUpdate(110);
+    expect(celebrationCount.n).toBe(1);
+
+    // Another poll at 110% — still just the one celebration.
+    processUpdate(110);
+    expect(celebrationCount.n).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeGoalMetOnLoad — hasSetGoalMetOnLoad one-shot initialisation logic
+// ---------------------------------------------------------------------------
+
+describe("computeGoalMetOnLoad — goalMetOnLoad initialisation", () => {
+  it("returns true when liveGoalPercent === 100 (goal exactly met at page load)", () => {
+    // goalMetOnLoad=true suppresses the goal-label-appear animation on reload.
+    expect(computeGoalMetOnLoad(100)).toBe(true);
+  });
+
+  it("returns true when liveGoalPercent > 100 (goal exceeded at page load)", () => {
+    expect(computeGoalMetOnLoad(120)).toBe(true);
+  });
+
+  it("returns false when liveGoalPercent < 100 (goal not yet met at page load)", () => {
+    // goalMetOnLoad=false means the goal was earned mid-session and the
+    // goal-label-appear animation should play.
+    expect(computeGoalMetOnLoad(80)).toBe(false);
+  });
+
+  it("returns false when liveGoalPercent is 0 (fresh day, no standing yet)", () => {
+    expect(computeGoalMetOnLoad(0)).toBe(false);
+  });
+
+  it("returns false at 99.9% (just under the threshold)", () => {
+    expect(computeGoalMetOnLoad(99.9)).toBe(false);
+  });
+
+  // Integration with goalLabelClass: verify that computeGoalMetOnLoad feeds
+  // goalLabelClass correctly to suppress/show the appear animation.
+
+  it("goalLabelClass suppresses goal-label-appear when computeGoalMetOnLoad returns true (reload scenario)", () => {
+    // Simulates: page reloads with goal already met → no appear animation.
+    const onLoad = computeGoalMetOnLoad(100);
+    expect(onLoad).toBe(true);
+    const cls = goalLabelClass(true, onLoad);
+    expect(cls).not.toContain("goal-label-appear");
+    expect(cls).toContain("text-emerald-600");
+  });
+
+  it("goalLabelClass includes goal-label-appear when computeGoalMetOnLoad returns false (mid-session crossing)", () => {
+    // Simulates: goal crossed mid-session → appear animation plays.
+    const onLoad = computeGoalMetOnLoad(80);
+    expect(onLoad).toBe(false);
+    const cls = goalLabelClass(true, onLoad);
+    expect(cls).toContain("goal-label-appear");
+    expect(cls).toContain("text-emerald-600");
   });
 });
