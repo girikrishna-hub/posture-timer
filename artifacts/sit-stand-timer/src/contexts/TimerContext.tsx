@@ -211,7 +211,10 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   const goalNotifStateRef = useRef<GoalNotifState>(getGoalNotifState());
   const prevDailyGoalRef = useRef<number | null>(null);
 
+  const elapsedSecondsRef = useRef(elapsedSeconds);
+
   useEffect(() => { modeRef.current = mode; }, [mode]);
+  useEffect(() => { elapsedSecondsRef.current = elapsedSeconds; }, [elapsedSeconds]);
   useEffect(() => { reminderCountRef.current = reminderCount; }, [reminderCount]);
   useEffect(() => { inReminderPhaseRef.current = inReminderPhase; }, [inReminderPhase]);
   useEffect(() => { activeSessionIdRef.current = activeSessionId; }, [activeSessionId]);
@@ -545,10 +548,89 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // On visibility restore, check if we've been away long enough to auto-pause
+  // ─── Background alert scheduling ────────────────────────────────────────
+  // When the page goes to background, hand the next scheduled alert to the
+  // service worker so it fires even if JS is throttled/suspended.
+
+  function sendSWMessage(msg: Record<string, unknown>): void {
+    if (!("serviceWorker" in navigator)) return;
+    void navigator.serviceWorker.ready
+      .then((reg) => { reg.active?.postMessage(msg); })
+      .catch(() => { /* silent */ });
+  }
+
+  function scheduleBackgroundAlert(): void {
+    const currentMode = modeRef.current;
+    if (currentMode === "idle" || currentMode === "resting") return;
+    if (Notification.permission !== "granted") return;
+
+    const elapsed = elapsedSecondsRef.current;
+    const inReminder = inReminderPhaseRef.current;
+    const count = reminderCountRef.current;
+    const s = settingsRef.current;
+
+    let delayMs: number | null = null;
+    let title = "";
+    let body = "";
+
+    if (currentMode === "sitting") {
+      const alertSecs = s.sittingAlertMinutes * 60;
+      const intervalSecs = s.reminderIntervalMinutes * 60;
+      const max = s.remindersCount;
+
+      if (!inReminder && elapsed < alertSecs) {
+        delayMs = (alertSecs - elapsed) * 1000;
+        title = "Time to stand!";
+        body = `You've been sitting for ${s.sittingAlertMinutes} minutes.`;
+      } else if (inReminder && count < max) {
+        const nextAtSecs = alertSecs + count * intervalSecs;
+        if (elapsed < nextAtSecs) {
+          delayMs = (nextAtSecs - elapsed) * 1000;
+          title = `Stand up — reminder ${count + 1}/${max}`;
+          body = `You've been sitting for over ${s.sittingAlertMinutes} minutes.`;
+        }
+      }
+    } else if (currentMode === "standing") {
+      const minSecs = s.standingMinMinutes * 60;
+      const maxSecs = s.standingMaxMinutes * 60;
+      const intervalSecs = s.reminderIntervalMinutes * 60;
+      const max = s.remindersCount;
+
+      if (!inReminder && elapsed < minSecs) {
+        delayMs = (minSecs - elapsed) * 1000;
+        title = "Time to sit!";
+        body = `You've been standing for ${s.standingMinMinutes} minutes.`;
+      } else if (inReminder && !finalReminderFiredRef.current) {
+        const nextAtSecs = minSecs + count * intervalSecs;
+        const targetSecs = elapsed < nextAtSecs ? nextAtSecs : maxSecs;
+        if (elapsed < targetSecs) {
+          delayMs = (targetSecs - elapsed) * 1000;
+          title = targetSecs >= maxSecs
+            ? "Final reminder — please sit down"
+            : `Sit down — reminder ${count + 1}/${max}`;
+          body = `You've been standing for ${Math.round(elapsed / 60)} minutes.`;
+        }
+      }
+    }
+
+    if (delayMs && delayMs > 0) {
+      sendSWMessage({ type: "SCHEDULE_NOTIFICATION", delayMs, title, body });
+    }
+  }
+
+  function cancelBackgroundAlert(): void {
+    sendSWMessage({ type: "CANCEL_SCHEDULED_NOTIFICATION" });
+  }
+
+  // On visibility change: schedule SW alert on hide, cancel + check auto-pause on show
   useEffect(() => {
     function handleVisibilityChange() {
-      if (document.visibilityState !== "visible") return;
+      if (document.visibilityState === "hidden") {
+        scheduleBackgroundAlert();
+        return;
+      }
+      // Became visible — cancel any pending SW alert (page JS takes over again)
+      cancelBackgroundAlert();
       const currentMode = modeRef.current;
       if (currentMode === "idle" || currentMode === "resting") return;
       const inactiveSecs = (Date.now() - lastActivityRef.current) / 1000;
@@ -559,6 +641,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     }
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ─── Goal milestone notifications ────────────────────────────────────────
