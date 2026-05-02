@@ -280,4 +280,37 @@ describe("DashboardPage — CSV export error banner", () => {
 
     expect(screen.queryByText(/Export failed\. Please try again\./i)).toBeNull();
   });
+
+  it("error banner clears and success banner appears when a second export succeeds", async () => {
+    vi.useFakeTimers();
+
+    // First export: fail → error banner appears
+    mockFetchFailure();
+
+    act(() => { renderPage(); });
+    act(() => { navigateToSessionsTab(); });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /export csv/i }));
+    });
+
+    // Advance past the 16 ms visibility tick so the banner is fully shown
+    act(() => { vi.advanceTimersByTime(20); });
+
+    expect(screen.getByText(/Export failed\. Please try again\./i)).toBeInTheDocument();
+    expect(screen.queryByText(/CSV exported successfully/i)).toBeNull();
+
+    // Second export: succeed → error banner dismissed, success banner shown
+    mockFetchSuccess();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /export csv/i }));
+    });
+
+    // Advance past the 350 ms fade-out so the error banner fully unmounts
+    act(() => { vi.advanceTimersByTime(400); });
+
+    expect(screen.queryByText(/Export failed\. Please try again\./i)).toBeNull();
+    expect(screen.getByText(/CSV exported successfully\./i)).toBeInTheDocument();
+  });
 });
