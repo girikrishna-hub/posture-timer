@@ -223,6 +223,31 @@ self.addEventListener("push", (event: PushEvent) => {
   );
 });
 
+// Navigate an existing window to the given URL (or open a new one).
+// Uses WindowClient.navigate() so the app routes to the right page even if
+// a different page is currently open — important when both posture and bladder
+// notifications can be live at the same time.
+function openOrNavigate(
+  windowClients: readonly WindowClient[],
+  url: string,
+): Promise<WindowClient | null> {
+  if (windowClients.length === 0) {
+    return self.clients.openWindow(url);
+  }
+  const target = windowClients[0];
+  // Only navigate if not already on the target page — avoids an unnecessary
+  // reload when the user happens to already be viewing that page.
+  const currentPath = new URL(target.url as string).pathname;
+  const targetPath = new URL(url, "https://placeholder").pathname;
+  if (currentPath === targetPath) {
+    return target.focus().then(() => null);
+  }
+  return (target as WindowClient)
+    .navigate(url)
+    .then(() => target.focus())
+    .catch(() => target.focus().then(() => null));
+}
+
 self.addEventListener("notificationclick", (event: NotificationEvent) => {
   event.notification.close();
 
@@ -243,8 +268,9 @@ self.addEventListener("notificationclick", (event: NotificationEvent) => {
             );
             if (clients.length === 0) {
               // App not open — open it so user can confirm
-              void self.clients.openWindow(notifData?.url ?? "/bladder");
+              return self.clients.openWindow(notifData?.url ?? "/bladder");
             }
+            return undefined;
           }),
       );
       return;
@@ -274,33 +300,19 @@ self.addEventListener("notificationclick", (event: NotificationEvent) => {
       return;
     }
 
-    // Default click → open app at bladder page
+    // Default click → navigate to bladder page regardless of current page
     event.waitUntil(
       self.clients
         .matchAll({ type: "window", includeUncontrolled: true })
-        .then((windowClients) => {
-          const bladderClients = windowClients.filter(
-            (c) => (c.url as string).includes("/bladder"),
-          );
-          const target = bladderClients[0] ?? windowClients[0];
-          if (target) return target.focus();
-          return self.clients.openWindow(notifData?.url ?? "/bladder");
-        }),
+        .then((windowClients) => openOrNavigate(windowClients, notifData?.url ?? "/bladder")),
     );
     return;
   }
 
-  // ── Default (posture) notification click ──────────────────────────────────
+  // ── Posture notification click → navigate to timer page ───────────────────
   event.waitUntil(
     self.clients
       .matchAll({ type: "window", includeUncontrolled: true })
-      .then((windowClients) => {
-        if (windowClients.length > 0) {
-          const focused =
-            windowClients.find((c) => c.focused) ?? windowClients[0];
-          return focused.focus();
-        }
-        return self.clients.openWindow("/");
-      })
+      .then((windowClients) => openOrNavigate(windowClients, notifData?.url ?? "/")),
   );
 });
