@@ -990,3 +990,122 @@ describe("midnight reset — cleanup cancels timer on unmount", () => {
     setTimeoutSpy.mockRestore();
   });
 });
+
+// ---------------------------------------------------------------------------
+// midnight reset — BroadcastChannel message triggers doReset on a separate
+// hook instance (background-tab path)
+//
+// The hook has two paths to doReset():
+//   1. The local setTimeout that fires at midnight (foreground/active-tab path)
+//   2. The BroadcastChannel onmessage handler (background-tab path)
+//
+// This suite verifies path 2: when a "midnight-reset" message arrives on the
+// BroadcastChannel, the receiving hook instance calls doReset() and resets
+// goalAchieved (and celebrating) to false — even though its own setTimeout
+// has not yet fired.
+//
+// Strategy:
+//   • Use fake timers so neither hook's midnight setTimeout fires during the test.
+//   • Seed localStorage so both hook instances initialise with goalAchieved=true.
+//   • Create a third BroadcastChannel in the test and post "midnight-reset".
+//     Per the BroadcastChannel spec the sender does not receive its own message,
+//     so both hook instances (neither is the sender) receive it and call doReset().
+//   • Verify that goalAchieved flips to false on the second (non-firing) instance,
+//     proving the onmessage handler works correctly.
+// ---------------------------------------------------------------------------
+
+describe("midnight reset — BroadcastChannel message triggers reset on separate hook instance", () => {
+  let OriginalBroadcastChannel: typeof BroadcastChannel;
+  // Tracks every BroadcastChannel instance created during the test, in order.
+  let busInstances: Array<{ postMessage: (data: unknown) => void; close: () => void }>;
+
+  beforeEach(() => {
+    localStorage.clear();
+    // Seed today's date so both hook instances initialise with goalAchieved=true.
+    saveCelebratedDate(todayStr());
+
+    OriginalBroadcastChannel = globalThis.BroadcastChannel;
+    busInstances = [];
+
+    // Minimal in-memory BroadcastChannel bus.  All instances registered under
+    // the same channel name share a peer list.  postMessage delivers to every
+    // peer EXCEPT the sender, faithfully matching the BroadcastChannel spec
+    // and exercising the actual cross-instance delivery path without relying on
+    // jsdom's native (or absent) cross-tab support.
+    const channelPeers = new Map<string, typeof busInstances>();
+
+    const MockBC = vi.fn().mockImplementation((name: string) => {
+      let _onmessage: ((ev: { data: unknown }) => void) | null = null;
+
+      const instance = {
+        get onmessage() { return _onmessage; },
+        set onmessage(h: ((ev: { data: unknown }) => void) | null) { _onmessage = h; },
+        postMessage(data: unknown) {
+          for (const peer of channelPeers.get(name) ?? []) {
+            if (peer !== instance) {
+              // Access the handler via the public getter so the delivery path
+              // goes through the same accessor the spec defines.
+              (peer as { onmessage: ((ev: { data: unknown }) => void) | null }).onmessage?.({ data });
+            }
+          }
+        },
+        close() {
+          const peers = channelPeers.get(name);
+          if (peers) {
+            const idx = peers.indexOf(instance);
+            if (idx !== -1) peers.splice(idx, 1);
+          }
+        },
+      };
+
+      if (!channelPeers.has(name)) channelPeers.set(name, []);
+      channelPeers.get(name)!.push(instance);
+      busInstances.push(instance);
+      return instance;
+    });
+
+    vi.stubGlobal("BroadcastChannel", MockBC);
+
+    // Freeze timers so neither hook's midnight setTimeout fires during the
+    // test — we want to exercise only the BroadcastChannel path.
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.stubGlobal("BroadcastChannel", OriginalBroadcastChannel);
+    localStorage.clear();
+  });
+
+  it("receiving a midnight-reset BroadcastChannel message resets goalAchieved on the hook instance", () => {
+    // Mount two hook instances — simulating two open browser tabs.
+    const hook1 = renderHook(() =>
+      useGoalCelebration({ liveGoalPercent: 110 }),
+    );
+    const hook2 = renderHook(() =>
+      useGoalCelebration({ liveGoalPercent: 110 }),
+    );
+
+    // Both hooks start with goalAchieved=true because CELEBRATION_KEY === today.
+    expect(hook1.result.current.goalAchieved).toBe(true);
+    expect(hook2.result.current.goalAchieved).toBe(true);
+
+    // Each hook created one BroadcastChannel instance, in mount order.
+    expect(busInstances).toHaveLength(2);
+    const [channel1] = busInstances; // hook1's channel — the "sending tab"
+
+    // Simulate the first tab's midnight timer posting "midnight-reset".
+    // The in-memory bus delivers the message to hook2's channel (sender excluded
+    // per spec), triggering hook2's onmessage handler → doReset().
+    act(() => {
+      channel1.postMessage("midnight-reset");
+    });
+
+    // hook2 (receiving/background tab) must have called doReset().
+    expect(hook2.result.current.goalAchieved).toBe(false);
+    expect(hook2.result.current.celebrating).toBe(false);
+
+    // hook1 (sender) does not receive its own message — state is unchanged.
+    expect(hook1.result.current.goalAchieved).toBe(true);
+  });
+});
