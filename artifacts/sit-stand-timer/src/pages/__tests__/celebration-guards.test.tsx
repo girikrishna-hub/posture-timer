@@ -11,6 +11,10 @@ import {
   shouldTriggerGoalCelebration,
   computeGoalMetOnLoad,
 } from "@/pages/TimerPage";
+import {
+  getCelebratedDate,
+  saveCelebratedDate,
+} from "@/hooks/useGoalCelebration";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -715,5 +719,125 @@ describe("computeGoalMetOnLoad — goalMetOnLoad initialisation", () => {
     const cls = goalLabelClass(true, onLoad);
     expect(cls).toContain("goal-label-appear");
     expect(cls).toContain("text-emerald-600");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getCelebratedDate / saveCelebratedDate — localStorage deduplication helpers
+//
+// These unit tests cover the two localStorage accessors that power the second
+// guard inside the celebration useEffect:
+//
+//   const today = todayStr();
+//   if (getCelebratedDate() === today) return;   ← this guard
+//   saveCelebratedDate(today);
+//
+// They verify: correct reads/writes, roundtrip fidelity, and that the boolean
+// expression used as the guard evaluates as expected for the three key states
+// (key absent, key = today, key = yesterday).
+// ---------------------------------------------------------------------------
+
+describe("getCelebratedDate / saveCelebratedDate — localStorage deduplication helpers", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it("getCelebratedDate returns an empty string when CELEBRATION_KEY is absent", () => {
+    expect(getCelebratedDate()).toBe("");
+  });
+
+  it("getCelebratedDate returns the stored date string when CELEBRATION_KEY is set", () => {
+    const date = "2026-05-01";
+    localStorage.setItem(CELEBRATION_KEY, date);
+    expect(getCelebratedDate()).toBe(date);
+  });
+
+  it("saveCelebratedDate writes the given date to CELEBRATION_KEY in localStorage", () => {
+    const date = "2026-05-01";
+    saveCelebratedDate(date);
+    expect(localStorage.getItem(CELEBRATION_KEY)).toBe(date);
+  });
+
+  it("getCelebratedDate reflects a value written by saveCelebratedDate (roundtrip)", () => {
+    const date = todayStr();
+    saveCelebratedDate(date);
+    expect(getCelebratedDate()).toBe(date);
+  });
+
+  it("deduplication guard evaluates to false when CELEBRATION_KEY is absent — first celebration is allowed", () => {
+    const today = todayStr();
+    // Nothing written yet: getCelebratedDate() returns "" ≠ today
+    expect(getCelebratedDate() === today).toBe(false);
+  });
+
+  it("deduplication guard evaluates to true after saveCelebratedDate(today) — re-celebration is blocked", () => {
+    const today = todayStr();
+    saveCelebratedDate(today);
+    // Guard fires: getCelebratedDate() === today
+    expect(getCelebratedDate() === today).toBe(true);
+  });
+
+  it("deduplication guard evaluates to false when CELEBRATION_KEY holds yesterday's date — new-day celebration is allowed", () => {
+    // Simulate: key was written on April 30, it is now May 1
+    vi.useFakeTimers({ now: new Date(2026, 4, 1, 0, 0, 1, 0).getTime() });
+    localStorage.setItem(CELEBRATION_KEY, "2026-04-30");
+
+    const today = todayStr(); // "2026-05-01"
+    expect(getCelebratedDate() === today).toBe(false);
+
+    vi.useRealTimers();
+  });
+
+  it("saveCelebratedDate overwrites a stale date — guard evaluates to true for the new date", () => {
+    // Old entry from yesterday
+    localStorage.setItem(CELEBRATION_KEY, "2026-04-30");
+
+    // Save today's date (as the celebration effect would do)
+    const today = todayStr();
+    saveCelebratedDate(today);
+
+    expect(getCelebratedDate()).toBe(today);
+    expect(getCelebratedDate() === today).toBe(true);
+  });
+
+  it("shouldTriggerGoalCelebration returns true but guard would block when key equals today (scenario composition)", () => {
+    // Compose the two guards as they appear in the useEffect:
+    //   1. shouldTriggerGoalCelebration(prev, current) — prevGoalPercentRef crossing check
+    //   2. getCelebratedDate() === today              — localStorage deduplication check
+    //
+    // Scenario: prev=60, current=100 satisfies the crossing check (true),
+    // but CELEBRATION_KEY already holds today → the compound condition blocks.
+    const today = todayStr();
+    saveCelebratedDate(today); // simulate: already celebrated this session/day
+
+    const prev = 60;
+    const current = 100;
+
+    const crossingDetected = shouldTriggerGoalCelebration(prev, current);
+    const alreadyCelebrated = getCelebratedDate() === today;
+
+    expect(crossingDetected).toBe(true);
+    expect(alreadyCelebrated).toBe(true);
+    // The effective gate the hook uses: crossing AND NOT already celebrated
+    expect(crossingDetected && !alreadyCelebrated).toBe(false);
+  });
+
+  it("both guards pass when crossing occurs for the first time today (celebration is allowed)", () => {
+    // CELEBRATION_KEY absent: fresh session, first crossing
+    const today = todayStr();
+    const prev = 80;
+    const current = 100;
+
+    const crossingDetected = shouldTriggerGoalCelebration(prev, current);
+    const alreadyCelebrated = getCelebratedDate() === today;
+
+    expect(crossingDetected).toBe(true);
+    expect(alreadyCelebrated).toBe(false);
+    // Effective gate: crossing AND NOT already celebrated → celebration fires
+    expect(crossingDetected && !alreadyCelebrated).toBe(true);
   });
 });

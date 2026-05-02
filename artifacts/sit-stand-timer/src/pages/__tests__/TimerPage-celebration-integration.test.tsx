@@ -9,6 +9,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import { CELEBRATION_KEY, BADGE_HINT_KEY, MIDNIGHT_CHANNEL_NAME, todayStr } from "@/pages/TimerPage";
+import { playGoalCelebrationTone } from "@/utils/audio";
 
 // ---------------------------------------------------------------------------
 // Module mocks — declared at top level so they hoist correctly
@@ -574,5 +575,158 @@ describe("TimerPage — end-to-end: cross goal then reload", () => {
 
     const replayBadge = screen.getByRole("button", { name: /replay goal celebration/i });
     expect(replayBadge.style.animation).toContain("badge-pop-in");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Scenario 7 — localStorage deduplication guard (getCelebratedDate === today)
+//
+// These tests exercise the second guard inside the celebration useEffect:
+//
+//   const today = todayStr();
+//   if (getCelebratedDate() === today) return;   ← this guard
+//   saveCelebratedDate(today);
+//   ...celebration fires...
+//
+// The guard prevents re-celebration when the goal is crossed mid-session but
+// CELEBRATION_KEY already holds today's date (e.g. if another session already
+// celebrated earlier today, or if the goal percentage somehow dips back below
+// 100% then rises again).
+// ---------------------------------------------------------------------------
+
+describe("TimerPage — deduplication guard: CELEBRATION_KEY already equals today blocks re-celebration", () => {
+  it("playGoalCelebrationTone is NOT called when CELEBRATION_KEY already equals today before the goal crossing", () => {
+    // Arrange: pre-seed localStorage as if an earlier session already celebrated today.
+    localStorage.setItem(CELEBRATION_KEY, todayStr());
+
+    // Start with stats below the goal so prevGoalPercentRef can advance from a
+    // sub-100 value, making shouldTriggerGoalCelebration return true on crossing.
+    _mockTodayStats = buildStats(50, 60);
+    const { rerender } = renderPage();
+
+    // Confirm the tone has not fired during initial render.
+    expect(playGoalCelebrationTone).not.toHaveBeenCalled();
+
+    // Act: cross the goal — shouldTriggerGoalCelebration(prev<100, 100) = true,
+    // but the localStorage guard (getCelebratedDate() === today) must block.
+    act(() => {
+      _mockTodayStats = buildStats(60, 60);
+      rerender(<TimerPage />);
+    });
+
+    // Assert: the deduplication guard fired — tone was never played.
+    expect(playGoalCelebrationTone).not.toHaveBeenCalled();
+  });
+
+  it("CELEBRATION_KEY is NOT overwritten when the dedup guard fires (value stays as originally set)", () => {
+    const existingValue = todayStr();
+    localStorage.setItem(CELEBRATION_KEY, existingValue);
+
+    _mockTodayStats = buildStats(50, 60);
+    const { rerender } = renderPage();
+
+    act(() => {
+      _mockTodayStats = buildStats(60, 60);
+      rerender(<TimerPage />);
+    });
+
+    // The guard short-circuits before saveCelebratedDate — value is unchanged.
+    expect(localStorage.getItem(CELEBRATION_KEY)).toBe(existingValue);
+  });
+
+  it("no celebration banner (celebrating state) becomes active when dedup guard fires", () => {
+    // The celebrating state drives the GoalProgressRing celebration sequence.
+    // While we cannot read React state directly, we can verify that the badge
+    // does NOT appear with the fresh badge-pop-in timing that only happens
+    // after a celebration (i.e. the 2 s setCelebrating → false timeout).
+    vi.useFakeTimers();
+    localStorage.setItem(CELEBRATION_KEY, todayStr());
+
+    _mockTodayStats = buildStats(50, 60);
+    const { rerender } = renderPage();
+
+    act(() => {
+      _mockTodayStats = buildStats(60, 60);
+      rerender(<TimerPage />);
+    });
+
+    // Advance past the celebration timeout — no badge should appear freshly.
+    act(() => {
+      vi.advanceTimersByTime(2100);
+    });
+
+    // The badge IS present (goalAchieved=true from the pre-existing localStorage)
+    // but it must NOT carry badge-pop-in (skipBadgePopInRef=true, no fresh celebration).
+    const badge = screen.getByRole("button", { name: /replay goal celebration/i });
+    expect(badge.style.animation).not.toContain("badge-pop-in");
+  });
+
+  it("playGoalCelebrationTone is called exactly once even when stats dip below 100% and then re-cross (genuine dip-and-recross)", () => {
+    // Scenario: fresh session, no CELEBRATION_KEY.
+    // 1. 50% → 100%: first crossing, celebration fires, CELEBRATION_KEY written.
+    // 2. 100% → 80%: prevGoalPercentRef drops to 80 (below goal again).
+    // 3. 80% → 100%: shouldTriggerGoalCelebration(80, 100) = true — the
+    //    prevGoalPercentRef crossing guard ALONE would NOT prevent re-firing here.
+    //    Only the localStorage dedup guard (getCelebratedDate() === today) blocks it.
+    _mockTodayStats = buildStats(50, 60);
+    const { rerender } = renderPage();
+
+    expect(playGoalCelebrationTone).not.toHaveBeenCalled();
+
+    // Step 1 — first crossing: 50% → 100%, celebration fires once.
+    act(() => {
+      _mockTodayStats = buildStats(60, 60);
+      rerender(<TimerPage />);
+    });
+
+    expect(playGoalCelebrationTone).toHaveBeenCalledTimes(1);
+    expect(localStorage.getItem(CELEBRATION_KEY)).toBe(todayStr());
+
+    // Step 2 — stats dip below goal (e.g. goal minutes changed): prevGoalPercentRef → <100.
+    act(() => {
+      _mockTodayStats = buildStats(48, 60); // 80% — below goal again
+      rerender(<TimerPage />);
+    });
+
+    // No new tone call after the dip.
+    expect(playGoalCelebrationTone).toHaveBeenCalledTimes(1);
+
+    // Step 3 — genuine re-crossing: prevGoalPercentRef=80 → 100%.
+    // shouldTriggerGoalCelebration(80, 100) is true, but localStorage guard blocks.
+    act(() => {
+      _mockTodayStats = buildStats(60, 60);
+      rerender(<TimerPage />);
+    });
+
+    // Still exactly one call — the localStorage dedup guard was the decisive blocker.
+    expect(playGoalCelebrationTone).toHaveBeenCalledTimes(1);
+  });
+
+  it("saveCelebratedDate is called on the first crossing so subsequent renders are blocked by the guard", () => {
+    // Start with no key.
+    expect(localStorage.getItem(CELEBRATION_KEY)).toBeNull();
+
+    _mockTodayStats = buildStats(50, 60);
+    const { rerender } = renderPage();
+
+    // Cross the goal — saveCelebratedDate writes today.
+    act(() => {
+      _mockTodayStats = buildStats(60, 60);
+      rerender(<TimerPage />);
+    });
+
+    const savedDate = localStorage.getItem(CELEBRATION_KEY);
+    expect(savedDate).toBe(todayStr());
+
+    // A subsequent render with the same 100% stat does not change the value
+    // (the guard fires, short-circuiting before any write).
+    act(() => {
+      _mockTodayStats = buildStats(60, 60);
+      rerender(<TimerPage />);
+    });
+
+    expect(localStorage.getItem(CELEBRATION_KEY)).toBe(savedDate);
+    // Tone was called exactly once across all renders.
+    expect(playGoalCelebrationTone).toHaveBeenCalledTimes(1);
   });
 });
