@@ -13,6 +13,7 @@ import {
   useGoalCelebration,
   CELEBRATION_KEY,
   BADGE_HINT_KEY,
+  MIDNIGHT_CHANNEL_NAME,
   todayStr,
   msUntilMidnight,
   shouldTriggerGoalCelebration,
@@ -23,6 +24,7 @@ import {
 export {
   CELEBRATION_KEY,
   BADGE_HINT_KEY,
+  MIDNIGHT_CHANNEL_NAME,
   todayStr,
   msUntilMidnight,
   shouldTriggerGoalCelebration,

@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import {
   TrophyBadge,
   goalLabelClass,
   CELEBRATION_KEY,
   BADGE_HINT_KEY,
+  MIDNIGHT_CHANNEL_NAME,
   todayStr,
   msUntilMidnight,
   shouldTriggerGoalCelebration,

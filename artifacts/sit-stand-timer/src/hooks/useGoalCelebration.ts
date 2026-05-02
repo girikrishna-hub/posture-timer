@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { playGoalCelebrationTone } from "@/utils/audio";
 
+// ─── Cross-tab coordination ───────────────────────────────────────────────────
+
+/** BroadcastChannel name used to synchronise the midnight reset across tabs. */
+export const MIDNIGHT_CHANNEL_NAME = "sit-stand-midnight-reset";
+
 // ─── localStorage keys ───────────────────────────────────────────────────────
 
 export const CELEBRATION_KEY = "sit-stand-goal-celebrated";
@@ -192,31 +197,58 @@ export function useGoalCelebration({
     };
   }, []);
 
-  // Reset all celebration/badge state at midnight so a new day starts clean
+  // Reset all celebration/badge state at midnight so a new day starts clean.
+  // A BroadcastChannel is used to notify background tabs immediately when any
+  // tab's timeout fires, so throttled timers in hidden tabs never miss the reset.
   useEffect(() => {
     let dayTimer: ReturnType<typeof setTimeout>;
 
+    // Open a cross-tab channel if the browser supports it (graceful fallback).
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel(MIDNIGHT_CHANNEL_NAME);
+    } catch {
+      // BroadcastChannel not supported — timeout-only fallback is sufficient.
+    }
+
+    function doReset() {
+      setCelebrating(false);
+      setGoalAchieved(false);
+      freshAchievementRef.current = false;
+      skipBadgePopInRef.current = false;
+      setBadgeHintShown(false);
+      hintScheduledRef.current = false;
+      if (celebrationTimerRef.current) {
+        clearTimeout(celebrationTimerRef.current);
+        celebrationTimerRef.current = null;
+      }
+      prevGoalPercentRef.current = null;
+      hasSetGoalMetOnLoad.current = false;
+      setGoalMetOnLoad(null);
+    }
+
     function scheduleMidnightReset() {
       dayTimer = setTimeout(() => {
-        setCelebrating(false);
-        setGoalAchieved(false);
-        freshAchievementRef.current = false;
-        skipBadgePopInRef.current = false;
-        setBadgeHintShown(false);
-        hintScheduledRef.current = false;
-        if (celebrationTimerRef.current) {
-          clearTimeout(celebrationTimerRef.current);
-          celebrationTimerRef.current = null;
-        }
-        prevGoalPercentRef.current = null;
-        hasSetGoalMetOnLoad.current = false;
-        setGoalMetOnLoad(null);
+        // Signal all other open tabs before resetting locally.
+        try { channel?.postMessage("midnight-reset"); } catch { /* ignore */ }
+        doReset();
         scheduleMidnightReset();
       }, msUntilMidnight());
     }
 
+    // Listen for the reset signal broadcast by whichever tab fires first.
+    // Guard on the payload so unrelated messages on the same channel are ignored.
+    if (channel) {
+      channel.onmessage = (ev) => {
+        if (ev.data === "midnight-reset") doReset();
+      };
+    }
+
     scheduleMidnightReset();
-    return () => clearTimeout(dayTimer);
+    return () => {
+      clearTimeout(dayTimer);
+      channel?.close();
+    };
   }, []);
 
   const handleBadgeHintShown = useCallback(() => {

@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
-import { CELEBRATION_KEY, BADGE_HINT_KEY, todayStr } from "@/pages/TimerPage";
+import { CELEBRATION_KEY, BADGE_HINT_KEY, MIDNIGHT_CHANNEL_NAME, todayStr } from "@/pages/TimerPage";
 
 // ---------------------------------------------------------------------------
 // Module mocks — declared at top level so they hoist correctly
@@ -415,6 +415,99 @@ describe("TimerPage — midnight reset clears daily progress", () => {
     expect(
       screen.getByRole("button", { name: /replay goal celebration/i }),
     ).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Scenario 6 — cross-tab midnight reset via BroadcastChannel
+// ---------------------------------------------------------------------------
+
+describe("TimerPage — cross-tab midnight reset via BroadcastChannel", () => {
+  // We track the mock channel instance created when the component mounts so
+  // tests can inspect postMessage calls and simulate incoming messages.
+  let mockPostMessage: ReturnType<typeof vi.fn>;
+  let capturedOnMessage: ((ev: { data: string }) => void) | null;
+  let OriginalBroadcastChannel: typeof BroadcastChannel;
+
+  beforeEach(() => {
+    mockPostMessage = vi.fn();
+    capturedOnMessage = null;
+
+    // Save the real BroadcastChannel (jsdom provides one) and swap it for a
+    // controllable mock so we can inspect what the hook sends and deliver
+    // synthetic messages from "another tab".
+    OriginalBroadcastChannel = globalThis.BroadcastChannel;
+    const MockBroadcastChannel = vi.fn().mockImplementation((name: string) => {
+      void name;
+      const instance = {
+        postMessage: mockPostMessage,
+        close: vi.fn(),
+        set onmessage(handler: (ev: { data: string }) => void) {
+          capturedOnMessage = handler;
+        },
+      };
+      return instance;
+    });
+    vi.stubGlobal("BroadcastChannel", MockBroadcastChannel);
+  });
+
+  afterEach(() => {
+    vi.stubGlobal("BroadcastChannel", OriginalBroadcastChannel);
+    vi.useRealTimers();
+    localStorage.clear();
+    vi.clearAllMocks();
+  });
+
+  it("MIDNIGHT_CHANNEL_NAME constant equals 'sit-stand-midnight-reset'", () => {
+    expect(MIDNIGHT_CHANNEL_NAME).toBe("sit-stand-midnight-reset");
+  });
+
+  it("posts 'midnight-reset' on the BroadcastChannel when the midnight timeout fires", () => {
+    // Set the clock to 23:59:59 on April 30 — ~1 s from midnight.
+    vi.useFakeTimers({ now: new Date(2026, 3, 30, 23, 59, 59, 0).getTime() });
+
+    // Goal already achieved so the badge is present before midnight.
+    localStorage.setItem(CELEBRATION_KEY, "2026-04-30");
+    _mockTodayStats = buildStats(60, 60);
+
+    act(() => { render(<TimerPage />); });
+
+    // Confirm the channel was opened and no message sent yet.
+    expect(mockPostMessage).not.toHaveBeenCalled();
+
+    // Advance past midnight — the setTimeout fires in this tab.
+    act(() => { vi.advanceTimersByTime(1001); });
+
+    // The hook must broadcast before resetting locally.
+    expect(mockPostMessage).toHaveBeenCalledWith("midnight-reset");
+    expect(mockPostMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("resets cleanly when it receives a 'midnight-reset' message from another tab", () => {
+    // Stay on April 30, goal already achieved — badge is visible.
+    vi.useFakeTimers({ now: new Date(2026, 3, 30, 12, 0, 0, 0).getTime() });
+    localStorage.setItem(CELEBRATION_KEY, "2026-04-30");
+    _mockTodayStats = buildStats(60, 60);
+
+    act(() => { render(<TimerPage />); });
+
+    // Badge is visible before the cross-tab reset.
+    expect(
+      screen.getByRole("button", { name: /replay goal celebration/i }),
+    ).toBeInTheDocument();
+
+    // Confirm the hook registered an onmessage listener.
+    expect(capturedOnMessage).not.toBeNull();
+
+    // Simulate the broadcast arriving from another tab.
+    act(() => {
+      capturedOnMessage!({ data: "midnight-reset" });
+    });
+
+    // This tab must now show no badge — goalAchieved reset to false.
+    expect(
+      screen.queryByRole("button", { name: /replay goal celebration/i }),
+    ).toBeNull();
   });
 });
 
