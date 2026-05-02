@@ -506,6 +506,44 @@ describe("midnight reset — localStorage guards clear for the new day", () => {
     vi.advanceTimersByTime(1500);
     expect(todayStr()).toBe("2026-05-01");
   });
+
+  it("auto-repeat: callback fires exactly once per midnight crossing over two consecutive nights", () => {
+    // Start just before midnight on April 30 so the first crossing is ~1 second away.
+    vi.useFakeTimers({ now: new Date(2026, 3, 30, 23, 59, 59, 0).getTime() });
+
+    let fireCount = 0;
+
+    // Mirror the scheduleMidnightReset recursive pattern from useGoalCelebration.ts:
+    // after firing it immediately re-schedules itself for the *next* midnight.
+    function scheduleMidnightReset() {
+      setTimeout(() => {
+        fireCount++;
+        scheduleMidnightReset();
+      }, msUntilMidnight());
+    }
+
+    scheduleMidnightReset();
+
+    // Nothing should have fired yet — we are still on April 30.
+    expect(fireCount).toBe(0);
+
+    // ── First midnight crossing: April 30 → May 1 ───────────────────────────
+    // Advance 1 500 ms to clear the ~1 000 ms timer.
+    vi.advanceTimersByTime(1_500);
+    // Clock is now May 1 00:00:00.500; the callback has fired once and
+    // re-scheduled itself for roughly 24 h from now (May 2 midnight).
+    expect(fireCount).toBe(1);
+
+    // Advance almost all of the next 24 hours — the second timer should NOT
+    // have fired yet.
+    vi.advanceTimersByTime(24 * 60 * 60 * 1_000 - 1_000);
+    expect(fireCount).toBe(1);
+
+    // ── Second midnight crossing: May 1 → May 2 ─────────────────────────────
+    // Advance the remaining time to push past May 2 midnight.
+    vi.advanceTimersByTime(2_000);
+    expect(fireCount).toBe(2);
+  });
 });
 
 // ---------------------------------------------------------------------------
