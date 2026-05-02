@@ -55,9 +55,19 @@ interface UseFitbitDriftOptions {
 }
 
 export function useFitbitDrift({ onAutoSwitch }: UseFitbitDriftOptions = {}) {
-  const enabled = (() => {
+  const [enabled, setEnabled] = useState(() => {
     try { return localStorage.getItem("fitbitAssisted") === "true"; } catch { return false; }
-  })();
+  });
+
+  useEffect(() => {
+    function onStorage(e: StorageEvent) {
+      if (e.key === "fitbitAssisted") {
+        setEnabled(e.newValue === "true");
+      }
+    }
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
   const { mode, switchMode, isInLockWindow } = useTimer();
   const modeRef = useRef(mode);
   useEffect(() => { modeRef.current = mode; }, [mode]);

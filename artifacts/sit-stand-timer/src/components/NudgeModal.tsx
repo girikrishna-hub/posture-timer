@@ -105,7 +105,7 @@ export function NudgeModal({ nudge, onConfirm, onCancel }: NudgeModalProps) {
           </div>
 
           <p className="text-center text-xs text-muted-foreground">
-            Auto-switching in {remaining}s · Powered by Fitbit
+            Auto-switching in {remaining}s · Powered by Google Fit
           </p>
         </div>
       </div>

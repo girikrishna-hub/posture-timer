@@ -22,14 +22,20 @@ export interface BladderLog {
 
 // ─── Storage helpers ────────────────────────────────────────────────────────
 
-const KEY_ENABLED  = "bladder_enabled";
-const KEY_INTERVAL = "bladder_interval_minutes";
-const KEY_LOGS     = "bladder_logs";
-const KEY_PENDING  = "bladder_pending_log";
+const KEY_ENABLED      = "bladder_enabled";
+const KEY_INTERVAL     = "bladder_interval_minutes";
+const KEY_LOGS         = "bladder_logs";
+const KEY_PENDING      = "bladder_pending_log";
+/**
+ * Absolute epoch-ms timestamp of when the NEXT void should fire.
+ * Persisted so a page refresh or background-kill can resume the exact
+ * remaining time rather than restarting the full interval.
+ */
+const KEY_NEXT_VOID_AT = "bladder_next_void_at";
 
-const DEFAULT_INTERVAL = 60;
-const MIN_INTERVAL     = 45;
-const MAX_INTERVAL     = 120;
+export const DEFAULT_INTERVAL = 60;
+export const MIN_INTERVAL     = 45;
+export const MAX_INTERVAL     = 120;
 
 function todayStr(): string {
   const d = new Date();
@@ -78,6 +84,21 @@ function savePending(log: BladderLog | null) {
   } catch { /* ignore */ }
 }
 
+function loadNextVoidAt(): number | null {
+  try {
+    const raw = localStorage.getItem(KEY_NEXT_VOID_AT);
+    if (!raw) return null;
+    const n = parseInt(raw, 10);
+    return Number.isNaN(n) ? null : n;
+  } catch { return null; }
+}
+function saveNextVoidAt(epochMs: number | null) {
+  try {
+    if (epochMs === null) localStorage.removeItem(KEY_NEXT_VOID_AT);
+    else localStorage.setItem(KEY_NEXT_VOID_AT, String(epochMs));
+  } catch { /* ignore */ }
+}
+
 // ─── SW helpers ─────────────────────────────────────────────────────────────
 
 function scheduleSWBladder(delayMs: number, logId: string) {
@@ -98,8 +119,9 @@ function cancelSWBladder() {
   }).catch(() => { /* ignore */ });
 }
 
-function showBladderNotification() {
+function showBladderNotificationNow() {
   if (!("serviceWorker" in navigator)) return;
+  if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
   navigator.serviceWorker.ready.then((reg) => {
     const opts = {
       body: "Go now. Do not delay.",
@@ -134,7 +156,7 @@ export type BladderSuggestion = "increase" | "decrease" | null;
 export function computeDaySummary(logs: BladderLog[], date: string): BladderDaySummary {
   const day = logs.filter((l) => l.date === date && l.status !== "pending");
   const totalCycles = day.length;
-  const onTimeCount = day.filter((l) => l.status === "done_on_time").length;
+  const onTimeCount  = day.filter((l) => l.status === "done_on_time").length;
   const delayedCount = day.filter((l) => l.status === "delayed").length;
   const leakageCount = day.filter((l) => l.status === "leakage").length;
   const onTimePercent = totalCycles > 0 ? Math.round((onTimeCount / totalCycles) * 100) : 0;
@@ -150,9 +172,6 @@ export function computeSuggestion(
   logs: BladderLog[],
   intervalMinutes: number,
 ): BladderSuggestion {
-  const today = todayStr();
-
-  // Build last-3-days strings (excluding today which may be incomplete)
   const past3: string[] = [];
   for (let offset = 1; offset <= 3; offset++) {
     const d = new Date();
@@ -161,25 +180,18 @@ export function computeSuggestion(
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
     );
   }
-
-  // Need at least 1 completed cycle each day
   const dayLogs = past3.map((date) =>
     logs.filter((l) => l.date === date && l.status !== "pending"),
   );
   if (dayLogs.some((d) => d.length === 0)) return null;
-
-  // Any leakage → suggest decrease
   if (dayLogs.some((d) => d.some((l) => l.status === "leakage"))) {
     return intervalMinutes > MIN_INTERVAL ? "decrease" : null;
   }
-
-  // 3 days ≥90% on-time, no leakage → suggest increase
   const allOnTime = dayLogs.every((d) => {
     const onTime = d.filter((l) => l.status === "done_on_time").length;
     return d.length > 0 && onTime / d.length >= 0.9;
   });
   if (allOnTime) return intervalMinutes < MAX_INTERVAL ? "increase" : null;
-
   return null;
 }
 
@@ -202,23 +214,27 @@ interface BladderContextValue {
 const BladderContext = createContext<BladderContextValue | null>(null);
 
 export function BladderProvider({ children }: { children: React.ReactNode }) {
-  const [enabled, setEnabledState]     = useState(loadEnabled);
+  const [enabled, setEnabledState]       = useState(loadEnabled);
   const [intervalMinutes, setIntervalState] = useState(loadInterval);
-  const [logs, setLogsState]           = useState<BladderLog[]>(loadLogs);
-  const [pendingLog, setPendingLog]    = useState<BladderLog | null>(loadPending);
-  const [nextVoidAt, setNextVoidAt]    = useState<Date | null>(null);
+  const [logs, setLogsState]             = useState<BladderLog[]>(loadLogs);
+  const [pendingLog, setPendingLog]      = useState<BladderLog | null>(loadPending);
+  const [nextVoidAt, setNextVoidAt]      = useState<Date | null>(() => {
+    const stored = loadNextVoidAt();
+    return stored ? new Date(stored) : null;
+  });
 
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const startedAtRef = useRef<number | null>(null);
-  const intervalRef  = useRef(intervalMinutes);
+  const timerRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const intervalRef = useRef(intervalMinutes);
+  const enabledRef  = useRef(enabled);
 
   useEffect(() => { intervalRef.current = intervalMinutes; }, [intervalMinutes]);
+  useEffect(() => { enabledRef.current  = enabled; }, [enabled]);
 
-  // ── derived ──────────────────────────────────────────────────────────────
+  // ── derived ───────────────────────────────────────────────────────────────
   const todaySummary = computeDaySummary(logs, todayStr());
   const suggestion   = computeSuggestion(logs, intervalMinutes);
 
-  // ── commit helpers ────────────────────────────────────────────────────────
+  // ── storage commit helpers ─────────────────────────────────────────────────
   const commitLogs = useCallback((updated: BladderLog[]) => {
     saveLogs(updated);
     setLogsState(updated);
@@ -229,71 +245,105 @@ export function BladderProvider({ children }: { children: React.ReactNode }) {
     setPendingLog(log);
   }, []);
 
-  // ── fire a void cycle ─────────────────────────────────────────────────────
-  const fireCycle = useCallback(() => {
-    const now = new Date();
-    const log: BladderLog = {
-      id: crypto.randomUUID(),
-      date: todayStr(),
-      scheduledAt: now.toISOString(),
-      status: "pending",
-      intervalMinutes: intervalRef.current,
-    };
-    commitPending(log);
+  // ── fireCycle — create a pending log entry and show the notification ───────
+  // Uses a ref so scheduleTimer can call it without a stale closure.
+  const fireCycleRef = useRef<(() => void) | null>(null);
 
-    // Show notification (foreground or SW)
-    if (
-      typeof Notification !== "undefined" &&
-      Notification.permission === "granted"
-    ) {
-      showBladderNotification();
+  // ── scheduleTimer — arm (or immediately fire) the void-cycle timer ─────────
+  //
+  // Takes an absolute epoch-ms timestamp so a page refresh or foreground-resume
+  // can use the stored deadline instead of restarting the full interval.
+  //
+  // If the deadline is already past AND no pendingLog is pending, the cycle
+  // fires immediately (catches up after a background kill).
+  // If a pendingLog already exists the deadline is still in the future (it was
+  // set by the previous fireCycle call), so the timer just arms normally.
+  const scheduleTimer = useCallback((nextVoidAtMs: number) => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
     }
 
-    // Schedule next cycle
-    const nextMs = intervalRef.current * 60 * 1000;
-    const nextAt = new Date(Date.now() + nextMs);
-    setNextVoidAt(nextAt);
-    startedAtRef.current = Date.now();
+    const remaining = nextVoidAtMs - Date.now();
 
+    if (remaining <= 0) {
+      // Past due — fire now, but only if there is no unanswered pending log
+      // (a pending log means fireCycle already ran; we just need to wait for
+      // the user to respond and then the next scheduled timer will be active).
+      const currentPending = loadPending();
+      if (!currentPending) {
+        fireCycleRef.current?.();
+      }
+      return;
+    }
+
+    setNextVoidAt(new Date(nextVoidAtMs));
     timerRef.current = setTimeout(() => {
-      // Previous cycle not yet responded → mark as delayed
-      setPendingLog((prev) => {
-        if (prev) {
-          const updated = loadLogs().map((l) =>
-            l.id === prev.id ? { ...l, status: "delayed" as BladderStatus } : l,
-          );
-          // Ensure the previous pending log is persisted as delayed
-          if (!updated.find((l) => l.id === prev.id)) {
-            updated.push({ ...prev, status: "delayed" });
-          }
-          saveLogs(updated);
-          setLogsState(updated);
-          savePending(null);
+      timerRef.current = null;
+      // Auto-resolve any unanswered pending log as "delayed" before firing
+      const prev = loadPending();
+      if (prev) {
+        const existing = loadLogs();
+        const updated = existing.map((l) =>
+          l.id === prev.id ? { ...l, status: "delayed" as BladderStatus } : l,
+        );
+        if (!updated.find((l) => l.id === prev.id)) {
+          updated.push({ ...prev, status: "delayed" });
         }
-        return null;
-      });
-      fireCycle();
-    }, nextMs);
+        saveLogs(updated);
+        setLogsState(updated);
+        savePending(null);
+        setPendingLog(null);
+      }
+      fireCycleRef.current?.();
+    }, remaining);
 
-    scheduleSWBladder(nextMs, log.id);
-  }, [commitPending]);
+    // Keep SW in sync — always schedule relative to now so the notification
+    // fires at the correct absolute time even if the SW was cleared.
+    scheduleSWBladder(remaining, "");
+  }, []);
 
-  // ── start / stop ──────────────────────────────────────────────────────────
+  // Stable fireCycle that uses refs so scheduleTimer's closure stays fresh.
+  useEffect(() => {
+    fireCycleRef.current = () => {
+      const now = new Date();
+      const log: BladderLog = {
+        id: crypto.randomUUID(),
+        date: todayStr(),
+        scheduledAt: now.toISOString(),
+        status: "pending",
+        intervalMinutes: intervalRef.current,
+      };
+      savePending(log);
+      setPendingLog(log);
+
+      showBladderNotificationNow();
+
+      // Compute and persist the NEXT void deadline immediately so a crash or
+      // refresh between now and the user's response preserves the schedule.
+      const nextMs   = intervalRef.current * 60 * 1000;
+      const nextAtMs = Date.now() + nextMs;
+      saveNextVoidAt(nextAtMs);
+      setNextVoidAt(new Date(nextAtMs));
+
+      scheduleTimer(nextAtMs);
+    };
+  }, [scheduleTimer]);
+
+  // ── startSchedule — begin a fresh cycle from now ───────────────────────────
   const startSchedule = useCallback(() => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    const ms = intervalRef.current * 60 * 1000;
-    const nextAt = new Date(Date.now() + ms);
-    setNextVoidAt(nextAt);
-    startedAtRef.current = Date.now();
-    timerRef.current = setTimeout(fireCycle, ms);
-    scheduleSWBladder(ms, "");
-  }, [fireCycle]);
+    const ms        = intervalRef.current * 60 * 1000;
+    const nextAtMs  = Date.now() + ms;
+    saveNextVoidAt(nextAtMs);
+    scheduleTimer(nextAtMs);
+  }, [scheduleTimer]);
 
+  // ── stopSchedule — cancel everything ──────────────────────────────────────
   const stopSchedule = useCallback(() => {
     if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
     cancelSWBladder();
+    saveNextVoidAt(null);
     setNextVoidAt(null);
-    startedAtRef.current = null;
   }, []);
 
   // ── toggle ─────────────────────────────────────────────────────────────────
@@ -302,49 +352,60 @@ export function BladderProvider({ children }: { children: React.ReactNode }) {
       const next = !prev;
       saveEnabled(next);
       if (next) {
-        // Small delay so state is committed before startSchedule reads interval
-        setTimeout(startSchedule, 0);
+        // If we have a stored deadline, resume from it; otherwise start fresh.
+        const stored = loadNextVoidAt();
+        if (stored) {
+          setTimeout(() => scheduleTimer(stored), 0);
+        } else {
+          setTimeout(startSchedule, 0);
+        }
       } else {
         stopSchedule();
         commitPending(null);
       }
       return next;
     });
-  }, [startSchedule, stopSchedule, commitPending]);
+  }, [scheduleTimer, startSchedule, stopSchedule, commitPending]);
 
   // ── respond ───────────────────────────────────────────────────────────────
   const respond = useCallback(
     (status: Exclude<BladderStatus, "pending">) => {
-      if (!pendingLog) return;
-      const resolved: BladderLog = {
-        ...pendingLog,
-        status,
-        respondedAt: new Date().toISOString(),
-      };
-      const existing = loadLogs();
-      const withoutPrev = existing.filter((l) => l.id !== resolved.id);
-      commitLogs([...withoutPrev, resolved]);
-      commitPending(null);
+      setPendingLog((current) => {
+        if (!current) return null;
+        const resolved: BladderLog = {
+          ...current,
+          status,
+          respondedAt: new Date().toISOString(),
+        };
+        const existing = loadLogs();
+        const withoutPrev = existing.filter((l) => l.id !== resolved.id);
+        commitLogs([...withoutPrev, resolved]);
+        savePending(null);
+        return null;
+      });
     },
-    [pendingLog, commitLogs, commitPending],
+    [commitLogs],
   );
 
-  // ── interval change ───────────────────────────────────────────────────────
+  // ── setIntervalMinutes ─────────────────────────────────────────────────────
   const setIntervalMinutes = useCallback(
     (v: number) => {
       const clamped = Math.min(MAX_INTERVAL, Math.max(MIN_INTERVAL, v));
       saveInterval(clamped);
       setIntervalState(clamped);
       intervalRef.current = clamped;
-      if (enabled) {
-        stopSchedule();
-        setTimeout(startSchedule, 0);
+      if (enabledRef.current) {
+        // Restart with new interval from now (interval change resets the clock)
+        if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+        const nextAtMs = Date.now() + clamped * 60 * 1000;
+        saveNextVoidAt(nextAtMs);
+        scheduleTimer(nextAtMs);
       }
     },
-    [enabled, startSchedule, stopSchedule],
+    [scheduleTimer],
   );
 
-  // ── apply suggestion ──────────────────────────────────────────────────────
+  // ── applyIntervalSuggestion ────────────────────────────────────────────────
   const applyIntervalSuggestion = useCallback(() => {
     if (!suggestion) return;
     const delta = suggestion === "increase" ? 15 : -15;
@@ -371,21 +432,43 @@ export function BladderProvider({ children }: { children: React.ReactNode }) {
           return null;
         });
       }
-      if (event.data?.type === "BLADDER_ACTION_SNOOZE") {
-        // SW will re-fire notification in 5 min; just acknowledge
-      }
     };
     navigator.serviceWorker.addEventListener("message", handler);
     return () => navigator.serviceWorker.removeEventListener("message", handler);
   }, []);
 
-  // ── mount: restore schedule if enabled ───────────────────────────────────
+  // ── Mount: resume from persisted deadline ─────────────────────────────────
   useEffect(() => {
-    if (enabled) startSchedule();
-    return () => stopSchedule();
-    // Run once on mount only
+    if (!enabled) return;
+    const stored = loadNextVoidAt();
+    if (stored) {
+      scheduleTimer(stored);
+    } else {
+      startSchedule();
+    }
+    return () => {
+      if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    };
+    // Intentionally only runs on mount — subsequent changes handled by toggle/setInterval
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Visibility change: re-arm timer after browser throttling ──────────────
+  //
+  // Mobile browsers throttle/kill setTimeout when the app is backgrounded.
+  // When the user returns, we recalculate the remaining time from the stored
+  // deadline so the timer fires at the correct absolute time.
+  useEffect(() => {
+    function handleVisibilityChange() {
+      if (document.visibilityState !== "visible") return;
+      if (!enabledRef.current) return;
+      const stored = loadNextVoidAt();
+      if (stored) scheduleTimer(stored);
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [scheduleTimer]);
 
   return (
     <BladderContext.Provider
@@ -413,5 +496,3 @@ export function useBladder() {
   if (!ctx) throw new Error("useBladder must be used within BladderProvider");
   return ctx;
 }
-
-export { MIN_INTERVAL, MAX_INTERVAL, DEFAULT_INTERVAL };
