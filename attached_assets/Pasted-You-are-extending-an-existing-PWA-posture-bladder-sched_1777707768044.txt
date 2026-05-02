@@ -1,0 +1,148 @@
+You are extending an existing PWA posture + bladder scheduling app.
+
+The app already has:
+- Bladder mode with interval timer
+- Logging per cycle: "done_on_time", "delayed", "leakage"
+- Data stored locally (localStorage or indexedDB)
+
+-----------------------------------
+GOAL
+-----------------------------------
+
+Implement a "Bladder Stability Score" system and "Max Safe Interval" tracking.
+
+The system must:
+- Be simple
+- Be computed daily
+- Drive decision-making (not just display data)
+
+-----------------------------------
+PART 1: DAILY SCORE CALCULATION
+-----------------------------------
+
+1. For each day, compute:
+
+Score = 100 
+        - (leakage_count * 25)
+        - (delayed_count * 10)
+        - (missed_count * 15)
+
+2. Definitions:
+- leakage_count = number of "leakage" logs
+- delayed_count = number of "delayed" logs
+- missed_count = scheduled cycles where user gave no response
+
+3. Clamp score:
+- Minimum = 0
+- Maximum = 100
+
+-----------------------------------
+PART 2: MAX SAFE INTERVAL
+-----------------------------------
+
+4. Track time between consecutive "void events":
+- A "void event" = "done_on_time" or "delayed"
+
+5. For each interval:
+- Calculate time difference (in minutes)
+
+6. If the interval ends WITHOUT leakage:
+- Consider it a "successful interval"
+
+7. If leakage occurs:
+- Mark that interval as failed
+
+8. Compute:
+- Max Safe Interval = longest successful interval (minutes) in the day
+
+Store this per day.
+
+-----------------------------------
+PART 3: DATA STRUCTURE
+-----------------------------------
+
+Each log entry should include:
+- timestamp
+- status ("done_on_time" | "delayed" | "leakage")
+
+Create daily aggregates:
+{
+  date: "YYYY-MM-DD",
+  leakage_count: number,
+  delayed_count: number,
+  missed_count: number,
+  score: number,
+  max_safe_interval: number
+}
+
+-----------------------------------
+PART 4: UI DISPLAY
+-----------------------------------
+
+Add a "Bladder Health" card:
+
+Display:
+- Score (large number)
+- Status label:
+    90–100 → "Stable"
+    75–89 → "Controlled"
+    50–74 → "Unstable"
+    <50 → "Poor"
+
+- Max Safe Interval (e.g., "75 min")
+
+- Counts:
+    Leakage: X
+    Delays: Y
+
+-----------------------------------
+PART 5: DECISION ENGINE (IMPORTANT)
+-----------------------------------
+
+Add simple guidance:
+
+IF leakage_count > 0:
+    Show: "Interval too long. Reduce by 15 minutes."
+
+ELSE IF score >= 90 for 3 consecutive days:
+    Show: "You may increase interval by 15 minutes."
+
+ELSE:
+    Show: "Maintain current interval."
+
+-----------------------------------
+PART 6: MISSED CYCLE LOGIC
+-----------------------------------
+
+If user does not respond within:
+- 10 minutes of notification
+
+Mark as:
+- missed_count += 1
+
+-----------------------------------
+PART 7: STORAGE
+-----------------------------------
+
+- Persist daily aggregates
+- Keep at least 14 days history
+
+-----------------------------------
+PART 8: CONSTRAINTS
+-----------------------------------
+
+- No complex analytics
+- No external APIs
+- Keep computation local and lightweight
+- UI must remain simple and readable
+
+-----------------------------------
+GOAL
+-----------------------------------
+
+This is a behavioral feedback system:
+- Reduce leakage
+- Improve timing discipline
+- Safely extend bladder interval
+
+Prioritize clarity and reliability over features.

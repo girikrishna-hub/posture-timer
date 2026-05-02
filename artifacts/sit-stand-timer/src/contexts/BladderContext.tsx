@@ -195,6 +195,153 @@ export function computeSuggestion(
   return null;
 }
 
+// ─── Stability score helpers ──────────────────────────────────────────────────
+
+/**
+ * Daily aggregate for the Bladder Stability Score system.
+ *
+ * missed_count = auto-resolved delayed logs (respondedAt absent).
+ * delayed_count = manually responded delayed logs (respondedAt present).
+ */
+export interface BladderDailyAggregate {
+  date: string;
+  leakageCount: number;
+  /** User tapped "Delayed" themselves */
+  delayedCount: number;
+  /** Auto-resolved: no response within the interval */
+  missedCount: number;
+  score: number;
+  maxSafeInterval: number | null;
+}
+
+/**
+ * Score = 100 - (leakage×25) - (delayed×10) - (missed×15), clamped 0–100.
+ */
+export function computeStabilityScore(
+  leakageCount: number,
+  delayedCount: number,
+  missedCount: number,
+): number {
+  return Math.max(0, Math.min(100, 100 - leakageCount * 25 - delayedCount * 10 - missedCount * 15));
+}
+
+/**
+ * Returns the longest successful interval (minutes) in the day.
+ * A "void event" is done_on_time or delayed.
+ * An interval is successful when the event that ENDS it is NOT leakage.
+ */
+export function computeMaxSafeInterval(logs: BladderLog[], date: string): number | null {
+  const voidEvents = logs
+    .filter(
+      (l) =>
+        l.date === date &&
+        (l.status === "done_on_time" || l.status === "delayed" || l.status === "leakage"),
+    )
+    .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt));
+
+  if (voidEvents.length < 2) return null;
+
+  let maxSafe = 0;
+  for (let i = 1; i < voidEvents.length; i++) {
+    const prev = voidEvents[i - 1];
+    const curr = voidEvents[i];
+    if (curr.status === "leakage") continue; // interval failed
+    const diffMin =
+      (new Date(curr.scheduledAt).getTime() - new Date(prev.scheduledAt).getTime()) / 60000;
+    if (diffMin > 0) maxSafe = Math.max(maxSafe, diffMin);
+  }
+
+  return maxSafe > 0 ? Math.round(maxSafe) : null;
+}
+
+/**
+ * Full daily aggregate computed purely from the raw log array.
+ */
+export function computeDailyAggregate(logs: BladderLog[], date: string): BladderDailyAggregate {
+  const day = logs.filter((l) => l.date === date && l.status !== "pending");
+  const leakageCount = day.filter((l) => l.status === "leakage").length;
+  // missed = auto-resolved delayed (no respondedAt written by the user)
+  const missedCount  = day.filter((l) => l.status === "delayed" && !l.respondedAt).length;
+  const delayedCount = day.filter((l) => l.status === "delayed" && !!l.respondedAt).length;
+  const score = computeStabilityScore(leakageCount, delayedCount, missedCount);
+  const maxSafeInterval = computeMaxSafeInterval(logs, date);
+  return { date, leakageCount, delayedCount, missedCount, score, maxSafeInterval };
+}
+
+export type StabilityLabel = "Stable" | "Controlled" | "Unstable" | "Poor";
+
+export function stabilityLabel(score: number): StabilityLabel {
+  if (score >= 90) return "Stable";
+  if (score >= 75) return "Controlled";
+  if (score >= 50) return "Unstable";
+  return "Poor";
+}
+
+export function stabilityColor(score: number): string {
+  if (score >= 90) return "text-emerald-600 dark:text-emerald-400";
+  if (score >= 75) return "text-blue-600 dark:text-blue-400";
+  if (score >= 50) return "text-amber-600 dark:text-amber-400";
+  return "text-red-600 dark:text-red-400";
+}
+
+export type GuidanceAction = "reduce" | "increase" | "maintain";
+
+export interface BladderGuidance {
+  action: GuidanceAction;
+  message: string;
+}
+
+/**
+ * Decision engine per the spec:
+ * - leakage today → reduce
+ * - score ≥ 90 for 3 consecutive days (today + past 2) → increase
+ * - otherwise → maintain
+ */
+export function computeGuidance(
+  logs: BladderLog[],
+  intervalMinutes: number,
+): BladderGuidance {
+  const todayKey = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  })();
+
+  const todayAgg = computeDailyAggregate(logs, todayKey);
+
+  if (todayAgg.leakageCount > 0) {
+    const next = Math.max(MIN_INTERVAL, intervalMinutes - 15);
+    return {
+      action: "reduce",
+      message:
+        intervalMinutes > MIN_INTERVAL
+          ? `Interval may be too long. Consider reducing to ${next} min.`
+          : "Leakage detected. You are already at the minimum interval.",
+    };
+  }
+
+  // Check 3 consecutive days with score ≥ 90
+  const streak = [0, 1, 2].map((offset) => {
+    const d = new Date();
+    d.setDate(d.getDate() - offset);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    return computeDailyAggregate(logs, key);
+  });
+
+  const hasThreeHighDays =
+    streak.every((a) => a.leakageCount + a.delayedCount + a.missedCount > 0 || a.score >= 90) &&
+    streak.every((a) => a.score >= 90);
+
+  if (hasThreeHighDays && intervalMinutes < MAX_INTERVAL) {
+    const next = Math.min(MAX_INTERVAL, intervalMinutes + 15);
+    return {
+      action: "increase",
+      message: `3 stable days in a row! Consider increasing to ${next} min.`,
+    };
+  }
+
+  return { action: "maintain", message: "Maintain current interval." };
+}
+
 // ─── Context ─────────────────────────────────────────────────────────────────
 
 interface BladderContextValue {
@@ -205,7 +352,9 @@ interface BladderContextValue {
   pendingLog: BladderLog | null;
   logs: BladderLog[];
   todaySummary: BladderDaySummary;
+  todayAggregate: BladderDailyAggregate;
   suggestion: BladderSuggestion;
+  guidance: BladderGuidance;
   toggle: () => void;
   respond: (status: Exclude<BladderStatus, "pending">) => void;
   applyIntervalSuggestion: () => void;
@@ -231,8 +380,10 @@ export function BladderProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { enabledRef.current  = enabled; }, [enabled]);
 
   // ── derived ───────────────────────────────────────────────────────────────
-  const todaySummary = computeDaySummary(logs, todayStr());
-  const suggestion   = computeSuggestion(logs, intervalMinutes);
+  const todaySummary   = computeDaySummary(logs, todayStr());
+  const todayAggregate = computeDailyAggregate(logs, todayStr());
+  const suggestion     = computeSuggestion(logs, intervalMinutes);
+  const guidance       = computeGuidance(logs, intervalMinutes);
 
   // ── storage commit helpers ─────────────────────────────────────────────────
   const commitLogs = useCallback((updated: BladderLog[]) => {
@@ -480,7 +631,9 @@ export function BladderProvider({ children }: { children: React.ReactNode }) {
         pendingLog,
         logs,
         todaySummary,
+        todayAggregate,
         suggestion,
+        guidance,
         toggle,
         respond,
         applyIntervalSuggestion,

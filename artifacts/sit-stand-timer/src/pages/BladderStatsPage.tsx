@@ -10,7 +10,15 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
-import { useBladder, computeDaySummary, type BladderLog, type BladderDaySummary } from "@/contexts/BladderContext";
+import {
+  useBladder,
+  computeDaySummary,
+  computeDailyAggregate,
+  stabilityLabel,
+  stabilityColor,
+  type BladderLog,
+  type BladderDaySummary,
+} from "@/contexts/BladderContext";
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
@@ -135,10 +143,14 @@ function DailyTab({ logs }: { logs: BladderLog[] }) {
       const d = addDays(today, -(6 - i));
       const key = dateStr(d);
       const s = computeDaySummary(logs, key);
+      const agg = computeDailyAggregate(logs, key);
       return {
         key,
         shortLabel: d.toLocaleDateString("en-US", { weekday: "short", month: "numeric", day: "numeric" }),
         dayLabel: i === 6 ? "Today" : d.toLocaleDateString("en-US", { weekday: "short" }),
+        score: agg.score,
+        missedCount: agg.missedCount,
+        maxSafeInterval: agg.maxSafeInterval,
         ...s,
       };
     });
@@ -237,14 +249,27 @@ function DailyTab({ logs }: { logs: BladderLog[] }) {
               {d.totalCycles === 0 ? (
                 <span className="text-xs text-muted-foreground">No data</span>
               ) : (
-                <div className="flex items-center gap-3 text-xs tabular-nums">
-                  <span className="text-muted-foreground">{d.totalCycles} cycle{d.totalCycles !== 1 ? "s" : ""}</span>
-                  <span className={`font-semibold ${d.onTimePercent >= 80 ? "text-emerald-600 dark:text-emerald-400" : d.onTimePercent >= 60 ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"}`}>
-                    {d.onTimePercent}% on-time
-                  </span>
-                  {d.leakageCount > 0 && (
-                    <span className="text-red-600 dark:text-red-400">{d.leakageCount} leak</span>
-                  )}
+                <div className="flex flex-col items-end gap-1">
+                  <div className="flex items-center gap-2 text-xs tabular-nums">
+                    <span className="text-muted-foreground">{d.totalCycles} cycle{d.totalCycles !== 1 ? "s" : ""}</span>
+                    {d.leakageCount > 0 && (
+                      <span className="text-red-600 dark:text-red-400">⚠ {d.leakageCount} leak</span>
+                    )}
+                    {d.missedCount > 0 && (
+                      <span className="text-orange-600 dark:text-orange-400">✗ {d.missedCount} missed</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`text-xs font-bold tabular-nums ${stabilityColor(d.score)}`}>
+                      {d.score}
+                    </span>
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-muted/60 ${stabilityColor(d.score)}`}>
+                      {stabilityLabel(d.score)}
+                    </span>
+                    {d.maxSafeInterval !== null && (
+                      <span className="text-[10px] text-muted-foreground">max {d.maxSafeInterval}m</span>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

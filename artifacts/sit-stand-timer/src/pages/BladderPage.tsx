@@ -5,6 +5,7 @@ import { useTimer } from "@/contexts/TimerContext";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { useBanner } from "@/hooks/useBanner";
+import { BladderHealthCard } from "@/components/BladderHealthCard";
 
 // ─── Countdown helper ────────────────────────────────────────────────────────
 
@@ -328,6 +329,9 @@ export default function BladderPage() {
         {enabled && pendingLog && (
           <ResponseCard onRespond={handleRespond} />
         )}
+
+        {/* Bladder health card */}
+        <BladderHealthCard />
 
         {/* Statistics link */}
         <Link
