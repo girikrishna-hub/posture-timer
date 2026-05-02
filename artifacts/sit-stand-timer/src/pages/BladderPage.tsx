@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useBladder, MIN_INTERVAL, MAX_INTERVAL } from "@/contexts/BladderContext";
+import { useTimer } from "@/contexts/TimerContext";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { useBanner } from "@/hooks/useBanner";
@@ -204,22 +205,13 @@ export default function BladderPage() {
 
   const countdown = useCountdown(enabled && !pendingLog ? nextVoidAt : null);
 
-  const [notifPermission, setNotifPermission] = useState<NotificationPermission>(
-    typeof Notification !== "undefined" ? Notification.permission : "default",
-  );
-
-  const requestPermission = useCallback(async () => {
-    if (typeof Notification !== "undefined" && Notification.permission === "default") {
-      const result = await Notification.requestPermission();
-      setNotifPermission(result);
-    }
-  }, []);
+  const { notificationPermission: notifPermission, requestNotificationPermission } = useTimer();
 
   useEffect(() => {
     if (enabled && notifPermission === "default") {
-      void requestPermission();
+      void requestNotificationPermission();
     }
-  }, [enabled, notifPermission, requestPermission]);
+  }, [enabled, notifPermission, requestNotificationPermission]);
 
   const suggestionBanner = useBanner(8000);
   useEffect(() => {

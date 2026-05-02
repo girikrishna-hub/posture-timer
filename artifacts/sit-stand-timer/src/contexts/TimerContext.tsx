@@ -18,6 +18,7 @@ import {
 } from "@workspace/api-client-react";
 import { playStandTone, playSitTone, playConfirmTone, playRestTone } from "@/utils/audio";
 import { useWalkingDetection, type GpsStatus } from "@/hooks/useWalkingDetection";
+import { useNotificationPermission } from "@/hooks/useNotificationPermission";
 
 export type TimerMode = "idle" | "sitting" | "standing" | "resting" | "walking";
 
@@ -190,10 +191,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   const [reminderCount, setReminderCount] = useState(0);
   const [inReminderPhase, setInReminderPhase] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
-  const [notificationPermission, setNotificationPermission] =
-    useState<NotificationPermission>(
-      typeof Notification !== "undefined" ? Notification.permission : "default"
-    );
+  const notificationPermission = useNotificationPermission();
   const [initialized, setInitialized] = useState(false);
   const [stateSource, setStateSource] = useState<StateSource>("manual");
 
@@ -706,8 +704,9 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
 
   const requestNotificationPermission = useCallback(async () => {
     if (typeof Notification !== "undefined" && Notification.permission === "default") {
-      const permission = await Notification.requestPermission();
-      setNotificationPermission(permission);
+      await Notification.requestPermission();
+      // No setState needed — useNotificationPermission hook reacts to the
+      // permissionchange event and updates notificationPermission automatically.
     }
   }, []);
 

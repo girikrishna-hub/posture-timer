@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useBanner } from "@/hooks/useBanner";
+import { useTimer } from "@/contexts/TimerContext";
 import {
   useGetSettings,
   useUpdateSettings,
@@ -88,9 +89,7 @@ export default function SettingsPage() {
   const [fitbitConnecting, setFitbitConnecting] = useState(false);
   const [fitbitDisconnecting, setFitbitDisconnecting] = useState(false);
   const goalBanner = useBanner(5000);
-  const [notifPermission, setNotifPermission] = useState<NotificationPermission>(
-    typeof Notification !== "undefined" ? Notification.permission : "default"
-  );
+  const { notificationPermission: notifPermission, requestNotificationPermission } = useTimer();
   const [geoPermission, setGeoPermission] = useState<GeoPermissionStatus>(
     "geolocation" in navigator ? "unknown" : "unsupported"
   );
@@ -134,12 +133,7 @@ export default function SettingsPage() {
     savedBanner.show();
   };
 
-  const requestNotifications = async () => {
-    if (typeof Notification !== "undefined") {
-      const permission = await Notification.requestPermission();
-      setNotifPermission(permission);
-    }
-  };
+  const requestNotifications = requestNotificationPermission;
 
   const checkGeoPermission = useCallback(async () => {
     if (!("geolocation" in navigator)) {
