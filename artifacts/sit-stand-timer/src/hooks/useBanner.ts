@@ -35,6 +35,14 @@ export function useBanner<T = undefined>(duration = 5000) {
     };
   }, []);
 
+  const hide = useCallback(() => {
+    if (hideTimerRef.current) { clearTimeout(hideTimerRef.current); hideTimerRef.current = null; }
+    if (visibleTimerRef.current) { clearTimeout(visibleTimerRef.current); visibleTimerRef.current = null; }
+    setVisible(false);
+    setShown(false);
+    setMessage(undefined);
+  }, []);
+
   const dismiss = useCallback(() => {
     if (hideTimerRef.current) { clearTimeout(hideTimerRef.current); hideTimerRef.current = null; }
     if (visibleTimerRef.current) { clearTimeout(visibleTimerRef.current); }
@@ -62,5 +70,5 @@ export function useBanner<T = undefined>(duration = 5000) {
     }, duration);
   }, [duration, dismiss]);
 
-  return { show, dismiss, shown, visible, message };
+  return { show, dismiss, hide, shown, visible, message };
 }

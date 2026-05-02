@@ -347,3 +347,91 @@ describe("DashboardPage — CSV export error banner", () => {
     expect(screen.getByText(/Export failed\. Please try again\./i)).toBeInTheDocument();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Scenario: both banners never appear in the DOM at the same time
+// ---------------------------------------------------------------------------
+
+describe("DashboardPage — CSV export banners mutual exclusivity", () => {
+  /**
+   * Helper: assert that the success and error banner texts are never both
+   * present in the DOM at the same instant.
+   */
+  function assertNeverBothVisible() {
+    const hasSuccess = screen.queryByText(/CSV exported successfully/i) !== null;
+    const hasError = screen.queryByText(/Export failed/i) !== null;
+    expect(hasSuccess && hasError).toBe(false);
+  }
+
+  it("never shows both banners simultaneously when transitioning success → failure", async () => {
+    vi.useFakeTimers();
+
+    // First export succeeds → success banner appears
+    mockFetchSuccess();
+    act(() => { renderPage(); });
+    act(() => { navigateToSessionsTab(); });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /export csv/i }));
+    });
+
+    // Let the banner become visible
+    act(() => { vi.advanceTimersByTime(20); });
+
+    expect(screen.getByText(/CSV exported successfully\./i)).toBeInTheDocument();
+    assertNeverBothVisible();
+
+    // Second export fails → dismiss() runs on success banner, show() on error banner
+    mockFetchFailure();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /export csv/i }));
+    });
+
+    // Step through the entire 350 ms fade-out window in 50 ms increments,
+    // asserting mutual exclusivity at every tick.
+    for (let elapsed = 0; elapsed <= 400; elapsed += 50) {
+      act(() => { vi.advanceTimersByTime(50); });
+      assertNeverBothVisible();
+    }
+
+    // After the transition: only the error banner remains
+    expect(screen.queryByText(/CSV exported successfully/i)).toBeNull();
+    expect(screen.getByText(/Export failed\. Please try again\./i)).toBeInTheDocument();
+  });
+
+  it("never shows both banners simultaneously when transitioning failure → success", async () => {
+    vi.useFakeTimers();
+
+    // First export fails → error banner appears
+    mockFetchFailure();
+    act(() => { renderPage(); });
+    act(() => { navigateToSessionsTab(); });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /export csv/i }));
+    });
+
+    // Let the banner become visible
+    act(() => { vi.advanceTimersByTime(20); });
+
+    expect(screen.getByText(/Export failed\. Please try again\./i)).toBeInTheDocument();
+    assertNeverBothVisible();
+
+    // Second export succeeds → dismiss() runs on error banner, show() on success banner
+    mockFetchSuccess();
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /export csv/i }));
+    });
+
+    // Step through the entire 350 ms fade-out window in 50 ms increments,
+    // asserting mutual exclusivity at every tick.
+    for (let elapsed = 0; elapsed <= 400; elapsed += 50) {
+      act(() => { vi.advanceTimersByTime(50); });
+      assertNeverBothVisible();
+    }
+
+    // After the transition: only the success banner remains
+    expect(screen.queryByText(/Export failed/i)).toBeNull();
+    expect(screen.getByText(/CSV exported successfully\./i)).toBeInTheDocument();
+  });
+});

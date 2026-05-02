@@ -902,10 +902,10 @@ function SessionsTab() {
       a.download = "sit-stand-sessions.csv";
       a.click();
       URL.revokeObjectURL(url);
-      exportErrorBanner.dismiss();
+      exportErrorBanner.hide();
       exportSuccessBanner.show();
     } catch {
-      exportSuccessBanner.dismiss();
+      exportSuccessBanner.hide();
       exportErrorBanner.show();
     } finally {
       setExporting(false);
