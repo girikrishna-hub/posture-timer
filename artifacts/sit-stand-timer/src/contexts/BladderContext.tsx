@@ -6,6 +6,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { useTimer } from "@/contexts/TimerContext";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -372,9 +373,12 @@ export function BladderProvider({ children }: { children: React.ReactNode }) {
     return stored ? new Date(stored) : null;
   });
 
-  const timerRef    = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const intervalRef = useRef(intervalMinutes);
-  const enabledRef  = useRef(enabled);
+  const { mode: timerMode, restType: timerRestType } = useTimer();
+
+  const timerRef       = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const intervalRef    = useRef(intervalMinutes);
+  const enabledRef     = useRef(enabled);
+  const wasSleepingRef = useRef(false);
 
   useEffect(() => { intervalRef.current = intervalMinutes; }, [intervalMinutes]);
   useEffect(() => { enabledRef.current  = enabled; }, [enabled]);
@@ -497,6 +501,17 @@ export function BladderProvider({ children }: { children: React.ReactNode }) {
     setNextVoidAt(null);
   }, []);
 
+  // ── pauseSchedule — suspend timer without losing the stored deadline ───────
+  //
+  // Used when the user enters sleep mode. The next-void deadline is kept in
+  // localStorage so that when sleep ends we can resume from the exact moment
+  // that was left rather than restarting the full interval.
+  const pauseSchedule = useCallback(() => {
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    cancelSWBladder();
+    setNextVoidAt(null); // clear visual countdown; stored deadline is preserved
+  }, []);
+
   // ── toggle ─────────────────────────────────────────────────────────────────
   const toggle = useCallback(() => {
     setEnabledState((prev) => {
@@ -603,6 +618,37 @@ export function BladderProvider({ children }: { children: React.ReactNode }) {
     // Intentionally only runs on mount — subsequent changes handled by toggle/setInterval
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Sleep-mode integration ─────────────────────────────────────────────────
+  //
+  // When the user enters sleep mode (resting + restType === "sleep") the bladder
+  // schedule is PAUSED — the JS timer and SW notification are cancelled but the
+  // stored deadline in localStorage is preserved.  When sleep ends the schedule
+  // resumes from that exact deadline (or starts fresh if none exists).
+  //
+  // Rest / nap mode leaves the schedule running unchanged.
+  useEffect(() => {
+    const isSleeping = timerMode === "resting" && timerRestType === "sleep";
+
+    if (isSleeping) {
+      if (!wasSleepingRef.current && enabledRef.current) {
+        wasSleepingRef.current = true;
+        pauseSchedule();
+      }
+    } else {
+      if (wasSleepingRef.current) {
+        wasSleepingRef.current = false;
+        if (enabledRef.current) {
+          const stored = loadNextVoidAt();
+          if (stored) {
+            scheduleTimer(stored);
+          } else {
+            startSchedule();
+          }
+        }
+      }
+    }
+  }, [timerMode, timerRestType, pauseSchedule, scheduleTimer, startSchedule]);
 
   // ── Visibility change: re-arm timer after browser throttling ──────────────
   //
