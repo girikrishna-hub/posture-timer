@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent, act, renderHook } from "@testing-library/react";
 import {
   TrophyBadge,
   goalLabelClass,
@@ -14,6 +14,7 @@ import {
 import {
   getCelebratedDate,
   saveCelebratedDate,
+  useGoalCelebration,
 } from "@/hooks/useGoalCelebration";
 
 // ---------------------------------------------------------------------------
@@ -839,5 +840,67 @@ describe("getCelebratedDate / saveCelebratedDate — localStorage deduplication 
     expect(alreadyCelebrated).toBe(false);
     // Effective gate: crossing AND NOT already celebrated → celebration fires
     expect(crossingDetected && !alreadyCelebrated).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// midnight reset — cleanup cancels the timer cleanly when unmounted
+//
+// useGoalCelebration stores the midnight setTimeout id in a local `dayTimer`
+// variable and calls clearTimeout(dayTimer) in the cleanup function returned
+// from its useEffect.  If that cleanup is missing or broken the timer fires
+// after the component is gone and triggers state updates on an unmounted
+// component.
+//
+// Strategy: spy on global.setTimeout to count scheduling calls.
+//   • On mount, scheduleMidnightReset() calls setTimeout once.
+//   • If the timer ever fires it immediately re-schedules itself, producing a
+//     second setTimeout call.
+//   • After unmounting before midnight and advancing the clock past midnight
+//     the call count must not have increased — proving the timer was cancelled.
+// ---------------------------------------------------------------------------
+
+describe("midnight reset — cleanup cancels timer on unmount", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    // Pin the clock to 23:59:59 on April 30 — midnight is ~1 second away.
+    vi.useFakeTimers({ now: new Date(2026, 3, 30, 23, 59, 59, 0).getTime() });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    localStorage.clear();
+  });
+
+  it("does not fire the midnight reset callback after the hook unmounts", () => {
+    // Track every setTimeout call so we can detect rescheduling.
+    const setTimeoutSpy = vi.spyOn(global, "setTimeout");
+
+    const { unmount } = renderHook(() =>
+      useGoalCelebration({ liveGoalPercent: 50 }),
+    );
+
+    // scheduleMidnightReset() ran on mount — record how many setTimeout
+    // calls have happened (includes any other internal timers the hook uses).
+    const callsAfterMount = setTimeoutSpy.mock.calls.length;
+    expect(callsAfterMount).toBeGreaterThanOrEqual(1);
+
+    // Unmount before midnight — the cleanup function should call
+    // clearTimeout(dayTimer), cancelling the pending midnight timer.
+    unmount();
+
+    // Advance the clock 2 seconds past midnight.  If clearTimeout was NOT
+    // called the pending callback would fire here, call doReset(), and then
+    // call scheduleMidnightReset() again — producing an additional setTimeout
+    // call and leaving us with callsAfterMount + 1.
+    act(() => {
+      vi.advanceTimersByTime(2_000);
+    });
+
+    // The count must not have grown: no new setTimeout means the callback
+    // never fired and cleanup cancelled the timer cleanly.
+    expect(setTimeoutSpy.mock.calls.length).toBe(callsAfterMount);
+
+    setTimeoutSpy.mockRestore();
   });
 });
