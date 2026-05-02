@@ -1175,6 +1175,44 @@ describe("midnight reset — BroadcastChannel message triggers reset on separate
 
     thirdChannel.close();
   });
+
+  it("midnight-reset from a third standalone channel resets goalAchieved on both hook instances", () => {
+    // Mount two hook instances — simulating two open browser tabs.
+    const hook1 = renderHook(() =>
+      useGoalCelebration({ liveGoalPercent: 110 }),
+    );
+    const hook2 = renderHook(() =>
+      useGoalCelebration({ liveGoalPercent: 110 }),
+    );
+
+    // Both hooks start with goalAchieved=true because CELEBRATION_KEY === today.
+    expect(hook1.result.current.goalAchieved).toBe(true);
+    expect(hook2.result.current.goalAchieved).toBe(true);
+
+    // hook1 and hook2 each created one BroadcastChannel instance.
+    expect(busInstances).toHaveLength(2);
+
+    // Create a third BroadcastChannel that belongs to neither hook — this
+    // simulates an independent sender (e.g. a service worker or a third tab
+    // that posts the recognised "midnight-reset" payload).  Because it is not
+    // owned by hook1 or hook2, BOTH hook instances are receivers.
+    const thirdChannel = new BroadcastChannel(MIDNIGHT_CHANNEL_NAME);
+    expect(busInstances).toHaveLength(3);
+
+    // Post the recognised "midnight-reset" payload from the third channel.
+    // Both hook1 and hook2 are receivers (neither is the sender), so each
+    // must call doReset() and flip goalAchieved to false.
+    act(() => {
+      thirdChannel.postMessage("midnight-reset");
+    });
+
+    // Both hooks must have reset — the payload is recognised and the sender
+    // is an external channel, so neither hook's self-send guard applies.
+    expect(hook1.result.current.goalAchieved).toBe(false);
+    expect(hook2.result.current.goalAchieved).toBe(false);
+
+    thirdChannel.close();
+  });
 });
 
 // ---------------------------------------------------------------------------
