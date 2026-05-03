@@ -346,6 +346,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/VapidPublicKey"
 
+  /push/has-subscription:
+    get:
+      operationId: getHasSubscription
+      tags: [push]
+      summary: Check whether the authenticated user has a valid push subscription on file
+      responses:
+        "200":
+          description: Subscription presence
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HasSubscriptionResult"
+
   /push/subscribe:
     post:
       operationId: subscribePush
@@ -862,6 +875,14 @@ components:
           type: string
       required:
         - publicKey
+
+    HasSubscriptionResult:
+      type: object
+      properties:
+        hasSubscription:
+          type: boolean
+      required:
+        - hasSubscription
 
     PushSubscribeBody:
       type: object

@@ -24,6 +24,7 @@ export * from "./fitbitStatus";
 export * from "./fitbitStepMinute";
 export * from "./getDailyMetricsParams";
 export * from "./handleFitbitCallbackParams";
+export * from "./hasSubscriptionResult";
 export * from "./healthStatus";
 export * from "./listSessionsParams";
 export * from "./pushScheduleBody";

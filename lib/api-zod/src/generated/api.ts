@@ -349,6 +349,13 @@ export const GetVapidPublicKeyResponse = zod.object({
 });
 
 /**
+ * @summary Check whether the authenticated user has a valid push subscription on file
+ */
+export const GetHasSubscriptionResponse = zod.object({
+  hasSubscription: zod.boolean(),
+});
+
+/**
  * @summary Register a push subscription
  */
 export const SubscribePushBody = zod.object({

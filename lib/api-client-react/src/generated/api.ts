@@ -28,6 +28,7 @@ import type {
   FitbitStatus,
   GetDailyMetricsParams,
   HandleFitbitCallbackParams,
+  HasSubscriptionResult,
   HealthStatus,
   ListSessionsParams,
   PushScheduleBody,
@@ -1659,6 +1660,81 @@ export function useGetVapidPublicKey<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetVapidPublicKeyQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Check whether the authenticated user has a valid push subscription on file
+ */
+export const getGetHasSubscriptionUrl = () => {
+  return `/api/push/has-subscription`;
+};
+
+export const getHasSubscription = async (
+  options?: RequestInit,
+): Promise<HasSubscriptionResult> => {
+  return customFetch<HasSubscriptionResult>(getGetHasSubscriptionUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetHasSubscriptionQueryKey = () => {
+  return [`/api/push/has-subscription`] as const;
+};
+
+export const getGetHasSubscriptionQueryOptions = <
+  TData = Awaited<ReturnType<typeof getHasSubscription>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getHasSubscription>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetHasSubscriptionQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getHasSubscription>>
+  > = ({ signal }) => getHasSubscription({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getHasSubscription>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetHasSubscriptionQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getHasSubscription>>
+>;
+export type GetHasSubscriptionQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Check whether the authenticated user has a valid push subscription on file
+ */
+
+export function useGetHasSubscription<
+  TData = Awaited<ReturnType<typeof getHasSubscription>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getHasSubscription>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetHasSubscriptionQueryOptions(options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

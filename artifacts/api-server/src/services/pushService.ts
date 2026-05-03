@@ -36,6 +36,15 @@ export async function saveSubscription(
     });
 }
 
+export async function hasSubscription(userId: string): Promise<boolean> {
+  const rows = await db
+    .select({ endpoint: pushSubscriptionsTable.endpoint })
+    .from(pushSubscriptionsTable)
+    .where(eq(pushSubscriptionsTable.userId, userId))
+    .limit(1);
+  return rows.length > 0;
+}
+
 export async function deleteSubscription(endpoint: string): Promise<void> {
   await db
     .delete(pushSubscriptionsTable)

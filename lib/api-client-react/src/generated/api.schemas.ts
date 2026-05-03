@@ -231,6 +231,10 @@ export interface VapidPublicKey {
   publicKey: string;
 }
 
+export interface HasSubscriptionResult {
+  hasSubscription: boolean;
+}
+
 export type PushSubscribeBodyKeys = {
   p256dh: string;
   auth: string;

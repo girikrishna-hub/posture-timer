@@ -3,6 +3,7 @@ import {
   vapidPublicKey,
   saveSubscription,
   deleteSubscription,
+  hasSubscription,
 } from "../services/pushService";
 import {
   schedulePushNotifications,
@@ -16,6 +17,11 @@ const router: IRouter = Router();
 
 router.get("/push/vapid-public-key", (_req, res) => {
   return res.json({ publicKey: vapidPublicKey });
+});
+
+router.get("/push/has-subscription", requireAuth, async (req, res) => {
+  const has = await hasSubscription(req.userId);
+  return res.json({ hasSubscription: has });
 });
 
 router.post("/push/subscribe", requireAuth, async (req, res) => {
