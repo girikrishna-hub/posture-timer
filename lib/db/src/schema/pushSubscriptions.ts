@@ -4,7 +4,9 @@ import { z } from "zod/v4";
 
 export const pushSubscriptionsTable = pgTable("push_subscriptions", {
   id: serial("id").primaryKey(),
-  userId: text("user_id").notNull().default(""),
+  // No default — subscriptions must be explicitly tied to a real Clerk userId.
+  // The DB-level CHECK constraint (migration 0002) enforces length > 0.
+  userId: text("user_id").notNull(),
   endpoint: text("endpoint").notNull().unique(),
   p256dh: text("p256dh").notNull(),
   auth: text("auth").notNull(),

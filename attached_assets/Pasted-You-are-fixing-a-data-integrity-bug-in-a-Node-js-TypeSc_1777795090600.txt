@@ -1,0 +1,133 @@
+You are fixing a data integrity bug in a Node.js/TypeScript backend.
+
+Problem:
+Some sessions were created with userId = "" (empty string). Timers run under this invalid userId, while push subscriptions are stored under real authenticated Clerk userIds. As a result, push notifications are never sent.
+
+DO NOT change API contracts.
+
+---
+
+## GOAL
+
+Ensure:
+
+* No invalid userId can enter the system
+* Existing invalid sessions are safely terminated
+* Orchestrator never operates on invalid users
+
+---
+
+## STEP 1 — HARD GUARDS
+
+Add a helper:
+
+function assertValidUserId(userId: string) {
+if (!userId || userId.trim() === "") {
+throw new Error("invalid_user_id");
+}
+}
+
+Apply in:
+
+* session.service.ts (startSession, endSession)
+* push subscribe route
+* any entry point receiving userId
+
+Return 400 with a clear error if invalid.
+
+---
+
+## STEP 2 — DB CONSTRAINTS (if supported)
+
+Add constraints:
+
+sessions.userId:
+NOT NULL
+CHECK (length(userId) > 0)
+
+pushSubscriptions.userId:
+NOT NULL
+CHECK (length(userId) > 0)
+
+---
+
+## STEP 3 — STARTUP CLEANUP
+
+On server startup:
+
+* Find sessions WHERE userId = "" OR userId IS NULL AND endedAt IS NULL
+
+* For each:
+
+  * set endedAt = now
+  * log:
+    { event: "cleanup.invalid_session_ended", sessionId }
+
+* Also cancel any in-memory timers tied to invalid userIds
+
+---
+
+## STEP 4 — ORCHESTRATOR GUARD
+
+In posture.orchestrator.ts:
+
+At the top of:
+
+* onSessionStarted
+* onSessionEnded
+* syncTimerWithSession
+
+Add:
+
+if (!userId || userId.trim() === "") {
+log.error({ event: "orchestrator.invalid_user", userId })
+return
+}
+
+---
+
+## STEP 5 — SUBSCRIPTION VALIDATION
+
+In POST /api/push/subscribe:
+
+* Require authenticated userId from Clerk
+* Reject if missing
+* Log invalid attempts
+
+---
+
+## STEP 6 — CLEANUP SCRIPT (one-time)
+
+Provide a script:
+
+* DELETE or END sessions with invalid userId
+* Log how many were fixed
+
+---
+
+## OUTPUT
+
+1. Show guard helper and where applied
+2. Show startup cleanup code
+3. Show orchestrator guard
+4. Show DB constraint statements
+5. Show cleanup script
+
+---
+
+## SUCCESS CRITERIA
+
+* No new sessions can be created with empty userId
+* Existing invalid sessions are terminated on startup
+* Orchestrator never schedules timers for invalid users
+* Push subscriptions and sessions always share the same userId
+
+---
+
+## MENTAL MODEL
+
+We are enforcing identity consistency.
+
+A system with mismatched identities will appear "unpredictable" even when all logic is correct.
+
+---

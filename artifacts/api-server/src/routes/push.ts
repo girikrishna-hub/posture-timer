@@ -26,6 +26,17 @@ router.get("/push/has-subscription", requireAuth, async (req, res) => {
 });
 
 router.post("/push/subscribe", requireAuth, async (req, res) => {
+  // Belt-and-suspenders: requireAuth already rejects empty/null userIds, but
+  // we guard again here to make the contract explicit for this specific route
+  // and to produce a clear 400 (not 401) if something slips through.
+  if (!req.userId || req.userId.trim() === "") {
+    req.log.error(
+      { event: "push.subscribe.invalid_user", userId: req.userId },
+      "push/subscribe: rejected request with invalid userId",
+    );
+    return res.status(400).json({ error: "invalid_user_id" });
+  }
+
   const { endpoint, keys } = req.body as {
     endpoint?: string;
     keys?: { p256dh?: string; auth?: string };

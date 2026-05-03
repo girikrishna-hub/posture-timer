@@ -2,6 +2,7 @@ import { sessionRepository } from "./session.repository";
 import { assertSessionInvariants } from "./session.invariants";
 import { logger } from "../lib/logger";
 import { postureOrchestrator } from "../orchestrators/posture.orchestrator";
+import { assertValidUserId } from "../lib/assertValidUserId";
 import type { Session } from "@workspace/db";
 import type {
   StartSessionDto,
@@ -66,6 +67,10 @@ export const sessionService = {
    *   session's timer is set via onSessionStarted — no duplicate timers.
    */
   async startSession(userId: string, dto: StartSessionDto): Promise<SessionDto> {
+    // Hard guard — a real Clerk userId is never empty. If we reach this point
+    // with an empty string it means requireAuth was bypassed or misconfigured.
+    assertValidUserId(userId);
+
     const existing = await sessionRepository.findActiveSession(userId);
 
     if (existing) {
@@ -123,6 +128,9 @@ export const sessionService = {
     sessionId: number,
     dto: EndSessionDto,
   ): Promise<SessionDto> {
+    // Hard guard — belt-and-suspenders behind requireAuth.
+    assertValidUserId(userId);
+
     const existing = await sessionRepository.findSessionById(sessionId);
 
     if (!existing || existing.userId !== userId) {

@@ -15,6 +15,13 @@
       "when": 1777506000000,
       "tag": "0001_add_walking_auto_detect",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1777795200000,
+      "tag": "0002_enforce_nonempty_userid",
+      "breakpoints": true
     }
   ]
 }

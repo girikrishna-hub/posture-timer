@@ -263,6 +263,15 @@ export const postureOrchestrator = {
    * Serialised per-user — safe to call concurrently.
    */
   onSessionStarted(userId: string, session: SessionDto): Promise<void> {
+    // Guard before taking the lock — an invalid userId must never reach the
+    // timer scheduling logic or the per-user lock Map.
+    if (!userId || userId.trim() === "") {
+      logger.error(
+        { event: "orchestrator.invalid_user", userId },
+        "posture.orchestrator: invalid userId — ignoring onSessionStarted",
+      );
+      return Promise.resolve();
+    }
     return withUserLock(userId, () => _onSessionStarted(userId, session));
   },
 
@@ -272,6 +281,13 @@ export const postureOrchestrator = {
    * corresponding session object (e.g. DELETE /push/schedule).
    */
   onSessionEnded(userId: string, session: SessionDto | null): Promise<void> {
+    if (!userId || userId.trim() === "") {
+      logger.error(
+        { event: "orchestrator.invalid_user", userId },
+        "posture.orchestrator: invalid userId — ignoring onSessionEnded",
+      );
+      return Promise.resolve();
+    }
     return withUserLock(userId, () => _onSessionEnded(userId, session));
   },
 
@@ -281,6 +297,13 @@ export const postureOrchestrator = {
    * Used at startup and by self-healing invariants.
    */
   syncTimerWithSession(userId: string): Promise<void> {
+    if (!userId || userId.trim() === "") {
+      logger.error(
+        { event: "orchestrator.invalid_user", userId },
+        "posture.orchestrator: invalid userId — ignoring syncTimerWithSession",
+      );
+      return Promise.resolve();
+    }
     return withUserLock(userId, () => _syncTimerWithSession(userId));
   },
 };
