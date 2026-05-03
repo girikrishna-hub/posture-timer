@@ -1,26 +1,33 @@
 /**
  * Posture Orchestrator
  *
- * Single authority on WHEN to schedule or cancel posture push timers.
+ * Single authority on WHEN to schedule or cancel posture push timers AND on
+ * creating new sessions under the per-user lock.
+ *
+ * Moving session creation here (instead of session.service) ensures that the
+ * find-orphan → close-orphan → create-new-session sequence is fully serialised
+ * per-user. Without the lock around the DB writes, three concurrent POST
+ * /sessions requests can all read "no active session" simultaneously, each
+ * create a row, and produce overlapping sessions that violate invariant 3.
+ *
  * All public methods are serialised per-user via an in-memory promise-chain
  * lock so that rapid concurrent calls (e.g. two POSTs racing) produce exactly
  * one consistent outcome without duplicates.
- *
- * Existing API endpoints (POST /push/schedule, DELETE /push/schedule) remain
- * externally unchanged; internally they now route through this orchestrator.
  */
 
 import { eq } from "drizzle-orm";
-import { db, settingsTable } from "@workspace/db";
+import { db, settingsTable, type Session } from "@workspace/db";
 import {
   schedulePushNotifications,
   cancelPushSchedule,
   hasActivePostureTimer,
 } from "../services/pushScheduler";
 import { sessionRepository } from "../sessions/session.repository";
+import { assertSessionInvariants } from "../sessions/session.invariants";
 import { ensureSingleActiveTimer } from "../push/push.invariants";
+import { assertValidUserId } from "../lib/assertValidUserId";
 import { logger } from "../lib/logger";
-import type { SessionDto } from "../sessions/session.dto";
+import type { StartSessionDto, SessionDto } from "../sessions/session.dto";
 
 // ─── Per-user lock ───────────────────────────────────────────────────────────
 //
@@ -99,6 +106,33 @@ async function fetchSettings(userId: string): Promise<PostureSettings> {
   return row ?? DEFAULTS;
 }
 
+// ─── Session DTO helpers ─────────────────────────────────────────────────────
+//
+// Duplicated here (rather than imported from session.service) to avoid a
+// circular dependency: session.service → orchestrator → session.service.
+// These are pure transformations with no side-effects.
+
+function classifyRest(startedAt: Date, endedAt: Date): "nap" | "sleep" | null {
+  const durationHours = (endedAt.getTime() - startedAt.getTime()) / (1000 * 60 * 60);
+  const startHour = startedAt.getHours();
+  const endHour = endedAt.getHours();
+  const isNighttime = startHour >= 21 || startHour < 8 || endHour >= 21 || endHour < 8;
+  if (durationHours >= 3 || isNighttime) return "sleep";
+  if (startHour >= 11 && startHour < 18) return "nap";
+  return null;
+}
+
+function toDto(session: Session): SessionDto {
+  return {
+    id: session.id,
+    mode: session.mode as SessionDto["mode"],
+    startedAt: session.startedAt.toISOString(),
+    endedAt: session.endedAt ? session.endedAt.toISOString() : null,
+    durationSeconds: session.durationSeconds ?? null,
+    restType: (session.restType as SessionDto["restType"]) ?? null,
+  };
+}
+
 // ─── Internal helpers ────────────────────────────────────────────────────────
 
 // Minimum delay (seconds) used when rescheduling a missed timer event.
@@ -168,6 +202,59 @@ async function scheduleForSession(
 // IMPORTANT: _syncTimerWithSession is passed as the healFn to
 // ensureSingleActiveTimer. It must be the UNLOCKED variant so calling it from
 // inside the lock does not deadlock.
+
+/**
+ * Create a new session under the per-user lock.
+ *
+ * By running the full find-orphan → close-orphan → create sequence inside the
+ * lock we guarantee that no two concurrent POST /sessions requests can both
+ * observe "no active session" and both insert rows at the same instant — which
+ * would produce overlapping session records that violate DB invariant 3.
+ */
+async function _startSession(userId: string, dto: StartSessionDto): Promise<SessionDto> {
+  // Close any orphaned active session first
+  const existing = await sessionRepository.findActiveSession(userId);
+
+  if (existing) {
+    logger.warn(
+      { userId, orphanedSessionId: existing.id },
+      "posture.orchestrator: auto-closing orphaned active session before creating new one",
+    );
+    const closeAt = dto.startedAt ?? new Date();
+    const durationSeconds = Math.max(
+      0,
+      Math.round((closeAt.getTime() - existing.startedAt.getTime()) / 1000),
+    );
+    let restType = existing.restType;
+    if (existing.mode === "resting" && !existing.restType) {
+      restType = classifyRest(existing.startedAt, closeAt);
+    }
+    await sessionRepository.endSession(existing.id, userId, {
+      endedAt: closeAt,
+      durationSeconds,
+      restType,
+    });
+    // Cancel any timer the orphaned session may have left running.
+    await _onSessionEnded(userId, toDto({ ...existing, endedAt: closeAt, durationSeconds, restType: restType ?? null }));
+  }
+
+  const session = await sessionRepository.createSession({
+    userId,
+    mode: dto.mode as "sitting" | "standing" | "resting" | "walking",
+    startedAt: dto.startedAt ?? new Date(),
+    restType: dto.restType,
+  });
+
+  logger.info(
+    { userId, sessionId: session.id, mode: session.mode },
+    "posture.orchestrator: session created",
+  );
+
+  await assertSessionInvariants(userId);
+  await _onSessionStarted(userId, toDto(session));
+
+  return toDto(session);
+}
 
 async function _onSessionStarted(userId: string, session: SessionDto): Promise<void> {
   const hadTimer = hasActivePostureTimer(userId);
@@ -259,8 +346,27 @@ async function _syncTimerWithSession(userId: string): Promise<void> {
 
 export const postureOrchestrator = {
   /**
+   * Start a new session for the user under the per-user lock.
+   *
+   * Moving session creation into the orchestrator (and therefore inside the
+   * lock) prevents the race condition where concurrent POST /sessions requests
+   * each observe "no active session" and both create DB rows that overlap.
+   *
+   * Previously this logic lived in session.service.startSession, which called
+   * orchestrator.onSessionStarted only after the DB write had already raced.
+   */
+  startSession(userId: string, dto: StartSessionDto): Promise<SessionDto> {
+    assertValidUserId(userId);
+    return withUserLock(userId, () => _startSession(userId, dto));
+  },
+
+  /**
    * Called after a new session has been persisted to the DB.
    * Serialised per-user — safe to call concurrently.
+   *
+   * Retained for external callers that create sessions via other paths
+   * (e.g. DB-seeded sessions, scripts, tests). Normal app flow should use
+   * startSession() so the DB write is also inside the lock.
    */
   onSessionStarted(userId: string, session: SessionDto): Promise<void> {
     // Guard before taking the lock — an invalid userId must never reach the

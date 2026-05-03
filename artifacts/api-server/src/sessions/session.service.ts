@@ -55,68 +55,17 @@ export const sessionService = {
   /**
    * Start a new session for the user.
    *
-   * Design choice — auto-close orphaned sessions:
-   *   If an active session already exists when this is called, it is ended
-   *   automatically before the new one is created. This is the safest option
-   *   because the client always ends the previous session before starting a
-   *   new one; a dangling active session therefore signals a network failure
-   *   or a server restart that lost the in-flight PATCH. Silently closing it
-   *   is preferable to rejecting a valid new session.
-   *
-   *   The orphan's timer is cancelled via onSessionEnded before the new
-   *   session's timer is set via onSessionStarted — no duplicate timers.
+   * Delegates entirely to the posture orchestrator so that the
+   * find-orphan → close-orphan → create-session sequence runs inside the
+   * per-user lock. Without the lock around the DB writes, concurrent POST
+   * /sessions requests can race into the DB and produce overlapping sessions
+   * that violate invariant 3.
    */
   async startSession(userId: string, dto: StartSessionDto): Promise<SessionDto> {
     // Hard guard — a real Clerk userId is never empty. If we reach this point
     // with an empty string it means requireAuth was bypassed or misconfigured.
     assertValidUserId(userId);
-
-    const existing = await sessionRepository.findActiveSession(userId);
-
-    if (existing) {
-      logger.warn(
-        { userId, orphanedSessionId: existing.id },
-        "startSession: auto-closing orphaned active session before creating new one",
-      );
-      const closeAt = dto.startedAt ?? new Date();
-      const durationSeconds = Math.max(
-        0,
-        Math.round(
-          (closeAt.getTime() - existing.startedAt.getTime()) / 1000,
-        ),
-      );
-      let restType = existing.restType;
-      if (existing.mode === "resting" && !existing.restType) {
-        restType = classifyRest(existing.startedAt, closeAt);
-      }
-      await sessionRepository.endSession(existing.id, userId, {
-        endedAt: closeAt,
-        durationSeconds,
-        restType,
-      });
-
-      // Cancel any timer the orphaned session may have left running.
-      await postureOrchestrator.onSessionEnded(userId, toDto({ ...existing, endedAt: closeAt, durationSeconds, restType: restType ?? null }));
-    }
-
-    const session = await sessionRepository.createSession({
-      userId,
-      mode: dto.mode as "sitting" | "standing" | "resting" | "walking",
-      startedAt: dto.startedAt ?? new Date(),
-      restType: dto.restType,
-    });
-
-    logger.info(
-      { userId, sessionId: session.id, mode: session.mode },
-      "session started",
-    );
-
-    await assertSessionInvariants(userId);
-
-    // Schedule (or skip) a timer for the new session mode.
-    await postureOrchestrator.onSessionStarted(userId, toDto(session));
-
-    return toDto(session);
+    return postureOrchestrator.startSession(userId, dto);
   },
 
   /**
@@ -137,6 +86,13 @@ export const sessionService = {
       throw Object.assign(new Error("Session not found"), {
         code: "NOT_FOUND",
       });
+    }
+
+    if (existing.endedAt !== null) {
+      throw Object.assign(
+        new Error(`Session ${sessionId} is already ended (endedAt: ${existing.endedAt.toISOString()})`),
+        { code: "ALREADY_ENDED" },
+      );
     }
 
     const endedAt = dto.endedAt ?? new Date();

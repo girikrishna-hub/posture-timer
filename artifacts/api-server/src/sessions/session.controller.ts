@@ -69,6 +69,10 @@ export const sessionController = {
         res.status(404).json({ error: "Session not found" });
         return;
       }
+      if ((err as { code?: string }).code === "ALREADY_ENDED") {
+        res.status(409).json({ error: (err as Error).message });
+        return;
+      }
       if (err instanceof SessionInvariantError) {
         req.log.error({ err }, "Session invariant violated on end");
         res.status(409).json({ error: err.message });

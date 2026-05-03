@@ -6,6 +6,7 @@
   "scripts": {
     "hello": "tsx ./src/hello.ts",
     "cleanup-invalid-sessions": "tsx ./src/cleanup-invalid-sessions.ts",
+    "test-runner": "tsx ./src/run-tests.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
