@@ -1,0 +1,184 @@
+You are refactoring an existing Node.js/TypeScript backend. The app is already working. DO NOT break existing API behavior or routes.
+
+Your task is to refactor ONLY the Sessions domain into a clean architecture with:
+
+* controller
+* service
+* repository
+* DTOs
+* invariant checks
+
+Do NOT modify any other domains (push, bladder, settings, fitbit, etc.).
+
+---
+
+## CONTEXT
+
+Existing routes:
+
+GET    /api/sessions/active
+POST   /api/sessions
+PATCH  /api/sessions/:id
+
+These routes currently contain mixed logic (validation, DB, business rules). We want to extract and organize them properly.
+
+---
+
+## GOAL
+
+Introduce proper layering WITHOUT changing:
+
+* route paths
+* request/response formats
+* authentication behavior
+
+---
+
+## TARGET STRUCTURE
+
+Create the following:
+
+/sessions
+session.controller.ts
+session.service.ts
+session.repository.ts
+session.dto.ts
+session.invariants.ts
+
+---
+
+## RULES (STRICT)
+
+1. Controllers:
+
+   * Handle HTTP only (req, res)
+   * Call service methods
+   * No business logic
+   * No direct DB calls
+
+2. Services:
+
+   * Contain ALL business logic
+   * Enforce session rules
+   * Call repository
+   * No Express objects
+
+3. Repository:
+
+   * Handle DB access only
+   * No business logic
+
+4. DTOs:
+
+   * Define input/output shapes
+   * Validate inputs (basic validation only)
+
+5. DO NOT:
+
+   * Change route URLs
+   * Change response JSON shape
+   * Touch other modules
+   * Introduce breaking changes
+
+---
+
+## INVARIANTS (CRITICAL)
+
+Implement a function:
+
+assertSessionInvariants(userId: string)
+
+This MUST enforce:
+
+1. Only ONE active session per user
+
+   * active = endedAt is null
+
+2. Session time validity
+
+   * endedAt >= startedAt
+
+3. No overlapping sessions for a user
+
+If any invariant fails:
+
+* throw a clear error
+* DO NOT silently fix data
+
+Call this invariant check AFTER:
+
+* creating a session
+* ending a session
+
+---
+
+## SERVICE METHODS
+
+Implement:
+
+startSession(userId, dto)
+
+* If an active session exists → either:
+  a) throw error, OR
+  b) end previous session (choose safest option, document it)
+* Create new session
+* Run invariants
+
+endSession(userId, sessionId)
+
+* Set endedAt
+* Validate session exists and belongs to user
+* Run invariants
+
+getActiveSession(userId)
+
+* Return current active session or null
+
+---
+
+## REPOSITORY METHODS
+
+Implement:
+
+findActiveSession(userId)
+createSession(data)
+endSession(sessionId, endedAt)
+findSessionById(sessionId)
+findSessionsByUser(userId)
+
+---
+
+## CONTROLLER MAPPING
+
+Refactor existing routes to:
+
+GET /api/sessions/active → sessionService.getActiveSession
+POST /api/sessions → sessionService.startSession
+PATCH /api/sessions/:id → sessionService.endSession
+
+---
+
+## IMPORTANT
+
+* Keep all existing middleware and auth intact (Clerk)
+* Do NOT rewrite database schema
+* Do NOT introduce new dependencies unless absolutely necessary
+* Add minimal logging for debugging
+
+---
+
+## OUTPUT
+
+1. Show new folder structure
+2. Show all new files
+3. Show updated route wiring
+4. Highlight what logic was moved from old code
+
+---
+
+## SUCCESS CRITERIA
+
+* Existing API works exactly the same
+* Session logic is fully inside service
+* Invariants prevent invalid state
+* Code is testable and cleanly separated
