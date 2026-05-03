@@ -52,6 +52,8 @@ vi.mock("@workspace/api-client-react", () => ({
   useGetTodayStats: () => ({ data: undefined }),
   useGetSettings: () => ({ data: undefined }),
   getGetTodayStatsQueryKey: () => ["today-stats"],
+  useListSessions: () => ({ data: undefined }),
+  getListSessionsQueryKey: () => ["/api/sessions"],
   getVapidPublicKey: vi.fn().mockResolvedValue({ publicKey: "" }),
   subscribePush: vi.fn().mockResolvedValue({ ok: true }),
   unsubscribePush: vi.fn().mockResolvedValue(undefined),
