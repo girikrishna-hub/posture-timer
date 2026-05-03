@@ -833,7 +833,7 @@ function TodayCycles() {
   const todayStr = new Date().toISOString().slice(0, 10);
 
   const params = { from: todayStr, to: todayStr, limit: 50 };
-  const { data } = useListSessions(params, {
+  const { data, isError } = useListSessions(params, {
     query: { queryKey: getListSessionsQueryKey(params), refetchInterval: 30000 },
   });
 
@@ -841,6 +841,12 @@ function TodayCycles() {
     .filter((s) => s.endedAt !== null && s.endedAt !== undefined)
     .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
     .slice(0, 10);
+
+  if (isError) return (
+    <p className="text-xs text-muted-foreground text-center py-1">
+      Could not load today's cycles.
+    </p>
+  );
 
   if (completed.length === 0) return null;
 
