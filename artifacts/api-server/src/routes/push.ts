@@ -6,11 +6,11 @@ import {
   hasSubscription,
 } from "../services/pushService";
 import {
-  schedulePushNotifications,
-  cancelPushSchedule,
+  hasActivePostureTimer,
   scheduleBladderPush,
   cancelBladderPush,
 } from "../services/pushScheduler";
+import { postureOrchestrator } from "../orchestrators/posture.orchestrator";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
@@ -45,46 +45,36 @@ router.delete("/push/subscribe", requireAuth, async (req, res) => {
   return res.status(204).send();
 });
 
-router.post("/push/schedule", requireAuth, (req, res) => {
-  const {
-    mode,
-    elapsedSeconds = 0,
-    sittingAlertMinutes = 45,
-    standingMinMinutes = 10,
-    standingMaxMinutes = 15,
-    reminderIntervalMinutes = 1,
-    remindersCount = 3,
-  } = req.body as {
-    mode?: string;
-    elapsedSeconds?: number;
-    sittingAlertMinutes?: number;
-    standingMinMinutes?: number;
-    standingMaxMinutes?: number;
-    reminderIntervalMinutes?: number;
-    remindersCount?: number;
-  };
+/**
+ * POST /push/schedule
+ *
+ * Previously scheduled timers directly via pushScheduler. Now routes through
+ * the posture orchestrator so the orchestrator remains the single authority on
+ * timer state. The timer is derived from the current active session in the DB
+ * rather than from client-supplied params, keeping the two sources in sync.
+ *
+ * Response format is unchanged: { ok: true, scheduled: boolean }
+ */
+router.post("/push/schedule", requireAuth, async (req, res) => {
+  await postureOrchestrator.syncTimerWithSession(req.userId);
 
-  if (mode !== "sitting" && mode !== "standing") {
-    cancelPushSchedule(req.userId);
-    return res.json({ ok: true, scheduled: false });
-  }
-
-  schedulePushNotifications(req.userId, {
-    mode,
-    elapsedSeconds,
-    sittingAlertMinutes,
-    standingMinMinutes,
-    standingMaxMinutes,
-    reminderIntervalMinutes,
-    remindersCount,
-  });
-
-  req.log.info({ mode, elapsedSeconds }, "Push schedule set");
-  return res.json({ ok: true, scheduled: true });
+  // Derive `scheduled` from actual in-process timer state after the sync.
+  const scheduled = hasActivePostureTimer(req.userId);
+  req.log.info({ scheduled }, "Push schedule synced via orchestrator");
+  return res.json({ ok: true, scheduled });
 });
 
-router.delete("/push/schedule", requireAuth, (req, res) => {
-  cancelPushSchedule(req.userId);
+/**
+ * DELETE /push/schedule
+ *
+ * Cancels the posture timer via the orchestrator so the cancel is recorded,
+ * logged, and checked for consistency — identical net effect to the previous
+ * direct cancelPushSchedule() call.
+ *
+ * Response format is unchanged: { ok: true }
+ */
+router.delete("/push/schedule", requireAuth, async (req, res) => {
+  await postureOrchestrator.onSessionEnded(req.userId, null);
   return res.json({ ok: true });
 });
 

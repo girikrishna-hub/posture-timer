@@ -1,0 +1,195 @@
+You are refactoring an existing Node.js/TypeScript backend. The system is live and already uses:
+
+* Sessions domain with invariants
+* Posture orchestrator (onSessionStarted, onSessionEnded, syncTimerWithSession)
+* In-memory push scheduler (activeTimers map)
+
+DO NOT break existing APIs or change request/response formats.
+
+---
+
+## GOAL
+
+Upgrade the system to be:
+
+1. Self-healing (not just logging inconsistencies)
+2. Resilient to server restarts
+3. Deterministic under concurrency
+4. Fully orchestrator-driven (single source of truth)
+
+---
+
+## CONSTRAINTS
+
+* Keep all existing routes unchanged
+* Do NOT change DB schema unless absolutely necessary
+* Do NOT remove existing push APIs
+* Do NOT introduce breaking changes
+
+---
+
+## STEP 1 — STARTUP RECONCILIATION (CRITICAL)
+
+On server startup:
+
+* Query all users with an active session (endedAt IS NULL)
+* For each user:
+  call postureOrchestrator.syncTimerWithSession(userId)
+
+Add this to server bootstrap (e.g., server.ts or app init)
+
+IMPORTANT:
+
+* Run AFTER DB connection is ready
+* Run asynchronously but log progress
+* Do NOT block server start
+
+---
+
+## STEP 2 — SELF-HEALING INVARIANT
+
+Modify:
+
+/push/push.invariants.ts
+
+Replace:
+
+assertSingleActiveTimer(userId)
+
+WITH:
+
+ensureSingleActiveTimer(userId)
+
+Behavior:
+
+* If system is consistent → do nothing
+* If mismatch detected:
+
+  * Log ERROR with details
+  * CALL postureOrchestrator.syncTimerWithSession(userId)
+  * Log "self-healed"
+
+IMPORTANT:
+
+* Never throw
+* Always attempt recovery
+
+---
+
+## STEP 3 — ROUTE PUSH APIs THROUGH ORCHESTRATOR
+
+Modify internal behavior of:
+
+POST /api/push/schedule
+DELETE /api/push/schedule
+
+DO NOT change request/response format.
+
+Instead of directly calling pushScheduler:
+
+* For schedule:
+  call postureOrchestrator.syncTimerWithSession(userId)
+
+* For cancel:
+  call postureOrchestrator.onSessionEnded(userId, null)
+  (safe cancel behavior)
+
+Goal:
+
+* APIs remain compatible
+* Orchestrator becomes the single authority
+
+---
+
+## STEP 4 — PER-USER LOCKING (CONCURRENCY SAFETY)
+
+Inside posture.orchestrator.ts:
+
+Implement a simple in-memory lock:
+
+* Map<userId, Promise>
+
+Wrap all public methods:
+
+onSessionStarted
+onSessionEnded
+syncTimerWithSession
+
+Inside:
+
+withUserLock(userId, async () => {
+// existing logic
+})
+
+Behavior:
+
+* Serialize operations per user
+* Prevent race conditions
+* Ensure deterministic outcomes
+
+IMPORTANT:
+
+* Locks must auto-release (use finally)
+* No deadlocks
+
+---
+
+## STEP 5 — TIMER RECOVERY LOGGING
+
+Add structured logs:
+
+* On startup reconciliation:
+  "Recovered timer for user X"
+  "No timer needed for user X"
+
+* On self-healing:
+  "Timer mismatch detected → healed"
+
+* On sync:
+  "Timer synced to session state"
+
+---
+
+## STEP 6 — SAFETY GUARDS
+
+Ensure:
+
+* Cancelling a non-existent timer is safe (no throw)
+* Scheduling twice does not create duplicates
+* syncTimerWithSession is idempotent
+
+---
+
+## OUTPUT
+
+1. Show updated server bootstrap with reconciliation
+2. Show updated push.invariants.ts (self-healing version)
+3. Show modified push routes (internal change only)
+4. Show locking implementation in orchestrator
+5. Show example logs
+
+---
+
+## SUCCESS CRITERIA
+
+* Server restart restores correct timers
+* Timer/session mismatches auto-correct
+* No duplicate timers under concurrent calls
+* Push APIs still behave exactly the same externally
+* System converges to correct state even after errors
+
+---
+
+## MENTAL MODEL
+
+We are evolving from:
+
+"Detect inconsistencies"
+
+to:
+
+"System automatically converges to correct state"
+
+This is required for real-world reliability.
+
+---
