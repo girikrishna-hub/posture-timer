@@ -1,0 +1,236 @@
+You are refactoring an existing Node.js/TypeScript backend. The system is already live. DO NOT break existing APIs or client behavior.
+
+Your task is to introduce a posture orchestration layer that keeps push timers consistent with session state.
+
+This is NOT a rewrite. This is a controlled addition.
+
+---
+
+## CONTEXT
+
+We already have a refactored Sessions domain:
+
+/sessions
+session.controller.ts
+session.service.ts
+session.repository.ts
+session.dto.ts
+session.invariants.ts
+
+We also have existing push APIs:
+
+POST   /api/push/schedule
+DELETE /api/push/schedule
+
+These must remain unchanged and continue working.
+
+---
+
+## PROBLEM
+
+Currently, session state and push timers can drift:
+
+* Starting a new session does not reliably cancel or replace existing timers
+* Auto-closing orphan sessions does not cancel timers
+* Multiple timers may exist for one user
+* Timers are command-driven instead of state-driven
+
+---
+
+## GOAL
+
+Introduce an orchestration layer that:
+
+1. Keeps push timers consistent with session state
+2. Ensures only ONE active posture timer per user
+3. Automatically cancels/replaces timers when sessions change
+4. Does NOT break existing push APIs
+
+---
+
+## TARGET STRUCTURE
+
+Create:
+
+/orchestrators
+posture.orchestrator.ts
+
+---
+
+## RULES (STRICT)
+
+1. DO NOT change:
+
+   * Existing API routes
+   * Request/response formats
+   * Auth (Clerk)
+   * Database schema (unless absolutely necessary)
+
+2. DO NOT remove existing push endpoints
+
+3. The orchestrator must CALL existing push service logic
+   (do not duplicate scheduling logic)
+
+---
+
+## IMPLEMENTATION
+
+STEP 1 — Create Orchestrator
+
+File: posture.orchestrator.ts
+
+Export a class or functions:
+
+onSessionStarted(userId, session)
+onSessionEnded(userId, session)
+
+---
+
+STEP 2 — Behavior
+
+onSessionStarted:
+
+* Cancel any existing posture timer
+* Compute new schedule based on:
+
+  * session.mode
+  * session.startedAt
+  * user settings (fetch from settings service or repository)
+* Call existing push scheduling logic (same logic used by /api/push/schedule)
+
+onSessionEnded:
+
+* Cancel any active posture timer
+
+---
+
+STEP 3 — Safe Timer Sync
+
+Introduce a helper:
+
+syncTimerWithSession(userId)
+
+Logic:
+
+* Get active session
+
+* If no active session:
+  → ensure NO timer exists (cancel if needed)
+
+* If active session exists:
+  → ensure EXACTLY ONE timer exists
+  → if missing or mismatched → reschedule
+
+---
+
+STEP 4 — Hook into Session Service
+
+Modify ONLY session.service.ts
+
+After:
+
+startSession(...)
+endSession(...)
+
+Add:
+
+await postureOrchestrator.onSessionStarted(...)
+await postureOrchestrator.onSessionEnded(...)
+
+IMPORTANT:
+
+If startSession auto-closes an orphan session:
+
+* ALSO call onSessionEnded for the closed session
+
+---
+
+STEP 5 — Idempotency (CRITICAL)
+
+Ensure:
+
+* Calling onSessionStarted multiple times does NOT create duplicate timers
+* Cancelling a non-existent timer does NOT throw
+
+---
+
+STEP 6 — Minimal Push Consistency Check
+
+Create:
+
+/push/push.invariants.ts
+
+Function:
+
+assertSingleActiveTimer(userId)
+
+* Ensure only one timer exists
+* Log error if violated (do not crash system yet)
+
+Call this after:
+
+* scheduling
+* cancelling
+
+---
+
+STEP 7 — Logging (MANDATORY)
+
+Add logs:
+
+* when timer is cancelled
+* when timer is scheduled
+* when timer is replaced
+* when mismatch is detected
+
+Use clear structured logs.
+
+---
+
+STEP 8 — DO NOT BREAK EXISTING FLOW
+
+Existing endpoints:
+
+POST /api/push/schedule
+DELETE /api/push/schedule
+
+Must continue to:
+
+* work independently
+* but ALSO remain consistent with orchestrator behavior
+
+---
+
+## OUTPUT
+
+1. Show new orchestrator file
+2. Show changes to session.service.ts
+3. Show how push scheduling is reused (not duplicated)
+4. Show invariant implementation
+5. Show logging examples
+
+---
+
+## SUCCESS CRITERIA
+
+* Starting a session always results in exactly one correct timer
+* Ending a session removes timers
+* Auto-closed sessions do not leave orphan timers
+* Multiple rapid calls do not create duplicate timers
+* Existing APIs behave exactly as before
+
+---
+
+## IMPORTANT MINDSET
+
+We are shifting from:
+
+"API triggers timers"
+
+to:
+
+"System state determines timers"
+
+But we must do this WITHOUT breaking current APIs.
+
+---

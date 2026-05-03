@@ -1,6 +1,7 @@
 import { sessionRepository } from "./session.repository";
 import { assertSessionInvariants } from "./session.invariants";
 import { logger } from "../lib/logger";
+import { postureOrchestrator } from "../orchestrators/posture.orchestrator";
 import type { Session } from "@workspace/db";
 import type {
   StartSessionDto,
@@ -60,6 +61,9 @@ export const sessionService = {
    *   new one; a dangling active session therefore signals a network failure
    *   or a server restart that lost the in-flight PATCH. Silently closing it
    *   is preferable to rejecting a valid new session.
+   *
+   *   The orphan's timer is cancelled via onSessionEnded before the new
+   *   session's timer is set via onSessionStarted — no duplicate timers.
    */
   async startSession(userId: string, dto: StartSessionDto): Promise<SessionDto> {
     const existing = await sessionRepository.findActiveSession(userId);
@@ -85,6 +89,9 @@ export const sessionService = {
         durationSeconds,
         restType,
       });
+
+      // Cancel any timer the orphaned session may have left running.
+      await postureOrchestrator.onSessionEnded(userId, toDto({ ...existing, endedAt: closeAt, durationSeconds, restType: restType ?? null }));
     }
 
     const session = await sessionRepository.createSession({
@@ -100,6 +107,10 @@ export const sessionService = {
     );
 
     await assertSessionInvariants(userId);
+
+    // Schedule (or skip) a timer for the new session mode.
+    await postureOrchestrator.onSessionStarted(userId, toDto(session));
+
     return toDto(session);
   },
 
@@ -148,6 +159,10 @@ export const sessionService = {
     );
 
     await assertSessionInvariants(userId);
+
+    // Cancel the posture timer for the session that just ended.
+    await postureOrchestrator.onSessionEnded(userId, toDto(updated));
+
     return toDto(updated);
   },
 

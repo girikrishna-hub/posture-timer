@@ -124,6 +124,11 @@ export function cancelPushSchedule(userId: string): void {
   logger.info({ userId }, "Push schedule cancelled");
 }
 
+/** Returns true when a posture timer is currently in-flight for this user. */
+export function hasActivePostureTimer(userId: string): boolean {
+  return activeTimers.has(userId);
+}
+
 // ─── Bladder push ─────────────────────────────────────────────────────────────
 // Separate per-user timer for bladder reminders. Unlike posture, bladder uses a
 // single one-shot push rather than a repeating schedule.
