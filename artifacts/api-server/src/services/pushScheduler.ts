@@ -179,12 +179,19 @@ function scheduleNext(
     );
 
     void sendPushToUser(userId, { title, body, type: "posture", tag: "timer-reminder", traceId: capturedTraceId, userId })
-      .then(() => {
-        recordNotificationSent(userId, capturedTraceId, true);
-        logger.info(
-          { event: "notification.sent", traceId: capturedTraceId, userId, success: true },
-          "Posture notification sent",
-        );
+      .then(({ success, sent, error }) => {
+        recordNotificationSent(userId, capturedTraceId, success, error);
+        if (success) {
+          logger.info(
+            { event: "notification.sent", traceId: capturedTraceId, userId, success: true, sent },
+            "Posture notification sent",
+          );
+        } else {
+          logger.warn(
+            { event: "notification.sent", traceId: capturedTraceId, userId, success: false, error },
+            "Posture notification not delivered",
+          );
+        }
       })
       .catch((err: unknown) => {
         const errorMessage = err instanceof Error ? err.message : String(err);

@@ -34,6 +34,20 @@ export interface PushPayload {
   userId?: string;
 }
 
+/**
+ * Result returned by sendPushToUser.
+ * Callers MUST use this to determine actual success — do NOT assume success
+ * just because the promise resolved without throwing.
+ */
+export interface SendPushResult {
+  /** True when at least one subscription received the push successfully. */
+  success: boolean;
+  /** Number of subscriptions that were accepted by the push service. */
+  sent: number;
+  /** Reason for failure when success is false. */
+  error?: string;
+}
+
 export async function saveSubscription(
   userId: string,
   endpoint: string,
@@ -68,7 +82,7 @@ async function sendToSubscriptions(
   userId: string,
   subs: { endpoint: string; p256dh: string; auth: string }[],
   payload: PushPayload,
-): Promise<void> {
+): Promise<SendPushResult> {
   const payloadType = payload.type ?? "posture";
   const traceId = payload.traceId ?? null;
 
@@ -91,11 +105,14 @@ async function sendToSubscriptions(
     }),
   );
 
+  let sent = 0;
+
   for (let i = 0; i < results.length; i++) {
     const r = results[i]!;
     const sub = subs[i]!;
 
     if (r.status === "fulfilled") {
+      sent++;
       logger.info(
         {
           event: "push.send.result",
@@ -141,9 +158,18 @@ async function sendToSubscriptions(
       }
     }
   }
+
+  return { success: sent > 0, sent };
 }
 
-export async function sendPushToUser(userId: string, payload: PushPayload): Promise<void> {
+/**
+ * Send a push notification to all subscriptions registered for a user.
+ *
+ * Returns a SendPushResult — callers MUST check result.success.
+ * The promise resolves in all cases (including no subscriptions or send
+ * failures); it only rejects on unexpected internal errors.
+ */
+export async function sendPushToUser(userId: string, payload: PushPayload): Promise<SendPushResult> {
   const subs = await db
     .select()
     .from(pushSubscriptionsTable)
@@ -161,7 +187,7 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
       },
       "Push fire: no subscriptions found for user — notification not delivered",
     );
-    return;
+    return { success: false, sent: 0, error: "no_subscriptions" };
   }
 
   logger.info(
@@ -173,5 +199,5 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
     },
     "Push fire: sending to subscriptions",
   );
-  await sendToSubscriptions(userId, subs, payload);
+  return sendToSubscriptions(userId, subs, payload);
 }

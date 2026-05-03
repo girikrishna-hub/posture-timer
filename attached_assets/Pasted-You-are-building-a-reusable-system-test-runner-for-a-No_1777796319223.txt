@@ -1,0 +1,255 @@
+You are building a reusable system test runner for a Node.js/TypeScript backend.
+
+The backend already exists and exposes these APIs:
+
+Sessions:
+
+* GET    /api/sessions/active
+* POST   /api/sessions
+* PATCH  /api/sessions/:id
+
+Push:
+
+* POST   /api/push/subscribe
+* POST   /api/push/schedule
+* DELETE /api/push/schedule
+
+Debug:
+
+* GET    /api/debug/system-state
+* POST   /api/debug/push-received
+* POST   /api/debug/notification-shown
+
+The system includes:
+
+* orchestrator-driven timers
+* self-healing invariants
+* per-user locking
+* startup reconciliation
+
+---
+
+## GOAL
+
+Build a SYSTEM-LEVEL test runner that validates:
+
+* correctness under normal conditions
+* correctness under failure conditions
+* correctness under concurrency
+* observability signals (push delivery chain)
+
+This is NOT unit testing.
+This is NOT mocking.
+All tests must run against the real API.
+
+---
+
+## TARGET STRUCTURE
+
+Create:
+
+/test-runner
+runner.ts
+apiClient.ts
+context.ts
+assertions.ts
+flows/
+sessionFlow.ts
+pushFlow.ts
+concurrencyFlow.ts
+recoveryFlow.ts
+reporter.ts
+
+---
+
+## CORE DESIGN
+
+1. Tests are JSON-like flow definitions
+2. Each step:
+
+   * makes an API call
+   * stores response in context
+3. Assertions always use GET /debug/system-state
+4. No direct DB access
+5. No reliance on timing delays unless necessary
+
+---
+
+## API CLIENT
+
+apiClient.ts:
+
+* wraps fetch
+* injects Authorization header
+* logs request + response
+* retries transient failures (max 2 retries)
+
+---
+
+## CONTEXT
+
+context.ts:
+
+* stores:
+
+  * userId
+  * sessionId
+  * traceIds
+  * last responses
+
+---
+
+## ASSERTIONS
+
+assertions.ts:
+
+Implement:
+
+assertSingleActiveSession(state)
+assertNoActiveSession(state)
+assertSingleTimer(state)
+assertNoTimer(state)
+assertPushDelivered(state, traceId)
+assertNoInvariantFailures(state)
+
+---
+
+## FLOW 1 — SESSION FLOW
+
+sessionFlow.ts:
+
+Steps:
+
+1. POST /sessions (start session)
+
+2. GET /debug/system-state
+   → assertSingleActiveSession
+   → assertSingleTimer
+
+3. PATCH /sessions/:id (end session)
+
+4. GET /debug/system-state
+   → assertNoActiveSession
+   → assertNoTimer
+
+---
+
+## FLOW 2 — PUSH FLOW
+
+pushFlow.ts:
+
+1. POST /push/subscribe
+
+2. POST /sessions
+
+3. Wait for one timer cycle (poll debug endpoint)
+
+4. GET /debug/system-state
+   → extract latest traceId
+
+5. Assert:
+
+   * push.send.result success = true
+   * push-received exists
+   * notification-shown exists
+
+---
+
+## FLOW 3 — CONCURRENCY FLOW
+
+concurrencyFlow.ts:
+
+Run in parallel:
+
+* 3x POST /sessions
+
+Then:
+
+GET /debug/system-state
+
+Assert:
+
+* exactly 1 active session
+* exactly 1 timer
+* no invariant failures
+
+---
+
+## FLOW 4 — RECOVERY FLOW
+
+recoveryFlow.ts:
+
+1. POST /sessions
+
+2. Simulate restart (call a test endpoint OR re-run sync logic)
+
+3. GET /debug/system-state
+
+Assert:
+
+* timer restored
+* session intact
+
+---
+
+## RUNNER
+
+runner.ts:
+
+* executes flows sequentially
+* supports parallel execution for concurrency tests
+* supports repeat count (stress testing)
+
+Example:
+
+run({
+flows: [sessionFlow, pushFlow, concurrencyFlow, recoveryFlow],
+repeat: 5
+})
+
+---
+
+## REPORTER
+
+reporter.ts:
+
+* logs each step
+* prints PASS/FAIL per flow
+* summarizes:
+
+  * total runs
+  * failures
+  * invariant violations
+
+---
+
+## RULES
+
+* NEVER assert based on HTTP 200 alone
+* ALWAYS validate system state
+* ALWAYS validate via debug endpoints
+* DO NOT rely on arbitrary sleep delays
+* Prefer polling with timeout
+
+---
+
+## SUCCESS CRITERIA
+
+The system is correct only if:
+
+* All flows pass
+* No invariant failures
+* Push delivery chain completes
+* System remains stable across repeated runs
+
+---
+
+## MENTAL MODEL
+
+We are not testing APIs.
+
+We are testing:
+
+"Does the system behave correctly end-to-end under real conditions?"
+
+---
