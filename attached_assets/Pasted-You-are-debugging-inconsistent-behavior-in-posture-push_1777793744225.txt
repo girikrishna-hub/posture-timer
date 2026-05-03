@@ -1,0 +1,146 @@
+You are debugging inconsistent behavior in posture push notifications.
+
+Bladder scheduling works correctly. Posture scheduling is unpredictable.
+
+DO NOT change system architecture yet. First, add deep instrumentation to trace behavior.
+
+---
+
+## GOAL
+
+Make posture timer behavior fully observable so we can identify:
+
+* when timers are scheduled
+* when they are cancelled
+* what delay was computed
+* whether notification actually fired
+
+---
+
+## STEP 1 — ADD TIMER TRACE ID
+
+In posture.orchestrator.ts:
+
+When scheduling a timer:
+
+* Generate a unique traceId (e.g., `${userId}-${Date.now()}`)
+
+Pass this traceId through:
+
+* scheduling
+* execution (when timer fires)
+
+---
+
+## STEP 2 — LOG SCHEDULING DETAILS
+
+Log every schedule event:
+
+{
+event: "timer.scheduled",
+traceId,
+userId,
+mode,
+elapsedSeconds,
+thresholdSeconds,
+computedDelaySeconds,
+nextTriggerAt (timestamp)
+}
+
+---
+
+## STEP 3 — LOG CANCELLATIONS
+
+When cancelling a timer:
+
+{
+event: "timer.cancelled",
+traceId,
+userId,
+reason: "session_change" | "resync" | "manual"
+}
+
+---
+
+## STEP 4 — LOG TIMER EXECUTION
+
+When timer fires:
+
+{
+event: "timer.fired",
+traceId,
+userId,
+actualFireTime,
+scheduledTime,
+driftMs
+}
+
+---
+
+## STEP 5 — LOG NOTIFICATION SEND
+
+Immediately before sending push:
+
+{
+event: "notification.attempt",
+traceId,
+userId,
+mode
+}
+
+After sending:
+
+{
+event: "notification.sent",
+traceId,
+success: true/false,
+error (if any)
+}
+
+---
+
+## STEP 6 — DETECT RESCHEDULE LOOPS
+
+Track last 5 schedule timestamps per user.
+
+If more than 3 schedules occur within 2 seconds:
+
+Log:
+
+{
+event: "timer.reschedule.loop",
+userId,
+count,
+windowMs
+}
+
+---
+
+## STEP 7 — DEBUG ENDPOINT
+
+Extend /debug/system-state to include:
+
+* last 5 timer events per user
+* current active timer traceId
+* nextTriggerAt
+
+---
+
+## OUTPUT
+
+1. Show logging additions
+2. Show how traceId flows through system
+3. Show example logs for one full cycle:
+   schedule → fire → notify
+
+---
+
+## SUCCESS CRITERIA
+
+We can trace a single timer end-to-end:
+
+schedule → (optional cancel) → fire → notify
+
+No step should be invisible.
+
+---

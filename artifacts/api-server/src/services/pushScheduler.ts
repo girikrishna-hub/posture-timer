@@ -1,5 +1,15 @@
 import { sendPushToUser } from "./pushService";
 import { logger } from "../lib/logger";
+import {
+  recordScheduled,
+  recordCancelled,
+  recordFired,
+  recordNotificationAttempt,
+  recordNotificationSent,
+  LOOP_THRESHOLD,
+  LOOP_WINDOW_MS,
+} from "./timerTrace";
+import type { CancelReason } from "./timerTrace";
 
 interface ScheduleParams {
   mode: "sitting" | "standing";
@@ -11,15 +21,28 @@ interface ScheduleParams {
   remindersCount: number;
 }
 
-// Per-user timer map
-const activeTimers = new Map<string, ReturnType<typeof setTimeout>>();
+// Per-user timer map — stores the handle AND the trace metadata so we can
+// attribute cancellations and drift measurements back to a specific schedule.
+interface TimerEntry {
+  handle: ReturnType<typeof setTimeout>;
+  traceId: string;
+  nextTriggerAt: number;
+}
 
-function clearActive(userId: string): void {
-  const t = activeTimers.get(userId);
-  if (t !== undefined) {
-    clearTimeout(t);
-    activeTimers.delete(userId);
-  }
+const activeTimers = new Map<string, TimerEntry>();
+
+function clearActive(userId: string, reason: CancelReason): void {
+  const entry = activeTimers.get(userId);
+  if (entry === undefined) return;
+
+  clearTimeout(entry.handle);
+  activeTimers.delete(userId);
+
+  recordCancelled(userId, entry.traceId, reason);
+  logger.info(
+    { event: "timer.cancelled", traceId: entry.traceId, userId, reason },
+    "Posture timer cancelled",
+  );
 }
 
 function scheduleNext(
@@ -27,8 +50,12 @@ function scheduleNext(
   params: ScheduleParams,
   currentMode: "sitting" | "standing",
   remindersFired: number,
+  traceId: string,
 ): void {
-  clearActive(userId);
+  // Always clear the previous entry before setting a new one.
+  // When this is called from a natural timer callback the entry is already
+  // deleted (callback removes it first) so this is a no-op there.
+  clearActive(userId, "resync");
 
   const {
     sittingAlertMinutes,
@@ -38,14 +65,15 @@ function scheduleNext(
     remindersCount,
   } = params;
 
+  let nextDelaySecs: number;
+  let title: string;
+  let body: string;
+  let nextMode: "sitting" | "standing";
+  let nextReminders: number;
+
   if (currentMode === "sitting") {
     const alertSecs = sittingAlertMinutes * 60;
     const intervalSecs = reminderIntervalMinutes * 60;
-
-    let nextDelaySecs: number;
-    let title: string;
-    let body: string;
-    let nextReminders: number;
 
     if (remindersFired === 0) {
       nextDelaySecs = alertSecs - params.elapsedSeconds;
@@ -58,29 +86,15 @@ function scheduleNext(
       body = "Time to take a standing break.";
       nextReminders = remindersFired + 1;
     } else {
-      return;
+      return; // all reminders exhausted
     }
 
-    if (nextDelaySecs <= 0) nextDelaySecs = 5;
-
-    logger.info({ userId, currentMode, nextDelaySecs, title }, "Scheduling push");
-    activeTimers.set(userId, setTimeout(() => {
-      void sendPushToUser(userId, { title, body, type: "posture", tag: "timer-reminder" }).catch((err: unknown) =>
-        logger.error({ err }, "Push send failed"),
-      );
-      scheduleNext(userId, { ...params, elapsedSeconds: 0 }, "sitting", nextReminders);
-    }, nextDelaySecs * 1000));
+    nextMode = "sitting";
 
   } else {
     const minSecs = standingMinMinutes * 60;
     const maxSecs = standingMaxMinutes * 60;
     const intervalSecs = reminderIntervalMinutes * 60;
-
-    let nextDelaySecs: number;
-    let title: string;
-    let body: string;
-    let nextMode: "sitting" | "standing";
-    let nextReminders: number;
 
     if (remindersFired === 0) {
       nextDelaySecs = minSecs - params.elapsedSeconds;
@@ -102,26 +116,111 @@ function scheduleNext(
       nextReminders = 0;
       nextMode = "sitting";
     }
-
-    if (nextDelaySecs <= 0) nextDelaySecs = 5;
-
-    logger.info({ userId, currentMode, nextDelaySecs, title }, "Scheduling push");
-    activeTimers.set(userId, setTimeout(() => {
-      void sendPushToUser(userId, { title, body, type: "posture", tag: "timer-reminder" }).catch((err: unknown) =>
-        logger.error({ err }, "Push send failed"),
-      );
-      scheduleNext(userId, { ...params, elapsedSeconds: 0 }, nextMode, nextReminders);
-    }, nextDelaySecs * 1000));
   }
+
+  if (nextDelaySecs <= 0) nextDelaySecs = 5;
+
+  const nextTriggerAt = Date.now() + nextDelaySecs * 1000;
+
+  // ── Record the schedule event ────────────────────────────────────────────
+  const { recentCount } = recordScheduled(userId, traceId, currentMode, nextDelaySecs);
+
+  logger.info(
+    {
+      event: "timer.scheduled",
+      traceId,
+      userId,
+      mode: currentMode,
+      computedDelaySeconds: nextDelaySecs,
+      nextTriggerAt: new Date(nextTriggerAt).toISOString(),
+      remindersFired,
+    },
+    "Posture timer scheduled",
+  );
+
+  if (recentCount > LOOP_THRESHOLD) {
+    logger.warn(
+      { event: "timer.reschedule.loop", userId, count: recentCount, windowMs: LOOP_WINDOW_MS },
+      "Posture timer reschedule loop detected — too many schedules in a short window",
+    );
+  }
+
+  // ── Capture closure vars before setting the timer ────────────────────────
+  const capturedTraceId = traceId;
+  const capturedNextTriggerAt = nextTriggerAt;
+  const capturedMode = currentMode;
+
+  const handle = setTimeout(() => {
+    // Remove the entry immediately so the subsequent scheduleNext call's
+    // clearActive() finds nothing and does NOT emit a spurious "cancelled" log.
+    activeTimers.delete(userId);
+
+    const fireTime = Date.now();
+    const driftMs = fireTime - capturedNextTriggerAt;
+
+    recordFired(userId, capturedTraceId, driftMs);
+    logger.info(
+      {
+        event: "timer.fired",
+        traceId: capturedTraceId,
+        userId,
+        actualFireTime: new Date(fireTime).toISOString(),
+        scheduledTime: new Date(capturedNextTriggerAt).toISOString(),
+        driftMs,
+      },
+      "Posture timer fired",
+    );
+
+    // ── Notification ──────────────────────────────────────────────────────
+    recordNotificationAttempt(userId, capturedTraceId, capturedMode);
+    logger.info(
+      { event: "notification.attempt", traceId: capturedTraceId, userId, mode: capturedMode },
+      "Posture notification attempt",
+    );
+
+    void sendPushToUser(userId, { title, body, type: "posture", tag: "timer-reminder" })
+      .then(() => {
+        recordNotificationSent(userId, capturedTraceId, true);
+        logger.info(
+          { event: "notification.sent", traceId: capturedTraceId, userId, success: true },
+          "Posture notification sent",
+        );
+      })
+      .catch((err: unknown) => {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        recordNotificationSent(userId, capturedTraceId, false, errorMessage);
+        logger.error(
+          { event: "notification.sent", traceId: capturedTraceId, userId, success: false, err },
+          "Posture notification failed",
+        );
+      });
+
+    // ── Reschedule next cycle with a fresh traceId ────────────────────────
+    const nextTraceId = `${userId}-${Date.now()}`;
+    scheduleNext(userId, { ...params, elapsedSeconds: 0 }, nextMode, nextReminders, nextTraceId);
+  }, nextDelaySecs * 1000);
+
+  activeTimers.set(userId, { handle, traceId, nextTriggerAt });
 }
 
-export function schedulePushNotifications(userId: string, params: ScheduleParams): void {
-  scheduleNext(userId, params, params.mode, 0);
+export function schedulePushNotifications(
+  userId: string,
+  params: ScheduleParams,
+  traceId: string,
+): void {
+  scheduleNext(userId, params, params.mode, 0, traceId);
 }
 
-export function cancelPushSchedule(userId: string): void {
-  clearActive(userId);
-  logger.info({ userId }, "Push schedule cancelled");
+export function cancelPushSchedule(
+  userId: string,
+  reason: CancelReason = "manual",
+): void {
+  clearActive(userId, reason);
+  // clearActive already logs if there was an active timer.
+  // Log separately when nothing was active so callers can see the no-op.
+  if (!activeTimers.has(userId)) {
+    // Entry already removed by clearActive; log only when there was nothing.
+  }
 }
 
 /** Returns true when a posture timer is currently in-flight for this user. */

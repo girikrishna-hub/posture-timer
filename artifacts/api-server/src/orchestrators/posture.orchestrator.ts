@@ -107,17 +107,8 @@ const MISSED_EVENT_RESCHEDULE_DELAY_SECS = 5;
 
 /**
  * Schedule exactly one posture timer for a sitting/standing session.
- *
- * Missed-event handling (explicit, not implicit):
- *   If the session has been running longer than the initial alert threshold
- *   (e.g. the server was down during the alert window), the event is logged
- *   as "timer.missed" and elapsedSeconds is set so the scheduler fires in
- *   exactly MISSED_EVENT_RESCHEDULE_DELAY_SECS seconds. We compute this
- *   explicitly rather than relying on pushScheduler's ≤0 clamp — the
- *   behaviour is local and auditable.
- *
- *   No belated notification is sent — the user receives the next cycle prompt
- *   shortly after the server comes back, without notification spam.
+ * Generates a unique traceId for this scheduling cycle and threads it through
+ * the scheduler so every subsequent event (fire, cancel, notify) is attributable.
  */
 async function scheduleForSession(
   userId: string,
@@ -153,18 +144,19 @@ async function scheduleForSession(
       "posture.orchestrator: missed timer event detected — rescheduling next cycle (no belated notification sent)",
     );
 
-    // Explicitly compute the elapsedSeconds value that makes the scheduler
-    // fire in exactly MISSED_EVENT_RESCHEDULE_DELAY_SECS seconds.
-    // For sitting: nextDelaySecs = alertSecs - elapsedSeconds
-    //   → we want nextDelaySecs = 5, so elapsedSeconds = alertSecs - 5
-    // For standing: nextDelaySecs = minSecs - elapsedSeconds  (same formula)
+    // Compute elapsedSeconds that makes the scheduler fire in exactly
+    // MISSED_EVENT_RESCHEDULE_DELAY_SECS seconds (not relying on clamping).
     elapsedSeconds = thresholdSeconds - MISSED_EVENT_RESCHEDULE_DELAY_SECS;
   }
 
-  schedulePushNotifications(userId, { mode, elapsedSeconds, ...settings });
+  // Unique trace identifier for this scheduling cycle. Flows through
+  // scheduling → firing → notification so every step is attributable.
+  const traceId = `${userId}-${Date.now()}`;
+
+  schedulePushNotifications(userId, { mode, elapsedSeconds, ...settings }, traceId);
 
   logger.info(
-    { userId, mode, elapsedSeconds, rawElapsedSeconds },
+    { userId, mode, traceId, elapsedSeconds, rawElapsedSeconds },
     "posture.orchestrator: timer scheduled",
   );
 }
@@ -179,7 +171,8 @@ async function scheduleForSession(
 
 async function _onSessionStarted(userId: string, session: SessionDto): Promise<void> {
   const hadTimer = hasActivePostureTimer(userId);
-  cancelPushSchedule(userId);
+  // Cancel with explicit reason so the trace log shows why it was cancelled.
+  cancelPushSchedule(userId, "session_change");
 
   if (hadTimer) {
     logger.info(
@@ -202,7 +195,7 @@ async function _onSessionStarted(userId: string, session: SessionDto): Promise<v
 
 async function _onSessionEnded(userId: string, session: SessionDto | null): Promise<void> {
   const hadTimer = hasActivePostureTimer(userId);
-  cancelPushSchedule(userId);
+  cancelPushSchedule(userId, "session_change");
 
   if (hadTimer) {
     logger.info(
@@ -225,7 +218,7 @@ async function _syncTimerWithSession(userId: string): Promise<void> {
   if (!activeSession) {
     const hadTimer = hasActivePostureTimer(userId);
     if (hadTimer) {
-      cancelPushSchedule(userId);
+      cancelPushSchedule(userId, "resync");
       logger.warn(
         { userId },
         "posture.orchestrator: syncTimerWithSession — cancelled orphan timer (no active session)",
@@ -251,7 +244,7 @@ async function _syncTimerWithSession(userId: string): Promise<void> {
   } else {
     const hadTimer = hasActivePostureTimer(userId);
     if (hadTimer) {
-      cancelPushSchedule(userId);
+      cancelPushSchedule(userId, "resync");
       logger.warn(
         { userId, mode },
         "posture.orchestrator: syncTimerWithSession — cancelled stale timer for non-posture session",
