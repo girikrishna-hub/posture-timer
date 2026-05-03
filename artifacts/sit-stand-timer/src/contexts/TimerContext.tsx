@@ -212,6 +212,9 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   const prevDailyGoalRef = useRef<number | null>(null);
 
   const elapsedSecondsRef = useRef(elapsedSeconds);
+  // Wall-clock timestamp (ms) when the current session started. Used to
+  // resync elapsedSeconds after browser throttles the interval in the background.
+  const sessionStartedAtRef = useRef<number | null>(null);
 
   useEffect(() => { modeRef.current = mode; }, [mode]);
   useEffect(() => { elapsedSecondsRef.current = elapsedSeconds; }, [elapsedSeconds]);
@@ -268,9 +271,9 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     if (!initialized && activeSessionData !== undefined) {
       const active = activeSessionData.session;
       if (active && !active.endedAt) {
-        const elapsed = Math.floor(
-          (Date.now() - new Date(active.startedAt).getTime()) / 1000
-        );
+        const startedAtMs = new Date(active.startedAt).getTime();
+        const elapsed = Math.floor((Date.now() - startedAtMs) / 1000);
+        sessionStartedAtRef.current = startedAtMs;
         setMode(active.mode as TimerMode);
         setRestType((active.restType as "nap" | "sleep" | null) ?? null);
         setElapsedSeconds(elapsed);
@@ -370,6 +373,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
 
       setMode(newMode);
       setRestType(newMode === "resting" ? (newRestType ?? null) : null);
+      sessionStartedAtRef.current = newMode === "resting" ? null : new Date(transitionTime).getTime();
       setElapsedSeconds(0);
       setReminderCount(0);
       setInReminderPhase(false);
@@ -421,6 +425,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
 
     setMode("idle");
     setActiveSessionId(null);
+    sessionStartedAtRef.current = null;
     setElapsedSeconds(0);
     setReminderCount(0);
     setInReminderPhase(false);
@@ -633,6 +638,17 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       cancelBackgroundAlert();
       const currentMode = modeRef.current;
       if (currentMode === "idle" || currentMode === "resting") return;
+
+      // Resync elapsed time from wall clock.
+      // The browser throttles/suspends setInterval in the background so the
+      // counter drifts behind. Recalculate from the absolute session start
+      // timestamp so the display is immediately correct without a page refresh.
+      const startedAt = sessionStartedAtRef.current;
+      if (startedAt !== null) {
+        const resynced = Math.floor((Date.now() - startedAt) / 1000);
+        setElapsedSeconds(resynced);
+      }
+
       const inactiveSecs = (Date.now() - lastActivityRef.current) / 1000;
       if (inactiveSecs >= IDLE_TIMEOUT_SECONDS) {
         void switchModeRef.current("resting");
