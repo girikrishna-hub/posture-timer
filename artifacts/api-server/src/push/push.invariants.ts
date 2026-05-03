@@ -2,25 +2,31 @@ import { hasActivePostureTimer } from "../services/pushScheduler";
 import { sessionRepository } from "../sessions/session.repository";
 import { logger } from "../lib/logger";
 
+const MAX_HEAL_ATTEMPTS = 2;
+
 /**
- * Self-healing consistency check.
+ * Self-healing consistency check with loop guard.
  *
  * Compares in-process timer state against the active session stored in the DB.
- * When a mismatch is found it logs an ERROR and then calls `healFn` to bring
- * the system back to a consistent state. Never throws — the goal is convergence,
- * not crash.
+ * When a mismatch is found it logs an ERROR and calls `healFn` to converge.
+ * Re-checks after healing (up to MAX_HEAL_ATTEMPTS times) to confirm the fix
+ * took effect. Stops and logs a HARD ERROR if the state still diverges after
+ * all retries — prevents infinite healing loops.
+ *
+ * Never throws. The goal is convergence, not crash.
  *
  * Consistent states:
  *   • No active session          → no timer
  *   • sitting / standing session → exactly one timer
  *   • resting / walking session  → no timer
  *
- * @param healFn  Injected by the caller (typically postureOrchestrator.syncTimerWithSession)
- *                to avoid a circular module import between orchestrator ↔ invariants.
+ * @param healFn  Injected by the caller to avoid circular module imports.
+ * @param attempt Current retry depth (callers should omit; defaults to 0).
  */
 export async function ensureSingleActiveTimer(
   userId: string,
   healFn: (userId: string) => Promise<void>,
+  attempt = 0,
 ): Promise<void> {
   const [hasTimer, activeSession] = await Promise.all([
     Promise.resolve(hasActivePostureTimer(userId)),
@@ -32,28 +38,55 @@ export async function ensureSingleActiveTimer(
 
   if (hasTimer === shouldHaveTimer) return; // consistent — nothing to do
 
-  if (hasTimer && !shouldHaveTimer) {
+  // ── Mismatch detected ────────────────────────────────────────────────────
+  const direction = hasTimer
+    ? "timer active but no sitting/standing session"
+    : "sitting/standing session but no timer";
+
+  if (attempt >= MAX_HEAL_ATTEMPTS) {
     logger.error(
-      { userId, activeSessionMode: mode },
-      "push.invariants: posture timer is active but no sitting/standing session exists — mismatch detected; healing",
+      {
+        event: "self.heal.failed",
+        userId,
+        activeSessionMode: mode,
+        hasTimer,
+        shouldHaveTimer,
+        attempts: attempt,
+        direction,
+      },
+      "push.invariants: self-heal HARD FAILURE — mismatch persists after max retries; giving up to avoid infinite loop",
     );
-  } else {
-    logger.error(
-      { userId, activeSessionMode: mode },
-      "push.invariants: sitting/standing session is active but no posture timer exists — mismatch detected; healing",
-    );
+    return;
   }
+
+  logger.error(
+    {
+      event: "self.heal.mismatch",
+      userId,
+      activeSessionMode: mode,
+      hasTimer,
+      shouldHaveTimer,
+      attempt,
+      direction,
+    },
+    `push.invariants: mismatch detected (attempt ${attempt + 1}/${MAX_HEAL_ATTEMPTS}) — healing`,
+  );
 
   try {
     await healFn(userId);
-    logger.info(
-      { userId, activeSessionMode: mode },
-      "push.invariants: self-healed — timer state converged to session state",
-    );
   } catch (err) {
     logger.error(
-      { err, userId },
-      "push.invariants: self-heal attempt failed",
+      { err, userId, attempt },
+      "push.invariants: healFn threw during self-heal — stopping",
     );
+    return;
   }
+
+  // Re-check: verify the heal actually converged.
+  await ensureSingleActiveTimer(userId, healFn, attempt + 1);
+
+  logger.info(
+    { event: "self.heal.success", userId, activeSessionMode: mode, attempt },
+    "push.invariants: self-healed — timer state converged to session state",
+  );
 }

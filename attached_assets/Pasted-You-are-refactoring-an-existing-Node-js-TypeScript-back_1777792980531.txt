@@ -1,0 +1,193 @@
+You are refactoring an existing Node.js/TypeScript backend that already has:
+
+* Sessions domain with invariants
+* Posture orchestrator with locking
+* In-memory push scheduler
+* Startup reconciliation
+* Self-healing timer invariant (ensureSingleActiveTimer)
+
+DO NOT change existing APIs or response formats.
+
+---
+
+## GOAL
+
+Fix the remaining system-level reliability gaps:
+
+1. Handle missed timer events after downtime
+2. Prevent infinite self-healing loops
+3. Make push scheduling behavior observable (no silent overrides)
+4. Prevent memory leak in per-user lock map
+5. Keep all behavior deterministic and safe
+
+---
+
+## CONSTRAINTS
+
+* No breaking API changes
+* No DB schema changes unless absolutely necessary
+* No removal of existing features
+* Changes must be minimal and targeted
+
+---
+
+## STEP 1 — MISSED EVENT HANDLING (CRITICAL)
+
+Inside posture.orchestrator.ts → _syncTimerWithSession:
+
+After computing:
+
+* session.startedAt
+* elapsedSeconds
+* expected next trigger time
+
+Add logic:
+
+IF current time > expected trigger time:
+THEN:
+- Log: "missed timer event detected"
+- EITHER:
+(a) trigger notification immediately
+OR
+(b) log as "missed" and reschedule next cycle
+
+Choose option (b) by default:
+
+* Do NOT spam user with delayed notifications
+* Just reschedule cleanly
+
+Add clear structured log:
+{
+event: "timer.missed",
+userId,
+mode,
+delaySeconds
+}
+
+---
+
+## STEP 2 — SELF-HEAL LOOP GUARD
+
+Modify ensureSingleActiveTimer:
+
+Add retry guard:
+
+ensureSingleActiveTimer(userId, healFn, attempt = 0)
+
+Behavior:
+
+* If mismatch detected:
+  IF attempt >= 2:
+  - Log HARD ERROR:
+  "self-heal failed after retries"
+  - STOP (do not retry further)
+  ELSE:
+  - call healFn(userId)
+  - re-run ensureSingleActiveTimer(userId, healFn, attempt + 1)
+
+This prevents infinite correction loops.
+
+---
+
+## STEP 3 — EXPLICIT OVERRIDE LOGGING
+
+In routes/push.ts:
+
+When POST /push/schedule is called:
+
+* Capture requested mode from request
+* After calling orchestrator:
+
+Compare:
+
+* requested mode
+* actual session mode (from DB or service)
+
+IF different:
+Log:
+
+{
+event: "push.override",
+userId,
+requestedMode,
+actualMode
+}
+
+DO NOT change API response.
+
+---
+
+## STEP 4 — LOCK MAP CLEANUP
+
+In posture.orchestrator.ts:
+
+Enhance withUserLock:
+
+After promise resolves:
+
+* If current stored promise === this promise
+  → delete from lockChain
+
+Prevents unbounded growth of Map<userId, Promise>
+
+---
+
+## STEP 5 — SAFETY HARDENING
+
+Ensure:
+
+* All orchestrator methods remain idempotent
+* Cancelling non-existent timers is safe
+* Scheduling does not duplicate timers
+
+Add defensive logging for unexpected states.
+
+---
+
+## STEP 6 — LOGGING IMPROVEMENTS
+
+Add structured logs for:
+
+* missed events
+* self-heal retries
+* override detection
+* lock acquisition/release (DEBUG level)
+
+---
+
+## OUTPUT
+
+1. Show updated _syncTimerWithSession logic
+2. Show updated ensureSingleActiveTimer with retry guard
+3. Show push route override logging
+4. Show updated withUserLock cleanup logic
+5. Show example logs for:
+
+   * missed event
+   * self-heal failure
+   * override detection
+
+---
+
+## SUCCESS CRITERIA
+
+* No missed events are silently ignored (they are logged + handled)
+* No infinite healing loops possible
+* Push API overrides are visible in logs
+* Lock map does not grow unbounded
+* System remains fully backward compatible
+
+---
+
+## MENTAL MODEL
+
+We are eliminating "silent failure modes":
+
+* missed timers → now visible + handled
+* infinite healing → now bounded
+* hidden overrides → now explicit
+* memory leaks → now controlled
+
+The system should now fail loudly or self-correct — never silently drift.
+
+---

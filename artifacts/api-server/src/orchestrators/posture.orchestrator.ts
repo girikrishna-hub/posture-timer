@@ -24,19 +24,30 @@ import type { SessionDto } from "../sessions/session.dto";
 
 // ─── Per-user lock ───────────────────────────────────────────────────────────
 //
-// Each userId maps to a promise that settles when the current operation for
-// that user finishes. New operations chain on the existing promise, so they
-// wait their turn. The stored promise always resolves (never rejects) so
-// upstream rejections do not block the queue.
+// Each userId maps to a void promise that settles when the current operation
+// finishes. New callers chain on that promise — they wait their turn.
+// The stored promise always resolves (errors are swallowed into void) so a
+// failing operation never blocks subsequent ones for the same user.
+//
+// Cleanup: once the stored promise for a user settles and no new operation has
+// taken its slot, the entry is removed from the Map to prevent unbounded growth.
 
 const lockChain = new Map<string, Promise<void>>();
 
 function withUserLock<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   const prior = lockChain.get(userId) ?? Promise.resolve();
   const result = prior.then(() => fn());
-  // Store a version that always resolves so future waiters are never blocked
-  // by a rejection from the current operation.
-  lockChain.set(userId, result.then(() => {}, () => {}));
+
+  // voidResult always resolves — safe to chain future operations on.
+  const voidResult: Promise<void> = result.then(() => {}, () => {});
+  lockChain.set(userId, voidResult);
+
+  // Cleanup: remove map entry once this operation is done and nothing newer
+  // has replaced it. Prevents unbounded Map growth for long-running servers.
+  void voidResult.then(() => {
+    if (lockChain.get(userId) === voidResult) lockChain.delete(userId);
+  });
+
   return result;
 }
 
@@ -75,6 +86,16 @@ async function fetchSettings(userId: string): Promise<PostureSettings> {
 
 // ─── Internal helpers ────────────────────────────────────────────────────────
 
+/**
+ * Schedule exactly one posture timer for a sitting/standing session.
+ *
+ * Also detects missed timer events: if the session has been running longer
+ * than the initial alert threshold (e.g. sitting for 60 min when alert is
+ * set to 45 min), the alert window has already passed. Rather than spamming
+ * the user with a belated notification, the scheduler is called with the real
+ * elapsedSeconds — pushScheduler clamps any negative delay to 5 s so the
+ * next cycle fires quickly. The missed event is logged for observability.
+ */
 async function scheduleForSession(
   userId: string,
   mode: "sitting" | "standing",
@@ -86,6 +107,29 @@ async function scheduleForSession(
     Math.round((Date.now() - startedAt.getTime()) / 1000),
   );
 
+  // Missed-event detection: check whether the first alert threshold has passed.
+  const thresholdSeconds =
+    mode === "sitting"
+      ? settings.sittingAlertMinutes * 60
+      : settings.standingMinMinutes * 60;
+
+  if (elapsedSeconds > thresholdSeconds) {
+    const delaySeconds = elapsedSeconds - thresholdSeconds;
+    logger.warn(
+      {
+        event: "timer.missed",
+        userId,
+        mode,
+        elapsedSeconds,
+        thresholdSeconds,
+        delaySeconds,
+      },
+      "posture.orchestrator: missed timer event detected — rescheduling next cycle (no belated notification sent)",
+    );
+  }
+
+  // schedulePushNotifications clamps nextDelaySecs ≤ 0 to 5 s, so passing a
+  // large elapsedSeconds is safe — it just fires the next cycle very soon.
   schedulePushNotifications(userId, { mode, elapsedSeconds, ...settings });
 
   logger.info(
@@ -95,8 +139,12 @@ async function scheduleForSession(
 }
 
 // ─── Implementation (unlocked) ───────────────────────────────────────────────
-// These functions contain the real logic. They are wrapped by the public API
-// so the lock is acquired before any of this runs.
+// These functions contain the real logic. They are called from the public API
+// wrappers which hold the per-user lock before invoking them.
+//
+// IMPORTANT: _syncTimerWithSession is passed as the healFn to
+// ensureSingleActiveTimer. It must be the UNLOCKED variant so calling it from
+// inside the lock does not deadlock.
 
 async function _onSessionStarted(userId: string, session: SessionDto): Promise<void> {
   const hadTimer = hasActivePostureTimer(userId);
@@ -152,7 +200,10 @@ async function _syncTimerWithSession(userId: string): Promise<void> {
         "posture.orchestrator: syncTimerWithSession — cancelled orphan timer (no active session)",
       );
     } else {
-      logger.info({ userId }, "posture.orchestrator: syncTimerWithSession — no active session, no timer needed");
+      logger.info(
+        { userId },
+        "posture.orchestrator: syncTimerWithSession — no active session, no timer needed",
+      );
     }
     await ensureSingleActiveTimer(userId, (id) => _syncTimerWithSession(id));
     return;
