@@ -178,7 +178,7 @@ function scheduleNext(
       "Posture notification attempt",
     );
 
-    void sendPushToUser(userId, { title, body, type: "posture", tag: "timer-reminder" })
+    void sendPushToUser(userId, { title, body, type: "posture", tag: "timer-reminder", traceId: capturedTraceId, userId })
       .then(() => {
         recordNotificationSent(userId, capturedTraceId, true);
         logger.info(
@@ -261,6 +261,8 @@ export function scheduleBladderPush(userId: string, delayMs: number, logId: stri
         tag: "bladder-reminder",
         type: "bladder",
         logId,
+        traceId: `${userId}-bladder-${logId}`,
+        userId,
       }).catch((err: unknown) =>
         logger.error({ err }, "Bladder push send failed"),
       );

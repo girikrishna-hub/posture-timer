@@ -13,6 +13,33 @@ self.addEventListener("activate", (event: ExtendableEvent) =>
   event.waitUntil(self.clients.claim()),
 );
 
+// ─── Debug beacon ─────────────────────────────────────────────────────────────
+//
+// Sends a best-effort fetch to a debug endpoint so the server can record
+// device-side push receipt and notification display events.
+//
+// Uses keepalive: true so the request survives even if the SW is about to be
+// suspended after the push event completes.
+// Never throws — errors are swallowed so the push handler never fails over a
+// non-critical beacon.
+
+interface BeaconPayload {
+  timestamp: number;
+  payloadType: string;
+  traceId: string;
+  userId: string;
+}
+
+function sendDebugBeacon(endpoint: string, payload: BeaconPayload): Promise<void> {
+  console.log(`[SW] ${endpoint}`, payload);
+  return fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    keepalive: true,
+  }).then(() => undefined, () => undefined);
+}
+
 // ─── Posture scheduled alert ─────────────────────────────────────────────────
 let scheduledAlertTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -186,45 +213,65 @@ self.addEventListener("push", (event: PushEvent) => {
         type?: string;
         tag?: string;
         logId?: string;
+        traceId?: string;
+        userId?: string;
       })
     : {};
 
+  // Extract correlation fields embedded in the server push payload.
+  const traceId = data.traceId ?? `unknown-${Date.now()}`;
+  const userId = data.userId ?? "unknown";
+  const payloadType = data.type ?? "posture";
+  const now = Date.now();
+
   if (data.type === "bladder") {
     // ── Bladder reminder ─────────────────────────────────────────────────────
-    // Independent of posture: uses tag "bladder-reminder" so the OS never
-    // replaces a posture notification with this one, or vice versa.
     if (data.logId) bladderPendingLogId = data.logId;
+    const capturedLogId = bladderPendingLogId;
+
     event.waitUntil(
-      self.registration.showNotification(data.title ?? "Time to void", {
-        body: data.body ?? "Go now. Do not delay.",
-        icon: "/favicon.svg",
-        badge: "/favicon.svg",
-        tag: "bladder-reminder",
-        renotify: true,
-        requireInteraction: true,
-        data: { url: "/bladder", logId: bladderPendingLogId },
-        actions: [
-          { action: "done", title: "✓ Done" },
-          { action: "snooze", title: "⏱ Snooze 5 min" },
-        ],
-      } as NotificationOptions),
+      sendDebugBeacon("/api/debug/push-received", { timestamp: now, payloadType, traceId, userId })
+        .then(() =>
+          self.registration.showNotification(data.title ?? "Time to void", {
+            body: data.body ?? "Go now. Do not delay.",
+            icon: "/favicon.svg",
+            badge: "/favicon.svg",
+            tag: "bladder-reminder",
+            renotify: true,
+            requireInteraction: true,
+            data: { url: "/bladder", logId: capturedLogId },
+            actions: [
+              { action: "done", title: "✓ Done" },
+              { action: "snooze", title: "⏱ Snooze 5 min" },
+            ],
+          } as NotificationOptions),
+        )
+        .then(() =>
+          sendDebugBeacon("/api/debug/notification-shown", { timestamp: Date.now(), payloadType, traceId, userId }),
+        )
+        .catch(() => {}),
     );
     return;
   }
 
   if (data.type === "posture" || data.type == null) {
     // ── Posture timer notification ────────────────────────────────────────────
-    // Independent of bladder: uses tag "timer-reminder" so both can be visible
-    // in the OS notification centre simultaneously without replacing each other.
     event.waitUntil(
-      self.registration.showNotification(data.title ?? "Timer Alert", {
-        body: data.body ?? "Time to switch your posture.",
-        icon: "/favicon.svg",
-        badge: "/favicon.svg",
-        tag: "timer-reminder",
-        renotify: true,
-        data: { url: "/" },
-      } as NotificationOptions),
+      sendDebugBeacon("/api/debug/push-received", { timestamp: now, payloadType, traceId, userId })
+        .then(() =>
+          self.registration.showNotification(data.title ?? "Timer Alert", {
+            body: data.body ?? "Time to switch your posture.",
+            icon: "/favicon.svg",
+            badge: "/favicon.svg",
+            tag: "timer-reminder",
+            renotify: true,
+            data: { url: "/" },
+          } as NotificationOptions),
+        )
+        .then(() =>
+          sendDebugBeacon("/api/debug/notification-shown", { timestamp: Date.now(), payloadType, traceId, userId }),
+        )
+        .catch(() => {}),
     );
   }
 });

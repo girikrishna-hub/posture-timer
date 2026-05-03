@@ -8,8 +8,79 @@ import {
   getTimerHistory,
   getTrackedUserIds,
 } from "../services/timerTrace";
+import {
+  recordPushReceived,
+  recordNotificationShown,
+  getPushReceived,
+  getNotificationShown,
+  getReceiptTrackedUserIds,
+} from "../services/pushReceiptTrace";
 
 const router: IRouter = Router();
+
+// ─── Push receipt endpoints (called by service worker) ───────────────────────
+//
+// No auth — these beacons arrive from the service worker context where Clerk
+// session tokens are not available. The userId is embedded in the encrypted
+// push payload and echoed back here; for a debug endpoint this is acceptable.
+
+/**
+ * POST /debug/push-received
+ *
+ * Recorded when the service worker "push" event fires on the device.
+ * Answers: "Did the device receive the push?"
+ *
+ * Body: { timestamp: number, payloadType: string, traceId: string, userId: string }
+ */
+router.post("/debug/push-received", (req, res) => {
+  const { timestamp, payloadType, traceId, userId } = req.body as {
+    timestamp?: number;
+    payloadType?: string;
+    traceId?: string;
+    userId?: string;
+  };
+
+  if (!traceId || !userId || !payloadType) {
+    return res.status(400).json({ error: "traceId, userId and payloadType are required" });
+  }
+
+  recordPushReceived(userId, traceId, payloadType, timestamp ?? Date.now());
+  req.log.info(
+    { event: "push-received", userId, traceId, payloadType },
+    "SW push-received beacon recorded",
+  );
+  return res.json({ ok: true });
+});
+
+/**
+ * POST /debug/notification-shown
+ *
+ * Recorded after showNotification() resolves in the service worker.
+ * Answers: "Did the OS actually display the notification?"
+ *
+ * Body: { timestamp: number, payloadType: string, traceId: string, userId: string }
+ */
+router.post("/debug/notification-shown", (req, res) => {
+  const { timestamp, payloadType, traceId, userId } = req.body as {
+    timestamp?: number;
+    payloadType?: string;
+    traceId?: string;
+    userId?: string;
+  };
+
+  if (!traceId || !userId || !payloadType) {
+    return res.status(400).json({ error: "traceId, userId and payloadType are required" });
+  }
+
+  recordNotificationShown(userId, traceId, payloadType, timestamp ?? Date.now());
+  req.log.info(
+    { event: "notification-shown", userId, traceId, payloadType },
+    "SW notification-shown beacon recorded",
+  );
+  return res.json({ ok: true });
+});
+
+// ─── System state snapshot ────────────────────────────────────────────────────
 
 /**
  * GET /debug/system-state
@@ -24,17 +95,21 @@ const router: IRouter = Router();
  *   usersWithActiveSessions: string[],
  *   usersWithActiveTimers:   string[],
  *   selfHealFailures:        number,
+ *
  *   timerDetails: {
  *     [userId]: {
  *       activeTimer: {
- *         traceId:              string,
- *         mode:                 "sitting" | "standing",
- *         scheduledAt:          number,   // ms epoch
- *         nextTriggerAt:        number,   // ms epoch
- *         computedDelaySeconds: number,
- *         msUntilTrigger:       number    // negative if overdue
+ *         traceId, mode, scheduledAt, nextTriggerAt,
+ *         computedDelaySeconds, msUntilTrigger
  *       } | null,
- *       recentEvents: TimerEvent[]        // last 5, oldest-first
+ *       recentEvents: TimerEvent[]    // last 5, oldest-first
+ *     }
+ *   },
+ *
+ *   pushReceipts: {
+ *     [userId]: {
+ *       received:  PushReceiptEvent[],  // last 20 push-received beacons
+ *       shown:     PushReceiptEvent[]   // last 20 notification-shown beacons
  *     }
  *   }
  * }
@@ -48,9 +123,8 @@ router.get("/debug/system-state", async (_req, res) => {
   const usersWithActiveSessions = rows.map((r) => r.userId);
   const usersWithActiveTimers = getActiveTimerUserIds();
 
-  // Build per-user timer details for every user that appears in either list
-  // or has any trace history.
-  const relevantUsers = new Set([
+  // ── Timer details ─────────────────────────────────────────────────────────
+  const timerUsers = new Set([
     ...usersWithActiveSessions,
     ...usersWithActiveTimers,
     ...getTrackedUserIds(),
@@ -72,13 +146,34 @@ router.get("/debug/system-state", async (_req, res) => {
     }
   > = {};
 
-  for (const userId of relevantUsers) {
+  for (const userId of timerUsers) {
     const state = getActiveTimerState(userId);
     timerDetails[userId] = {
       activeTimer: state
         ? { ...state, msUntilTrigger: state.nextTriggerAt - now }
         : null,
       recentEvents: getTimerHistory(userId),
+    };
+  }
+
+  // ── Push receipt details ──────────────────────────────────────────────────
+  const receiptUsers = new Set([
+    ...timerUsers,
+    ...getReceiptTrackedUserIds(),
+  ]);
+
+  const pushReceipts: Record<
+    string,
+    {
+      received: ReturnType<typeof getPushReceived>;
+      shown: ReturnType<typeof getNotificationShown>;
+    }
+  > = {};
+
+  for (const userId of receiptUsers) {
+    pushReceipts[userId] = {
+      received: getPushReceived(userId),
+      shown: getNotificationShown(userId),
     };
   }
 
@@ -89,6 +184,7 @@ router.get("/debug/system-state", async (_req, res) => {
     usersWithActiveTimers,
     selfHealFailures: getSelfHealFailureCount(),
     timerDetails,
+    pushReceipts,
   });
 });
 
