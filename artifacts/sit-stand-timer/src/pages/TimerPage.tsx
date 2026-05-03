@@ -1,5 +1,5 @@
 import { useTimer, type TimerMode } from "@/contexts/TimerContext";
-import { useGetTodayStats, useGetSettings, getGetTodayStatsQueryKey } from "@workspace/api-client-react";
+import { useGetTodayStats, useGetSettings, getGetTodayStatsQueryKey, useListSessions, getListSessionsQueryKey } from "@workspace/api-client-react";
 import { isSoundEnabled, setSoundEnabled } from "@/utils/audio";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -793,6 +793,8 @@ export default function TimerPage() {
             />
           </div>
         )}
+
+        <TodayCycles />
       </footer>
     </div>
   );
@@ -803,6 +805,68 @@ function StatCard({ label, value, color }: { label: string; value: string; color
     <div className="bg-card border border-border rounded-xl p-3 text-center">
       <div className={`text-lg font-semibold tabular-nums ${color}`}>{value}</div>
       <div className="text-xs text-muted-foreground mt-0.5">{label}</div>
+    </div>
+  );
+}
+
+function formatSessionDuration(seconds: number | null): string {
+  if (seconds === null || seconds <= 0) return "—";
+  const totalMin = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  if (totalMin < 60) return secs > 0 && totalMin === 0 ? `${secs}s` : `${totalMin}m`;
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
+function getModeDotColor(mode: TimerMode): string {
+  switch (mode) {
+    case "sitting": return "bg-amber-500 dark:bg-amber-400";
+    case "standing": return "bg-emerald-500 dark:bg-emerald-400";
+    case "resting": return "bg-indigo-500 dark:bg-indigo-400";
+    case "walking": return "bg-teal-500 dark:bg-teal-400";
+    default: return "bg-muted-foreground";
+  }
+}
+
+function TodayCycles() {
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  const params = { from: todayStr, to: todayStr, limit: 50 };
+  const { data } = useListSessions(params, {
+    query: { queryKey: getListSessionsQueryKey(params), refetchInterval: 30000 },
+  });
+
+  const completed = (data?.sessions ?? [])
+    .filter((s) => s.endedAt !== null && s.endedAt !== undefined)
+    .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
+    .slice(0, 10);
+
+  if (completed.length === 0) return null;
+
+  return (
+    <div className="rounded-2xl border border-border bg-card px-4 py-4 space-y-3">
+      <p className="text-sm font-semibold text-foreground">Today's cycles</p>
+      <div className="space-y-2.5">
+        {completed.map((session) => {
+          const mode = session.mode as TimerMode;
+          const label = getModeLabel(mode, session.restType as "nap" | "sleep" | null);
+          const timeLabel = new Date(session.startedAt).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+          const duration = formatSessionDuration(session.durationSeconds ?? null);
+
+          return (
+            <div key={session.id} className="flex items-center gap-3 text-sm">
+              <span className="text-muted-foreground tabular-nums w-14 shrink-0">{timeLabel}</span>
+              <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${getModeDotColor(mode)}`} />
+              <span className={`flex-1 font-medium ${getModeColor(mode)}`}>{label}</span>
+              <span className="text-muted-foreground tabular-nums text-xs">{duration}</span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
