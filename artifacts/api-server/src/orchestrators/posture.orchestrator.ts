@@ -29,14 +29,29 @@ import type { SessionDto } from "../sessions/session.dto";
 // The stored promise always resolves (errors are swallowed into void) so a
 // failing operation never blocks subsequent ones for the same user.
 //
-// Cleanup: once the stored promise for a user settles and no new operation has
-// taken its slot, the entry is removed from the Map to prevent unbounded growth.
+// Cleanup: once the stored promise for a user settles and no newer operation
+// has taken its slot, the entry is removed from the Map to prevent unbounded
+// growth.
 
 const lockChain = new Map<string, Promise<void>>();
 
 function withUserLock<T>(userId: string, fn: () => Promise<T>): Promise<T> {
   const prior = lockChain.get(userId) ?? Promise.resolve();
-  const result = prior.then(() => fn());
+
+  // Capture wall-clock time before we start waiting so we can measure how
+  // long this call spent queued behind previous operations.
+  const waitStart = Date.now();
+
+  const result = prior.then(() => {
+    const waitMs = Date.now() - waitStart;
+    if (waitMs > 100) {
+      logger.warn(
+        { event: "lock.wait.slow", userId, waitMs },
+        "posture.orchestrator: slow lock wait — serialised operations are backing up",
+      );
+    }
+    return fn();
+  });
 
   // voidResult always resolves — safe to chain future operations on.
   const voidResult: Promise<void> = result.then(() => {}, () => {});
@@ -86,15 +101,23 @@ async function fetchSettings(userId: string): Promise<PostureSettings> {
 
 // ─── Internal helpers ────────────────────────────────────────────────────────
 
+// Minimum delay (seconds) used when rescheduling a missed timer event.
+// Set explicitly here — we do NOT rely on pushScheduler's internal clamping.
+const MISSED_EVENT_RESCHEDULE_DELAY_SECS = 5;
+
 /**
  * Schedule exactly one posture timer for a sitting/standing session.
  *
- * Also detects missed timer events: if the session has been running longer
- * than the initial alert threshold (e.g. sitting for 60 min when alert is
- * set to 45 min), the alert window has already passed. Rather than spamming
- * the user with a belated notification, the scheduler is called with the real
- * elapsedSeconds — pushScheduler clamps any negative delay to 5 s so the
- * next cycle fires quickly. The missed event is logged for observability.
+ * Missed-event handling (explicit, not implicit):
+ *   If the session has been running longer than the initial alert threshold
+ *   (e.g. the server was down during the alert window), the event is logged
+ *   as "timer.missed" and elapsedSeconds is set so the scheduler fires in
+ *   exactly MISSED_EVENT_RESCHEDULE_DELAY_SECS seconds. We compute this
+ *   explicitly rather than relying on pushScheduler's ≤0 clamp — the
+ *   behaviour is local and auditable.
+ *
+ *   No belated notification is sent — the user receives the next cycle prompt
+ *   shortly after the server comes back, without notification spam.
  */
 async function scheduleForSession(
   userId: string,
@@ -102,38 +125,46 @@ async function scheduleForSession(
   startedAt: Date,
 ): Promise<void> {
   const settings = await fetchSettings(userId);
-  const elapsedSeconds = Math.max(
+  const rawElapsedSeconds = Math.max(
     0,
     Math.round((Date.now() - startedAt.getTime()) / 1000),
   );
 
-  // Missed-event detection: check whether the first alert threshold has passed.
   const thresholdSeconds =
     mode === "sitting"
       ? settings.sittingAlertMinutes * 60
       : settings.standingMinMinutes * 60;
 
-  if (elapsedSeconds > thresholdSeconds) {
-    const delaySeconds = elapsedSeconds - thresholdSeconds;
+  let elapsedSeconds = rawElapsedSeconds;
+
+  if (rawElapsedSeconds > thresholdSeconds) {
+    const delaySeconds = rawElapsedSeconds - thresholdSeconds;
+
     logger.warn(
       {
         event: "timer.missed",
         userId,
         mode,
-        elapsedSeconds,
+        elapsedSeconds: rawElapsedSeconds,
         thresholdSeconds,
         delaySeconds,
+        reschedulingInSeconds: MISSED_EVENT_RESCHEDULE_DELAY_SECS,
       },
       "posture.orchestrator: missed timer event detected — rescheduling next cycle (no belated notification sent)",
     );
+
+    // Explicitly compute the elapsedSeconds value that makes the scheduler
+    // fire in exactly MISSED_EVENT_RESCHEDULE_DELAY_SECS seconds.
+    // For sitting: nextDelaySecs = alertSecs - elapsedSeconds
+    //   → we want nextDelaySecs = 5, so elapsedSeconds = alertSecs - 5
+    // For standing: nextDelaySecs = minSecs - elapsedSeconds  (same formula)
+    elapsedSeconds = thresholdSeconds - MISSED_EVENT_RESCHEDULE_DELAY_SECS;
   }
 
-  // schedulePushNotifications clamps nextDelaySecs ≤ 0 to 5 s, so passing a
-  // large elapsedSeconds is safe — it just fires the next cycle very soon.
   schedulePushNotifications(userId, { mode, elapsedSeconds, ...settings });
 
   logger.info(
-    { userId, mode, elapsedSeconds },
+    { userId, mode, elapsedSeconds, rawElapsedSeconds },
     "posture.orchestrator: timer scheduled",
   );
 }

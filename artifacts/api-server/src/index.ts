@@ -77,6 +77,19 @@ app.listen(port, (err) => {
 
   startFitbitPoller();
 
+  logger.info(
+    {
+      event: "system.ready",
+      features: [
+        "startup_reconciliation",
+        "self_healing",
+        "orchestrator_locking",
+        "debug_endpoint",
+      ],
+    },
+    "System ready",
+  );
+
   // Fire-and-forget: restore push timers from DB state.
   // Errors are caught inside reconcileTimersOnStartup so this never crashes.
   void reconcileTimersOnStartup();

@@ -1,0 +1,182 @@
+You are making final reliability adjustments to an existing Node.js/TypeScript backend before building a system test runner.
+
+The system already has:
+
+* Sessions domain with invariants
+* Posture orchestrator with per-user locking
+* Self-healing push invariants (bounded retries)
+* Startup reconciliation
+* Structured logging
+
+DO NOT change APIs or introduce breaking changes.
+
+---
+
+## GOAL
+
+Close the last reliability gaps so system behavior is:
+
+* explicit (not implicit)
+* observable
+* testable
+
+---
+
+## STEP 1 — EXPLICIT MISSED EVENT HANDLING
+
+In posture.orchestrator.ts → scheduleForSession:
+
+After computing:
+
+* elapsedSeconds
+* thresholdSeconds
+
+Add:
+
+IF elapsedSeconds > thresholdSeconds:
+- Log WARN:
+{
+event: "timer.missed",
+userId,
+mode,
+elapsedSeconds,
+thresholdSeconds,
+delaySeconds
+}
+
+```
+- Explicitly set:
+  nextDelaySeconds = 5
+```
+
+IMPORTANT:
+
+* Do NOT rely on downstream scheduler clamping
+* This logic must be local and explicit
+
+---
+
+## STEP 2 — ESCALATE SELF-HEAL FAILURE
+
+In push/push.invariants.ts:
+
+When attempt >= 2:
+
+Log:
+
+{
+level: "error",
+event: "self.heal.failed",
+userId,
+action: "requires_manual_reconciliation"
+}
+
+Additionally:
+
+* Track a simple in-memory counter:
+  failedSelfHealCount++
+
+Export a function:
+getSelfHealFailureCount()
+
+---
+
+## STEP 3 — ADD DEBUG SYSTEM STATE ENDPOINT
+
+Create:
+
+routes/debug.ts
+
+Add endpoint:
+
+GET /debug/system-state
+
+Return JSON:
+
+{
+activeSessions: number,
+activeTimers: number,
+usersWithActiveSessions: string[],
+usersWithActiveTimers: string[],
+selfHealFailures: number
+}
+
+Implementation:
+
+* activeSessions → query DB (endedAt IS NULL)
+* activeTimers → from pushScheduler
+* user lists → derive from both
+* selfHealFailures → from Step 2
+
+Wire this route into the server (no auth required OR reuse existing auth)
+
+---
+
+## STEP 4 — OPTIONAL: LOCK WAIT VISIBILITY
+
+In posture.orchestrator.ts:
+
+Enhance withUserLock:
+
+* Capture start time before chaining
+* Measure wait time
+
+If wait time > 100ms:
+log WARN:
+{
+event: "lock.wait.slow",
+userId,
+waitMs
+}
+
+---
+
+## STEP 5 — VALIDATION LOGGING
+
+Add one-time startup log:
+
+{
+event: "system.ready",
+features: [
+"startup_reconciliation",
+"self_healing",
+"orchestrator_locking",
+"debug_endpoint"
+]
+}
+
+---
+
+## OUTPUT
+
+1. Show updated scheduleForSession logic
+2. Show updated self-heal failure tracking
+3. Show debug route implementation
+4. Show lock wait logging (if implemented)
+5. Show example /debug/system-state response
+
+---
+
+## SUCCESS CRITERIA
+
+* Missed events are handled explicitly (not implicitly)
+* Self-heal failures are visible and countable
+* System state can be queried via API
+* No API contracts changed
+* System is now fully observable and testable
+
+---
+
+## MENTAL MODEL
+
+We are preparing the system for verification.
+
+The system must:
+
+* expose its internal state
+* make all decisions explicit
+* never rely on hidden behavior
+
+Only then can a test runner validate it correctly.
+
+---

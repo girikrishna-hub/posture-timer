@@ -4,6 +4,18 @@ import { logger } from "../lib/logger";
 
 const MAX_HEAL_ATTEMPTS = 2;
 
+// ─── Self-heal failure counter ───────────────────────────────────────────────
+// Incremented each time a mismatch persists after MAX_HEAL_ATTEMPTS retries.
+// Never reset — lifetime count since last server start. Exposed via the debug
+// endpoint so operators can detect persistent inconsistencies without grepping logs.
+
+let failedSelfHealCount = 0;
+
+/** Returns the number of self-heal hard failures since process start. */
+export function getSelfHealFailureCount(): number {
+  return failedSelfHealCount;
+}
+
 /**
  * Self-healing consistency check with loop guard.
  *
@@ -44,6 +56,7 @@ export async function ensureSingleActiveTimer(
     : "sitting/standing session but no timer";
 
   if (attempt >= MAX_HEAL_ATTEMPTS) {
+    failedSelfHealCount++;
     logger.error(
       {
         event: "self.heal.failed",
@@ -53,6 +66,8 @@ export async function ensureSingleActiveTimer(
         shouldHaveTimer,
         attempts: attempt,
         direction,
+        action: "requires_manual_reconciliation",
+        lifetimeFailureCount: failedSelfHealCount,
       },
       "push.invariants: self-heal HARD FAILURE — mismatch persists after max retries; giving up to avoid infinite loop",
     );

@@ -129,6 +129,16 @@ export function hasActivePostureTimer(userId: string): boolean {
   return activeTimers.has(userId);
 }
 
+/** Returns the number of posture timers currently in-flight. */
+export function getActiveTimerCount(): number {
+  return activeTimers.size;
+}
+
+/** Returns the list of userIds that currently have an in-flight posture timer. */
+export function getActiveTimerUserIds(): string[] {
+  return Array.from(activeTimers.keys());
+}
+
 // ─── Bladder push ─────────────────────────────────────────────────────────────
 // Separate per-user timer for bladder reminders. Unlike posture, bladder uses a
 // single one-shot push rather than a repeating schedule.
