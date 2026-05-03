@@ -29,6 +29,18 @@ import { assertValidUserId } from "../lib/assertValidUserId";
 import { logger } from "../lib/logger";
 import type { StartSessionDto, SessionDto } from "../sessions/session.dto";
 
+// ─── Invalid-user event counter ──────────────────────────────────────────────
+// Incremented whenever an empty/invalid userId reaches a public API method.
+// Never reset — lifetime count since last process start, exposed via the debug
+// endpoint so the test runner can detect orchestrator miscalls.
+
+let invalidUserEventCount = 0;
+
+/** Returns the number of invalid-user events observed since process start. */
+export function getInvalidUserEventCount(): number {
+  return invalidUserEventCount;
+}
+
 // ─── Per-user lock ───────────────────────────────────────────────────────────
 //
 // Each userId maps to a void promise that settles when the current operation
@@ -372,6 +384,7 @@ export const postureOrchestrator = {
     // Guard before taking the lock — an invalid userId must never reach the
     // timer scheduling logic or the per-user lock Map.
     if (!userId || userId.trim() === "") {
+      invalidUserEventCount++;
       logger.error(
         { event: "orchestrator.invalid_user", userId },
         "posture.orchestrator: invalid userId — ignoring onSessionStarted",
@@ -388,6 +401,7 @@ export const postureOrchestrator = {
    */
   onSessionEnded(userId: string, session: SessionDto | null): Promise<void> {
     if (!userId || userId.trim() === "") {
+      invalidUserEventCount++;
       logger.error(
         { event: "orchestrator.invalid_user", userId },
         "posture.orchestrator: invalid userId — ignoring onSessionEnded",
@@ -404,6 +418,7 @@ export const postureOrchestrator = {
    */
   syncTimerWithSession(userId: string): Promise<void> {
     if (!userId || userId.trim() === "") {
+      invalidUserEventCount++;
       logger.error(
         { event: "orchestrator.invalid_user", userId },
         "posture.orchestrator: invalid userId — ignoring syncTimerWithSession",

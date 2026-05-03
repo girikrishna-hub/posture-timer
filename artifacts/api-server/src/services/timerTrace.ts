@@ -53,6 +53,9 @@ const eventHistory = new Map<string, TimerEvent[]>();
 // Raw schedule timestamps for loop detection, newest-first (max 5).
 const recentScheduleTimes = new Map<string, number[]>();
 
+// Lifetime count of reschedule-loop detections (never reset, for observability).
+let rescheduleLoopCount = 0;
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function appendEvent(userId: string, event: TimerEvent): void {
@@ -179,6 +182,36 @@ export function getTimerHistory(userId: string): TimerEvent[] {
 export function getTrackedUserIds(): string[] {
   const ids = new Set([...activeState.keys(), ...eventHistory.keys()]);
   return Array.from(ids);
+}
+
+// ─── Anomaly counter read/write API ──────────────────────────────────────────
+
+/** Returns the lifetime count of reschedule-loop detections since process start. */
+export function getRescheduleLoopCount(): number {
+  return rescheduleLoopCount;
+}
+
+/**
+ * Increment the reschedule-loop counter.
+ * Called by pushScheduler when it detects more than LOOP_THRESHOLD schedules
+ * within LOOP_WINDOW_MS for the same user.
+ */
+export function recordRescheduleLoop(): void {
+  rescheduleLoopCount++;
+}
+
+/**
+ * Clear the per-user schedule-frequency history.
+ *
+ * Call this at session boundaries (session_change cancellations) so that the
+ * loop detector counts only within a single session lifecycle. Without this
+ * reset, the final reschedule that occurs when a timer naturally fires at the
+ * end of one session is counted together with the first reschedule of the next
+ * session, producing false positives when sessions change in rapid succession
+ * (e.g. the concurrency test immediately after the push flow test).
+ */
+export function resetScheduleHistory(userId: string): void {
+  recentScheduleTimes.delete(userId);
 }
 
 export { LOOP_THRESHOLD, LOOP_WINDOW_MS };

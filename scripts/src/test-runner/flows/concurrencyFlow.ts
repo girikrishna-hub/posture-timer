@@ -1,9 +1,10 @@
 import { apiFetch, getSystemState } from "../apiClient.js";
 import { Reporter } from "../reporter.js";
 import {
-  assertNoInvariantFailures,
   assertTimerSessionParity,
   AssertionError,
+  captureAnomalyBaseline,
+  assertNoNewAnomalies,
 } from "../assertions.js";
 import type { RunnerConfig, SessionDto } from "../types.js";
 
@@ -20,14 +21,17 @@ export const concurrencyFlow = {
     }
 
     const PARALLEL = 3;
-    const sessionIds: number[] = [];
 
     try {
+      // ── Capture anomaly baseline ──────────────────────────────────────────
+      const initialState = await getSystemState(config);
+      const baseline = captureAnomalyBaseline(initialState);
+
       // ── Step 1: Ensure clean state (end any lingering session) ───────────
       reporter.step("GET /sessions/active (pre-flight cleanup)");
-      const activeRes = await apiFetch<SessionDto | null>(config, "GET", "/sessions/active");
-      if (activeRes.ok && activeRes.body && typeof (activeRes.body as SessionDto).id === "number") {
-        const stale = (activeRes.body as SessionDto).id;
+      const activeRes = await apiFetch<{ session: SessionDto | null }>(config, "GET", "/sessions/active");
+      if (activeRes.ok && activeRes.body?.session?.id) {
+        const stale = activeRes.body.session.id;
         reporter.step(`Ending stale session id=${stale} before concurrency test`);
         await apiFetch(config, "PATCH", `/sessions/${stale}`, {}).catch(() => {});
       }
@@ -35,11 +39,8 @@ export const concurrencyFlow = {
       // ── Step 2: Fire N parallel POST /sessions ───────────────────────────
       reporter.step(`POST /sessions × ${PARALLEL} in parallel (same user, mode: sitting)`);
       const results = await Promise.allSettled(
-        Array.from({ length: PARALLEL }, (_, i) =>
-          apiFetch<SessionDto>(config, "POST", `/sessions`, { mode: "sitting" }).then((r) => {
-            if (r.ok) sessionIds.push(r.body.id);
-            return r;
-          }),
+        Array.from({ length: PARALLEL }, () =>
+          apiFetch<SessionDto>(config, "POST", `/sessions`, { mode: "sitting" }),
         ),
       );
 
@@ -54,9 +55,9 @@ export const concurrencyFlow = {
       reporter.step("GET /debug/system-state");
       const state = await getSystemState(config);
 
-      reporter.step("Assert: exactly 1 active session + timer, no invariant failures");
-      assertNoInvariantFailures(state);
+      reporter.step("Assert: exactly 1 active session + timer, no new anomalies");
       assertTimerSessionParity(state);
+      assertNoNewAnomalies(baseline, state, "post-parallel");
 
       if (state.activeSessions !== 1) {
         throw new AssertionError(

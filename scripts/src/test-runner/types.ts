@@ -59,9 +59,21 @@ export interface SystemState {
   activeTimers: number;
   usersWithActiveSessions: string[];
   usersWithActiveTimers: string[];
+  // ── Anomaly counters (lifetime, never reset) ──────────────────────────────
   selfHealFailures: number;
+  rescheduleLoopCount: number;
+  invalidUserEventCount: number;
+  // ── Per-user subscription counts ─────────────────────────────────────────
+  subscriptionCounts: Record<string, number>;
   timerDetails: Record<string, TimerDetail>;
   pushReceipts: Record<string, PushReceiptDetail>;
+}
+
+/** Minimal snapshot of anomaly counters taken at the start of a flow. */
+export interface AnomalyBaseline {
+  selfHealFailures: number;
+  rescheduleLoopCount: number;
+  invalidUserEventCount: number;
 }
 
 export interface SettingsDto {

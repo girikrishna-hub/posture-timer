@@ -6,8 +6,9 @@ import {
   assertNoActiveSession,
   assertSingleTimer,
   assertNoTimer,
-  assertNoInvariantFailures,
   assertTimerSessionParity,
+  captureAnomalyBaseline,
+  assertNoNewAnomalies,
 } from "../assertions.js";
 import type { RunnerConfig, SessionDto } from "../types.js";
 
@@ -26,6 +27,10 @@ export const recoveryFlow = {
     const ctx = new TestContext();
 
     try {
+      // ── Capture anomaly baseline ──────────────────────────────────────────
+      const initialState = await getSystemState(config);
+      const baseline = captureAnomalyBaseline(initialState);
+
       // ── Step 1: Pre-flight cleanup (end any session left by a prior flow) ─
       reporter.step("GET /sessions/active (pre-flight cleanup)");
       const activeRes = await apiFetch<{ session: SessionDto | null }>(config, "GET", "/sessions/active");
@@ -44,7 +49,7 @@ export const recoveryFlow = {
       }
       ctx.sessionId = startRes.body.id;
 
-      // ── Step 2: Derive userId, confirm timer is running ──────────────────
+      // ── Step 3: Derive userId, confirm timer is running ──────────────────
       reporter.step("GET /debug/system-state (confirm timer running)");
       const stateAfterStart = await getSystemState(config);
       if (stateAfterStart.usersWithActiveSessions.length === 0) {
@@ -53,12 +58,12 @@ export const recoveryFlow = {
       ctx.userId = stateAfterStart.usersWithActiveSessions[0];
       assertSingleActiveSession(stateAfterStart, ctx.userId);
       assertSingleTimer(stateAfterStart, ctx.userId);
-      assertNoInvariantFailures(stateAfterStart);
+      assertNoNewAnomalies(baseline, stateAfterStart, "post-start");
 
       const traceIdBefore = stateAfterStart.timerDetails[ctx.userId]?.activeTimer?.traceId;
       reporter.step("Timer confirmed active", `traceId=${traceIdBefore}`);
 
-      // ── Step 3: Simulate restart reconciliation via POST /push/schedule ──
+      // ── Step 4: Simulate restart reconciliation via POST /push/schedule ──
       //
       //   POST /push/schedule calls postureOrchestrator.syncTimerWithSession(userId)
       //   which is exactly the same logic as startup reconciliation.
@@ -79,20 +84,20 @@ export const recoveryFlow = {
       }
       reporter.step("Sync result", `scheduled=${syncRes.body.scheduled}`);
 
-      // ── Step 4: Verify state after resync ────────────────────────────────
+      // ── Step 5: Verify state after resync ────────────────────────────────
       reporter.step("GET /debug/system-state (post-resync)");
       const stateAfterSync = await getSystemState(config);
 
-      reporter.step("Assert: session intact, timer restored");
+      reporter.step("Assert: session intact, timer restored, no new anomalies");
       assertSingleActiveSession(stateAfterSync, ctx.userId);
       assertSingleTimer(stateAfterSync, ctx.userId);
-      assertNoInvariantFailures(stateAfterSync);
       assertTimerSessionParity(stateAfterSync);
+      assertNoNewAnomalies(baseline, stateAfterSync, "post-resync");
 
       const traceIdAfter = stateAfterSync.timerDetails[ctx.userId]?.activeTimer?.traceId;
       reporter.step("Timer re-confirmed", `traceId=${traceIdAfter}`);
 
-      // ── Step 5: End session — timer should cancel automatically ──────────
+      // ── Step 6: End session — timer should cancel automatically ──────────
       reporter.step(`PATCH /sessions/${ctx.sessionId} (end session)`);
       const endRes = await apiFetch(config, "PATCH", `/sessions/${ctx.sessionId}`, {});
       if (!endRes.ok) {
@@ -102,10 +107,10 @@ export const recoveryFlow = {
 
       reporter.step("GET /debug/system-state (post-end)");
       const stateAfterEnd = await getSystemState(config);
-      reporter.step("Assert: no active session, no timer");
+      reporter.step("Assert: no active session, no timer, no new anomalies");
       assertNoActiveSession(stateAfterEnd, ctx.userId);
       assertNoTimer(stateAfterEnd, ctx.userId);
-      assertNoInvariantFailures(stateAfterEnd);
+      assertNoNewAnomalies(baseline, stateAfterEnd, "post-end");
 
       reporter.pass(recoveryFlow.name);
     } catch (e) {

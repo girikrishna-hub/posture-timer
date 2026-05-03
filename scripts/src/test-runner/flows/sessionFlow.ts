@@ -6,8 +6,9 @@ import {
   assertNoActiveSession,
   assertSingleTimer,
   assertNoTimer,
-  assertNoInvariantFailures,
   assertTimerSessionParity,
+  captureAnomalyBaseline,
+  assertNoNewAnomalies,
 } from "../assertions.js";
 import type { RunnerConfig, SessionDto } from "../types.js";
 
@@ -26,6 +27,10 @@ export const sessionFlow = {
     const ctx = new TestContext();
 
     try {
+      // ── Capture anomaly baseline ──────────────────────────────────────────
+      const initialState = await getSystemState(config);
+      const baseline = captureAnomalyBaseline(initialState);
+
       // ── Step 1: Start session ────────────────────────────────────────────
       reporter.step("POST /sessions (mode: sitting)");
       const startRes = await apiFetch<SessionDto>(config, "POST", "/sessions", {
@@ -48,8 +53,8 @@ export const sessionFlow = {
       reporter.step("Assert: single active session + timer", `userId=${ctx.userId}`);
       assertSingleActiveSession(stateAfterStart, ctx.userId);
       assertSingleTimer(stateAfterStart, ctx.userId);
-      assertNoInvariantFailures(stateAfterStart);
       assertTimerSessionParity(stateAfterStart);
+      assertNoNewAnomalies(baseline, stateAfterStart, "post-start");
 
       // ── Step 4: End session ──────────────────────────────────────────────
       reporter.step(`PATCH /sessions/${ctx.sessionId} (end)`);
@@ -61,10 +66,10 @@ export const sessionFlow = {
       // ── Step 5: Assert session + timer gone ──────────────────────────────
       reporter.step("GET /debug/system-state (post-end)");
       const stateAfterEnd = await getSystemState(config);
-      reporter.step("Assert: no active session, no timer");
+      reporter.step("Assert: no active session, no timer, no new anomalies");
       assertNoActiveSession(stateAfterEnd, ctx.userId);
       assertNoTimer(stateAfterEnd, ctx.userId);
-      assertNoInvariantFailures(stateAfterEnd);
+      assertNoNewAnomalies(baseline, stateAfterEnd, "post-end");
 
       reporter.pass(sessionFlow.name);
     } catch (e) {

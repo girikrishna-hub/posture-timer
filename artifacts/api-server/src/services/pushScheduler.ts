@@ -6,6 +6,8 @@ import {
   recordFired,
   recordNotificationAttempt,
   recordNotificationSent,
+  recordRescheduleLoop,
+  resetScheduleHistory,
   LOOP_THRESHOLD,
   LOOP_WINDOW_MS,
 } from "./timerTrace";
@@ -43,6 +45,14 @@ function clearActive(userId: string, reason: CancelReason): void {
     { event: "timer.cancelled", traceId: entry.traceId, userId, reason },
     "Posture timer cancelled",
   );
+
+  // Reset the per-user schedule-frequency history at session boundaries so the
+  // loop detector operates per session lifecycle rather than across sessions.
+  // "resync" cancellations happen within a single session (e.g. scheduleNext
+  // calls clearActive before re-scheduling), so we leave that history intact.
+  if (reason === "session_change") {
+    resetScheduleHistory(userId);
+  }
 }
 
 function scheduleNext(
@@ -139,6 +149,7 @@ function scheduleNext(
   );
 
   if (recentCount > LOOP_THRESHOLD) {
+    recordRescheduleLoop();
     logger.warn(
       { event: "timer.reschedule.loop", userId, count: recentCount, windowMs: LOOP_WINDOW_MS },
       "Posture timer reschedule loop detected — too many schedules in a short window",
@@ -243,6 +254,19 @@ export function getActiveTimerCount(): number {
 /** Returns the list of userIds that currently have an in-flight posture timer. */
 export function getActiveTimerUserIds(): string[] {
   return Array.from(activeTimers.keys());
+}
+
+/**
+ * Cancel ALL in-flight posture timers and return the list of userIds that
+ * had timers cancelled. Used by the simulate-restart debug endpoint to
+ * wipe in-memory state before running startup reconciliation.
+ */
+export function cancelAllPostureTimers(): string[] {
+  const userIds = Array.from(activeTimers.keys());
+  for (const userId of userIds) {
+    clearActive(userId, "manual");
+  }
+  return userIds;
 }
 
 // ─── Bladder push ─────────────────────────────────────────────────────────────
