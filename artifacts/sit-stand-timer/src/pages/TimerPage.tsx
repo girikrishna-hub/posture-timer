@@ -847,7 +847,10 @@ function TodayCycles() {
     );
     const best = new Map<string, typeof all[number]>();
     for (const s of all) {
-      const bucket = `${new Date(s.startedAt).toISOString().slice(0, 19)}|${s.mode}`;
+      // Bucket by minute (slice(0,16) = "YYYY-MM-DDTHH:MM") because the UI
+      // only shows HH:MM — two same-mode sessions in the same minute are
+      // always cascade artifacts and should collapse into one.
+      const bucket = `${new Date(s.startedAt).toISOString().slice(0, 16)}|${s.mode}`;
       const prev = best.get(bucket);
       if (
         !prev ||
