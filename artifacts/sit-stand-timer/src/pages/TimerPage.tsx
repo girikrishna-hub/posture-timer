@@ -837,10 +837,30 @@ function TodayCycles() {
     query: { queryKey: getListSessionsQueryKey(params), refetchInterval: 30000 },
   });
 
-  const completed = (data?.sessions ?? [])
-    .filter((s) => s.endedAt !== null && s.endedAt !== undefined)
-    .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
-    .slice(0, 10);
+  // Deduplicate cascade artifacts: the offline-queue bug could create several
+  // sessions with the exact same startedAt timestamp (all using the same
+  // transitionTime). Keep only the session with the longest duration per
+  // (startedAt-second, mode) bucket; fall back to highest id for tie-breaking.
+  const completed = (() => {
+    const all = (data?.sessions ?? []).filter(
+      (s) => s.endedAt !== null && s.endedAt !== undefined,
+    );
+    const best = new Map<string, typeof all[number]>();
+    for (const s of all) {
+      const bucket = `${new Date(s.startedAt).toISOString().slice(0, 19)}|${s.mode}`;
+      const prev = best.get(bucket);
+      if (
+        !prev ||
+        (s.durationSeconds ?? 0) > (prev.durationSeconds ?? 0) ||
+        ((s.durationSeconds ?? 0) === (prev.durationSeconds ?? 0) && s.id > prev.id)
+      ) {
+        best.set(bucket, s);
+      }
+    }
+    return Array.from(best.values())
+      .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
+      .slice(0, 10);
+  })();
 
   if (isError) return (
     <p className="text-xs text-muted-foreground text-center py-1">
