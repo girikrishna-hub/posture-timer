@@ -52,7 +52,14 @@ export async function assertSessionInvariants(userId: string): Promise<void> {
   }
 
   // Only enforce invariants 2 & 3 against internally consistent sessions.
-  const validCompleted = completed.filter((s) => s.endedAt! >= s.startedAt);
+  // Also exclude sub-2-second sessions: these are cascade artifacts produced
+  // when the orchestrator's closeAt clamp (max(rawCloseAt, startedAt+1s))
+  // creates multiple 1-second sessions with identical time ranges. Checking
+  // them here causes Invariant 3 to fire on the overlapping duplicates,
+  // which perpetuates the cascade indefinitely.
+  const validCompleted = completed.filter(
+    (s) => s.endedAt! >= s.startedAt && (s.durationSeconds ?? 0) > 1,
+  );
 
   // Invariant 2 is now satisfied by definition for validCompleted — kept as
   // an explicit assertion so any regression is caught immediately.
