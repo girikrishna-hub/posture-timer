@@ -232,7 +232,14 @@ async function _startSession(userId: string, dto: StartSessionDto): Promise<Sess
       { userId, orphanedSessionId: existing.id },
       "posture.orchestrator: auto-closing orphaned active session before creating new one",
     );
-    const closeAt = dto.startedAt ?? new Date();
+    // Clamp closeAt so it is never before the orphaned session's own startedAt.
+    // Without this guard, a stale dto.startedAt (e.g. replayed from an offline
+    // queue with a yesterday timestamp) would produce endedAt < startedAt,
+    // corrupting the session and permanently breaking the invariant check.
+    const rawCloseAt = dto.startedAt ?? new Date();
+    const closeAt = new Date(
+      Math.max(rawCloseAt.getTime(), existing.startedAt.getTime() + 1000),
+    );
     const durationSeconds = Math.max(
       0,
       Math.round((closeAt.getTime() - existing.startedAt.getTime()) / 1000),

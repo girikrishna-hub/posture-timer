@@ -288,8 +288,28 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     async function drain() {
       const queue = loadQueue();
       if (queue.length === 0) return;
+
+      // Drop start-session ops whose startedAt is more than 12 hours old.
+      // Replaying stale timestamps is the root cause of the corrupted-session
+      // bug: the orchestrator uses dto.startedAt as closeAt for any orphaned
+      // session, so a yesterday timestamp produces endedAt < startedAt.
+      const cutoff = Date.now() - 12 * 60 * 60 * 1000;
+      const fresh = queue.filter((op) => {
+        if (op.type === "startSession") {
+          return new Date(op.startedAt).getTime() >= cutoff;
+        }
+        return true;
+      });
+      if (fresh.length < queue.length) {
+        saveQueue(fresh);
+        if (fresh.length === 0) {
+          pendingLocalQueueIdRef.current = null;
+          return;
+        }
+      }
+
       const remaining: OfflineOp[] = [];
-      for (const op of queue) {
+      for (const op of fresh) {
         try {
           if (op.type === "endSession") {
             await doEndSession(op.sessionId, op.endedAt);
@@ -359,10 +379,17 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
           setActiveSessionId(newSession.id);
           pendingLocalQueueIdRef.current = null;
         } catch {
-          const opId = crypto.randomUUID();
-          saveQueueOp({ id: opId, type: "startSession", mode: newMode, startedAt: transitionTime, ...(sessionRestType ? { restType: sessionRestType } : {}) });
-          pendingLocalQueueIdRef.current = opId;
-          setActiveSessionId(OFFLINE_SESSION_SENTINEL);
+          // While online, a failed start most likely means the server encountered
+          // a conflict (e.g. an orphaned session was already cleaned up server-side
+          // and a new session may have been created anyway). Queuing another start
+          // op here would cause the stale startedAt to be replayed on the next
+          // drain, potentially corrupting the orphan-close timestamp.
+          // Instead, refetch the active session so the client re-syncs with
+          // whatever the server actually persisted.
+          void queryClient.invalidateQueries({ queryKey: getGetActiveSessionQueryKey() });
+          void queryClient.invalidateQueries({ queryKey: getGetTodayStatsQueryKey() });
+          // Leave activeSessionId as-is — the refetch will correct it via the
+          // initialization effect once the server responds.
         }
       } else {
         const opId = crypto.randomUUID();
