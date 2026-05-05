@@ -233,6 +233,13 @@ export default function SettingsPage() {
     });
   }, []);
 
+  const [queueCleared, setQueueCleared] = useState(false);
+  const handleClearQueue = useCallback(() => {
+    try { localStorage.removeItem("sit-stand-offline-queue"); } catch { /* ignore */ }
+    setQueueCleared(true);
+    setTimeout(() => setQueueCleared(false), 3000);
+  }, []);
+
   return (
     <div className="min-h-screen bg-background">
       <header className="flex items-center gap-3 px-6 pt-6 pb-4">
@@ -527,6 +534,22 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Troubleshooting */}
+        <div className="bg-card border border-border rounded-2xl p-5 mb-4">
+          <p className="text-sm font-medium text-foreground mb-1">Troubleshooting</p>
+          <p className="text-xs text-muted-foreground mb-4">
+            If duplicate sessions keep appearing, clearing the offline sync queue stops any pending retries immediately.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full"
+            onClick={handleClearQueue}
+          >
+            {queueCleared ? "Sync queue cleared ✓" : "Clear offline sync queue"}
+          </Button>
         </div>
 
         {savedBanner.shown && (
