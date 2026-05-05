@@ -75,10 +75,24 @@ export async function assertSessionInvariants(userId: string): Promise<void> {
   // Invariant 3: no overlapping sessions
   // Two sessions overlap when A starts before B ends AND A ends after B starts.
   // Adjacent sessions (A ends exactly when B starts) are NOT overlaps.
-  for (let i = 0; i < validCompleted.length; i++) {
-    for (let j = i + 1; j < validCompleted.length; j++) {
-      const a = validCompleted[i]!;
-      const b = validCompleted[j]!;
+  //
+  // Before scanning, deduplicate by (startedAt, endedAt): cascade bugs can
+  // produce multiple sessions with identical time ranges. Keeping only the
+  // lowest-id representative per unique range means the invariant will not
+  // fire on those duplicates and perpetuate the cascade. The duplicates
+  // themselves should be cleaned up via a DB migration.
+  const seen = new Map<string, typeof validCompleted[number]>();
+  for (const s of validCompleted) {
+    const key = `${s.startedAt.toISOString()}|${s.endedAt!.toISOString()}`;
+    const existing = seen.get(key);
+    if (!existing || s.id < existing.id) seen.set(key, s);
+  }
+  const deduped = Array.from(seen.values());
+
+  for (let i = 0; i < deduped.length; i++) {
+    for (let j = i + 1; j < deduped.length; j++) {
+      const a = deduped[i]!;
+      const b = deduped[j]!;
       if (a.startedAt < b.endedAt! && a.endedAt! > b.startedAt) {
         throw new SessionInvariantError(
           `Sessions ${a.id} and ${b.id} have overlapping time ranges ` +
