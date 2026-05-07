@@ -241,6 +241,7 @@ export const GetDailyMetricsResponse = zod.object({
       sittingMinutes: zod.number(),
       standingMinutes: zod.number(),
       walkingMinutes: zod.number(),
+      workoutMinutes: zod.number(),
       napMinutes: zod.number(),
       sleepMinutes: zod.number(),
       activeMinutes: zod.number(),

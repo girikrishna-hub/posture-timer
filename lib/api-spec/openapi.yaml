@@ -684,6 +684,8 @@ components:
           type: integer
         walkingMinutes:
           type: integer
+        workoutMinutes:
+          type: integer
         napMinutes:
           type: integer
         sleepMinutes:
@@ -699,6 +701,7 @@ components:
         - sittingMinutes
         - standingMinutes
         - walkingMinutes
+        - workoutMinutes
         - napMinutes
         - sleepMinutes
         - activeMinutes

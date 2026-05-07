@@ -1,4 +1,4 @@
-export type SessionMode = "sitting" | "standing" | "resting" | "walking";
+export type SessionMode = "sitting" | "standing" | "resting" | "walking" | "workout";
 export type RestType = "nap" | "sleep";
 
 export interface StartSessionDto {

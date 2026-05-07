@@ -92,6 +92,7 @@ const MODE_COLORS = {
   sitting: "#3B82F6",
   standing: "#22C55E",
   walking: "#14B8A6",
+  workout: "#F97316",
   nap: "#F59E0B",
   sleep: "#6366F1",
 } as const;
@@ -192,7 +193,7 @@ function WeeklyChart({
   days,
   goalMinutes,
 }: {
-  days: { date: string; sittingMinutes: number; standingMinutes: number; walkingMinutes: number }[];
+  days: { date: string; sittingMinutes: number; standingMinutes: number; walkingMinutes: number; workoutMinutes: number }[];
   goalMinutes: number;
 }) {
   const data = days.map((d) => ({
@@ -200,6 +201,7 @@ function WeeklyChart({
     Sitting: d.sittingMinutes,
     Standing: d.standingMinutes,
     Walking: d.walkingMinutes,
+    Workout: d.workoutMinutes,
   }));
 
   return (
@@ -221,6 +223,7 @@ function WeeklyChart({
           <Bar dataKey="Sitting" fill={MODE_COLORS.sitting} radius={[3, 3, 0, 0]} />
           <Bar dataKey="Standing" fill={MODE_COLORS.standing} radius={[3, 3, 0, 0]} />
           <Bar dataKey="Walking" fill={MODE_COLORS.walking} radius={[3, 3, 0, 0]} />
+          <Bar dataKey="Workout" fill={MODE_COLORS.workout} radius={[3, 3, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -543,7 +546,7 @@ function OverviewTab({
               {goalMet ? "Goal reached!" : "Standing goal"}
             </span>
             <span className={`font-medium transition-colors duration-500 ${goalMet ? "text-emerald-600 dark:text-emerald-400" : "text-foreground"}`}>
-              {formatMinutes(Math.floor(todayStats.standingMinutes + todayStats.walkingMinutes + cappedElapsedMinutes))} / {formatMinutes(goalMinutes)}
+              {formatMinutes(Math.floor(todayStats.standingMinutes + todayStats.walkingMinutes + (todayStats.workoutMinutes ?? 0) + cappedElapsedMinutes))} / {formatMinutes(goalMinutes)}
             </span>
           </div>
           <div className="relative pr-4 overflow-visible">
@@ -679,6 +682,7 @@ function DailyTimeline({
     if (s.mode === "sitting") return MODE_COLORS.sitting;
     if (s.mode === "standing") return MODE_COLORS.standing;
     if (s.mode === "walking") return MODE_COLORS.walking;
+    if (s.mode === "workout") return MODE_COLORS.workout;
     if (s.restType === "nap") return MODE_COLORS.nap;
     return MODE_COLORS.sleep;
   };
@@ -687,6 +691,7 @@ function DailyTimeline({
     if (s.mode === "sitting") return "Sitting";
     if (s.mode === "standing") return "Standing";
     if (s.mode === "walking") return "Walking";
+    if (s.mode === "workout") return "Workout";
     if (s.restType === "nap") return "Nap";
     return "Sleep";
   };
@@ -1011,6 +1016,8 @@ function SessionsTab() {
                           ? MODE_COLORS.standing
                           : s.mode === "walking"
                           ? MODE_COLORS.walking
+                          : s.mode === "workout"
+                          ? MODE_COLORS.workout
                           : s.restType === "nap"
                           ? MODE_COLORS.nap
                           : MODE_COLORS.sleep,
@@ -1086,7 +1093,7 @@ export default function DashboardPage() {
   const goalCelebrationBanner = useBanner(5000);
 
   const goalMinutes = todayStats?.goalMinutes ?? 120;
-  const isActiveMode = mode === "standing" || mode === "walking";
+  const isActiveMode = mode === "standing" || mode === "walking" || mode === "workout";
   const secondsSinceLocalMidnight = (() => {
     const now = new Date();
     return now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
@@ -1096,7 +1103,7 @@ export default function DashboardPage() {
     : 0;
   const goalPercent = todayStats
     ? goalMinutes > 0
-      ? Math.min(100, ((todayStats.standingMinutes + todayStats.walkingMinutes + cappedElapsedMinutes) / goalMinutes) * 100)
+      ? Math.min(100, ((todayStats.standingMinutes + todayStats.walkingMinutes + (todayStats.workoutMinutes ?? 0) + cappedElapsedMinutes) / goalMinutes) * 100)
       : todayStats.goalProgressPercent ?? 0
     : 0;
   const goalMet = goalPercent >= 100;
@@ -1197,6 +1204,7 @@ type DayDataShape = {
   sittingMinutes: number;
   standingMinutes: number;
   walkingMinutes: number;
+  workoutMinutes: number;
   activeMinutes: number;
   napMinutes: number;
   sleepMinutes: number;
@@ -1240,6 +1248,12 @@ function DailyStatGrid({ dayData }: { dayData: DayDataShape }) {
           <p className="text-xs text-teal-600">Walking</p>
           <p className="text-base font-semibold text-teal-700">{formatMinutes(dayData.walkingMinutes)}</p>
         </div>
+        {dayData.workoutMinutes > 0 && (
+          <div className="bg-orange-50 border border-orange-200 rounded-xl px-3 py-2 text-center">
+            <p className="text-xs text-orange-600">Workout</p>
+            <p className="text-base font-semibold text-orange-700">{formatMinutes(dayData.workoutMinutes)}</p>
+          </div>
+        )}
         {dayData.napMinutes > 0 && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-center">
             <p className="text-xs text-amber-600">Nap</p>
