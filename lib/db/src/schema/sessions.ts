@@ -10,7 +10,7 @@ export const sessionsTable = pgTable(
     // No default — every session must be explicitly associated with a Clerk userId.
     // The DB-level CHECK constraint (migration 0002) enforces length > 0.
     userId: text("user_id").notNull(),
-    mode: text("mode", { enum: ["sitting", "standing", "resting", "walking"] }).notNull(),
+    mode: text("mode", { enum: ["sitting", "standing", "resting", "walking", "workout"] }).notNull(),
     startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
     endedAt: timestamp("ended_at", { withTimezone: true }),
     durationSeconds: integer("duration_seconds"),

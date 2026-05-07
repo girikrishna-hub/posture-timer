@@ -20,7 +20,7 @@ import { playStandTone, playSitTone, playConfirmTone, playRestTone } from "@/uti
 import { useWalkingDetection, type GpsStatus } from "@/hooks/useWalkingDetection";
 import { useNotificationPermission } from "@/hooks/useNotificationPermission";
 
-export type TimerMode = "idle" | "sitting" | "standing" | "resting" | "walking";
+export type TimerMode = "idle" | "sitting" | "standing" | "resting" | "walking" | "workout";
 
 // ─── Offline queue types ───────────────────────────────────────────────────
 
@@ -34,7 +34,7 @@ interface OfflineEndOp {
 interface OfflineStartOp {
   id: string;
   type: "startSession";
-  mode: "sitting" | "standing" | "resting" | "walking";
+  mode: "sitting" | "standing" | "resting" | "walking" | "workout";
   startedAt: string;
   endedAt?: string;
   restType?: "nap" | "sleep";
@@ -168,7 +168,7 @@ interface TimerContextValue {
   activeSessionId: number | null;
   notificationPermission: NotificationPermission;
   requestNotificationPermission: () => Promise<void>;
-  switchMode: (newMode: "sitting" | "standing" | "resting" | "walking", source?: StateSource, restType?: "nap" | "sleep") => Promise<void>;
+  switchMode: (newMode: "sitting" | "standing" | "resting" | "walking" | "workout", source?: StateSource, restType?: "nap" | "sleep") => Promise<void>;
   endCurrentSession: () => Promise<void>;
   gpsStatus: GpsStatus;
   isLoading: boolean;
@@ -257,7 +257,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     async (sessionMode: string, startedAt?: string, sessionRestType?: "nap" | "sleep"): Promise<{ id: number }> => {
       return startMutationRef.current.mutateAsync({
         data: {
-          mode: sessionMode as "sitting" | "standing" | "resting" | "walking",
+          mode: sessionMode as "sitting" | "standing" | "resting" | "walking" | "workout",
           ...(startedAt ? { startedAt } : {}),
           ...(sessionRestType != null ? { restType: sessionRestType } : {}),
         },
@@ -337,7 +337,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   }, [doEndSession, doStartSession, queryClient]);
 
   const switchMode = useCallback(
-    async (newMode: "sitting" | "standing" | "resting" | "walking", source: StateSource = "manual", newRestType?: "nap" | "sleep") => {
+    async (newMode: "sitting" | "standing" | "resting" | "walking" | "workout", source: StateSource = "manual", newRestType?: "nap" | "sleep") => {
       const currentId = activeSessionIdRef.current;
       const currentMode = modeRef.current;
 
@@ -419,7 +419,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     const lastManual = lastManualActionAt.current;
     if (lastManual === null) return false;
     const currentMode = modeRef.current;
-    if (currentMode === "walking") return false;
+    if (currentMode === "walking" || currentMode === "workout") return false;
     const lockMs = LOCK_WINDOW_MS[currentMode];
     if (!lockMs) return false;
     return Date.now() - lastManual < lockMs;
@@ -706,16 +706,20 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
 
     const completedStandingMinutes = todayStatsData?.standingMinutes ?? 0;
     const completedWalkingMinutes = todayStatsData?.walkingMinutes ?? 0;
+    const completedWorkoutMinutes = todayStatsData?.workoutMinutes ?? 0;
     // Cap in-progress contribution to minutes elapsed since local midnight so a
     // session spanning midnight doesn't inflate today's count with yesterday's time.
     const cappedElapsed = Math.min(elapsedSeconds, secondsSinceLocalMidnight()) / 60;
     const inProgressStandingMinutes = modeRef.current === "standing" ? cappedElapsed : 0;
     const inProgressWalkingMinutes = modeRef.current === "walking" ? cappedElapsed : 0;
+    const inProgressWorkoutMinutes = modeRef.current === "workout" ? cappedElapsed : 0;
     const totalActiveMinutes =
       completedStandingMinutes +
       completedWalkingMinutes +
+      completedWorkoutMinutes +
       inProgressStandingMinutes +
-      inProgressWalkingMinutes;
+      inProgressWalkingMinutes +
+      inProgressWorkoutMinutes;
 
     const state = goalNotifStateRef.current;
 

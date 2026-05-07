@@ -19,7 +19,7 @@ export const HealthCheckResponse = zod.object({
  * @summary Start a new session
  */
 export const StartSessionBody = zod.object({
-  mode: zod.enum(["sitting", "standing", "resting", "walking"]),
+  mode: zod.enum(["sitting", "standing", "resting", "walking", "workout"]),
   startedAt: zod.coerce
     .date()
     .optional()
@@ -57,7 +57,7 @@ export const ListSessionsResponse = zod.object({
   sessions: zod.array(
     zod.object({
       id: zod.number(),
-      mode: zod.enum(["sitting", "standing", "resting", "walking"]),
+      mode: zod.enum(["sitting", "standing", "resting", "walking", "workout"]),
       startedAt: zod.coerce.date(),
       endedAt: zod.coerce.date().nullable(),
       durationSeconds: zod.number().nullable(),
@@ -74,7 +74,7 @@ export const GetActiveSessionResponse = zod.object({
   session: zod
     .object({
       id: zod.number(),
-      mode: zod.enum(["sitting", "standing", "resting", "walking"]),
+      mode: zod.enum(["sitting", "standing", "resting", "walking", "workout"]),
       startedAt: zod.coerce.date(),
       endedAt: zod.coerce.date().nullable(),
       durationSeconds: zod.number().nullable(),
@@ -99,7 +99,7 @@ export const EndSessionBody = zod.object({
 
 export const EndSessionResponse = zod.object({
   id: zod.number(),
-  mode: zod.enum(["sitting", "standing", "resting", "walking"]),
+  mode: zod.enum(["sitting", "standing", "resting", "walking", "workout"]),
   startedAt: zod.coerce.date(),
   endedAt: zod.coerce.date().nullable(),
   durationSeconds: zod.number().nullable(),
@@ -196,6 +196,7 @@ export const GetTodayStatsResponse = zod.object({
   sittingMinutes: zod.number(),
   standingMinutes: zod.number(),
   walkingMinutes: zod.number(),
+  workoutMinutes: zod.number(),
   restingMinutes: zod.number(),
   activeMinutes: zod.number(),
   goalMinutes: zod.number(),
@@ -214,6 +215,7 @@ export const GetWeeklyStatsResponse = zod.object({
       sittingMinutes: zod.number(),
       standingMinutes: zod.number(),
       walkingMinutes: zod.number(),
+      workoutMinutes: zod.number(),
       restingMinutes: zod.number(),
       activeMinutes: zod.number(),
       goalProgressPercent: zod.number(),
@@ -384,7 +386,14 @@ export const schedulePushBodyReminderIntervalMinutesDefault = 1;
 export const schedulePushBodyRemindersCountDefault = 3;
 
 export const SchedulePushBody = zod.object({
-  mode: zod.enum(["sitting", "standing", "resting", "walking", "idle"]),
+  mode: zod.enum([
+    "sitting",
+    "standing",
+    "resting",
+    "walking",
+    "workout",
+    "idle",
+  ]),
   elapsedSeconds: zod.number().default(schedulePushBodyElapsedSecondsDefault),
   sittingAlertMinutes: zod
     .number()

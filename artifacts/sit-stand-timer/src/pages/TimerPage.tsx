@@ -143,6 +143,19 @@ function ModeIcon({ mode }: { mode: TimerMode }) {
       </svg>
     );
   }
+  if (mode === "workout") {
+    return (
+      <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-24 h-24">
+        <rect x="4" y="28" width="8" height="8" rx="2" fill="currentColor" opacity="0.7" />
+        <rect x="52" y="28" width="8" height="8" rx="2" fill="currentColor" opacity="0.7" />
+        <rect x="10" y="24" width="6" height="16" rx="2" fill="currentColor" opacity="0.85" />
+        <rect x="48" y="24" width="6" height="16" rx="2" fill="currentColor" opacity="0.85" />
+        <rect x="16" y="29" width="32" height="6" rx="3" fill="currentColor" opacity="0.9" />
+        <circle cx="32" cy="14" r="6" fill="currentColor" opacity="0.9" />
+        <path d="M26 22h12l2 8H24l2-8z" fill="currentColor" opacity="0.7" />
+      </svg>
+    );
+  }
   return (
     <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-24 h-24">
       <circle cx="32" cy="32" r="20" stroke="currentColor" strokeWidth="3" strokeDasharray="6 4" fill="none" opacity="0.5" />
@@ -157,6 +170,7 @@ function getModeLabel(mode: TimerMode, restType?: "nap" | "sleep" | null): strin
     case "standing": return "Standing";
     case "resting": return restType === "sleep" ? "Sleeping" : "Resting";
     case "walking": return "Walking";
+    case "workout": return "Working Out";
     default: return "Ready";
   }
 }
@@ -167,6 +181,7 @@ function getModeColor(mode: TimerMode): string {
     case "standing": return "text-emerald-700 dark:text-emerald-400";
     case "resting": return "text-indigo-700 dark:text-indigo-400";
     case "walking": return "text-teal-700 dark:text-teal-400";
+    case "workout": return "text-orange-700 dark:text-orange-400";
     default: return "text-muted-foreground";
   }
 }
@@ -229,6 +244,7 @@ function GoalProgressRing({ mode, restType, goalPercent, celebrating, goalAchiev
       case "standing": return "bg-emerald-50 dark:bg-emerald-950/40";
       case "resting": return "bg-indigo-50 dark:bg-indigo-950/40";
       case "walking": return "bg-teal-50 dark:bg-teal-950/40";
+      case "workout": return "bg-orange-50 dark:bg-orange-950/40";
       default: return "bg-card";
     }
   }
@@ -376,13 +392,14 @@ export default function TimerPage() {
   const remindersCount = settingsData?.remindersCount ?? 3;
   const autoDetectWalking = settingsData?.autoDetectWalking ?? false;
 
-  // Live goal percent: add current session's elapsed standing/walking time so
+  // Live goal percent: add current session's elapsed standing/walking/workout time so
   // the ring moves in real time (every second) instead of only on API refetch
-  // (every 30s). Walking counts toward the goal just like standing.
+  // (every 30s). Walking and workout count toward the goal just like standing.
   const completedStandingMinutes = todayStats?.standingMinutes ?? 0;
   const completedWalkingMinutes = todayStats?.walkingMinutes ?? 0;
+  const completedWorkoutMinutes = todayStats?.workoutMinutes ?? 0;
   const goalMinutes = todayStats?.goalMinutes ?? 120;
-  const isActiveMode = mode === "standing" || mode === "walking";
+  const isActiveMode = mode === "standing" || mode === "walking" || mode === "workout";
   const liveStandingTotalSeconds = completedStandingMinutes * 60 + (isActiveMode ? elapsedSeconds : 0);
   const completedSittingMinutes = todayStats?.sittingMinutes ?? 0;
   const isActiveSitting = mode === "sitting";
@@ -398,7 +415,7 @@ export default function TimerPage() {
     ? Math.min(elapsedSeconds, secondsSinceLocalMidnight()) / 60
     : 0;
   const liveGoalPercent = goalMinutes > 0
-    ? Math.min(100, ((completedStandingMinutes + completedWalkingMinutes + cappedElapsedMinutes) / goalMinutes) * 100)
+    ? Math.min(100, ((completedStandingMinutes + completedWalkingMinutes + completedWorkoutMinutes + cappedElapsedMinutes) / goalMinutes) * 100)
     : todayStats?.goalProgressPercent ?? 0;
 
   // Goal celebration — shared hook handles all state, effects, and midnight reset
@@ -431,15 +448,15 @@ export default function TimerPage() {
 
   // Auto-switch toast
   const autoSwitchBanner = useBanner<string>(4000);
-  const autoSwitchPrevModeRef = useRef<"sitting" | "standing" | "resting" | "walking" | null>(null);
+  const autoSwitchPrevModeRef = useRef<"sitting" | "standing" | "resting" | "walking" | "workout" | null>(null);
 
-  const UNDOABLE_MODES = ["sitting", "standing", "resting", "walking"] as const;
+  const UNDOABLE_MODES = ["sitting", "standing", "resting", "walking", "workout"] as const;
   type UndoableMode = typeof UNDOABLE_MODES[number];
   const isUndoableMode = (m: string): m is UndoableMode =>
     (UNDOABLE_MODES as readonly string[]).includes(m);
 
   const showAutoSwitchToast = (toMode: string, reason: string, fromMode: string) => {
-    const label = toMode === "sitting" ? "Sitting" : toMode === "standing" ? "Standing" : "Walking";
+    const label = toMode === "sitting" ? "Sitting" : toMode === "standing" ? "Standing" : toMode === "workout" ? "Workout" : "Walking";
     autoSwitchPrevModeRef.current = isUndoableMode(fromMode) ? fromMode : null;
     soundBanner.hide();
     autoSwitchBanner.show(`Auto-switched to ${label} — ${reason}`);
@@ -638,46 +655,39 @@ export default function TimerPage() {
             >
               Start Sitting
             </Button>
-          ) : mode === "resting" ? (
+          ) : (mode === "sitting" || mode === "standing") ? (
             <div className="space-y-3">
-              <Button
-                size="lg"
-                variant="default"
-                className="w-full h-14 text-base font-semibold rounded-2xl"
-                onClick={() => switchMode("sitting")}
-                disabled={isLoading}
-              >
-                I'm Sitting
-              </Button>
-              <Button
-                size="lg"
-                variant="secondary"
-                className="w-full h-14 text-base font-semibold rounded-2xl"
-                onClick={() => switchMode("standing")}
-                disabled={isLoading}
-              >
-                I'm Standing
-              </Button>
-            </div>
-          ) : mode === "walking" ? (
-            <div className="space-y-3">
+              {/* Primary toggle */}
               <Button
                 size="lg"
                 className="w-full h-14 text-base font-semibold rounded-2xl"
-                onClick={() => switchMode("sitting")}
+                onClick={() => switchMode(mode === "sitting" ? "standing" : "sitting")}
                 disabled={isLoading}
               >
-                I'm Sitting
+                {mode === "sitting" ? "I'm Standing" : "I'm Sitting"}
               </Button>
-              <Button
-                size="lg"
-                variant="secondary"
-                className="w-full h-14 text-base font-semibold rounded-2xl"
-                onClick={() => switchMode("standing")}
-                disabled={isLoading}
-              >
-                I'm Standing
-              </Button>
+              {/* Activity row */}
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="h-12 text-sm font-medium rounded-2xl text-teal-700 border-teal-200 hover:bg-teal-50 hover:text-teal-800 dark:text-teal-400 dark:border-teal-800/50 dark:hover:bg-teal-950/40"
+                  onClick={() => switchMode("walking")}
+                  disabled={isLoading}
+                >
+                  Walk
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="h-12 text-sm font-medium rounded-2xl text-orange-700 border-orange-200 hover:bg-orange-50 hover:text-orange-800 dark:text-orange-400 dark:border-orange-800/50 dark:hover:bg-orange-950/40"
+                  onClick={() => switchMode("workout")}
+                  disabled={isLoading}
+                >
+                  Workout
+                </Button>
+              </div>
+              {/* Rest row */}
               <div className="grid grid-cols-2 gap-2">
                 <Button
                   size="lg"
@@ -699,17 +709,51 @@ export default function TimerPage() {
                 </Button>
               </div>
             </div>
-          ) : (
+          ) : (mode === "walking" || mode === "workout") ? (
             <div className="space-y-3">
-              <Button
-                size="lg"
-                className="w-full h-14 text-base font-semibold rounded-2xl"
-                onClick={() => switchMode(mode === "sitting" ? "standing" : "sitting")}
-                disabled={isLoading}
-              >
-                {mode === "sitting" ? "I'm Standing" : "I'm Sitting"}
-              </Button>
+              {/* Sit / Stand row */}
               <div className="grid grid-cols-2 gap-2">
+                <Button
+                  size="lg"
+                  className="h-14 text-base font-semibold rounded-2xl"
+                  onClick={() => switchMode("sitting")}
+                  disabled={isLoading}
+                >
+                  Sitting
+                </Button>
+                <Button
+                  size="lg"
+                  variant="secondary"
+                  className="h-14 text-base font-semibold rounded-2xl"
+                  onClick={() => switchMode("standing")}
+                  disabled={isLoading}
+                >
+                  Standing
+                </Button>
+              </div>
+              {/* Switch activity + rest row */}
+              <div className="grid grid-cols-3 gap-2">
+                {mode === "workout" ? (
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="h-12 text-sm font-medium rounded-2xl text-teal-700 border-teal-200 hover:bg-teal-50 hover:text-teal-800 dark:text-teal-400 dark:border-teal-800/50 dark:hover:bg-teal-950/40"
+                    onClick={() => switchMode("walking")}
+                    disabled={isLoading}
+                  >
+                    Walk
+                  </Button>
+                ) : (
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="h-12 text-sm font-medium rounded-2xl text-orange-700 border-orange-200 hover:bg-orange-50 hover:text-orange-800 dark:text-orange-400 dark:border-orange-800/50 dark:hover:bg-orange-950/40"
+                    onClick={() => switchMode("workout")}
+                    disabled={isLoading}
+                  >
+                    Workout
+                  </Button>
+                )}
                 <Button
                   size="lg"
                   variant="outline"
@@ -727,6 +771,50 @@ export default function TimerPage() {
                   disabled={isLoading}
                 >
                   Sleep
+                </Button>
+              </div>
+            </div>
+          ) : (
+            /* resting */
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  size="lg"
+                  variant="default"
+                  className="h-14 text-base font-semibold rounded-2xl"
+                  onClick={() => switchMode("sitting")}
+                  disabled={isLoading}
+                >
+                  Sitting
+                </Button>
+                <Button
+                  size="lg"
+                  variant="secondary"
+                  className="h-14 text-base font-semibold rounded-2xl"
+                  onClick={() => switchMode("standing")}
+                  disabled={isLoading}
+                >
+                  Standing
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="h-12 text-sm font-medium rounded-2xl text-teal-700 border-teal-200 hover:bg-teal-50 hover:text-teal-800 dark:text-teal-400 dark:border-teal-800/50 dark:hover:bg-teal-950/40"
+                  onClick={() => switchMode("walking")}
+                  disabled={isLoading}
+                >
+                  Walk
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="h-12 text-sm font-medium rounded-2xl text-orange-700 border-orange-200 hover:bg-orange-50 hover:text-orange-800 dark:text-orange-400 dark:border-orange-800/50 dark:hover:bg-orange-950/40"
+                  onClick={() => switchMode("workout")}
+                  disabled={isLoading}
+                >
+                  Workout
                 </Button>
               </div>
             </div>
@@ -767,32 +855,49 @@ export default function TimerPage() {
           </div>
         )}
 
-        {todayStats && (
-          <div className={`grid gap-3 ${todayStats.walkingMinutes > 0 ? "grid-cols-4" : "grid-cols-3"}`}>
-            <StatCard
-              label="Sitting"
-              value={isActiveSitting ? formatLiveElapsed(liveSittingTotalSeconds) : formatMinutes(completedSittingMinutes)}
-              color="text-amber-700 dark:text-amber-400"
-            />
-            <StatCard
-              label="Standing"
-              value={isActiveMode ? formatLiveElapsed(liveStandingTotalSeconds) : formatMinutes(completedStandingMinutes)}
-              color="text-emerald-700 dark:text-emerald-400"
-            />
-            {todayStats.walkingMinutes > 0 && (
+        {todayStats && (() => {
+          const hasWalking = (mode === "walking" ? true : todayStats.walkingMinutes > 0);
+          const hasWorkout = (mode === "workout" ? true : (todayStats.workoutMinutes ?? 0) > 0);
+          const extraCols = (hasWalking ? 1 : 0) + (hasWorkout ? 1 : 0);
+          const gridCols = extraCols === 0 ? "grid-cols-3" : extraCols === 1 ? "grid-cols-4" : "grid-cols-5";
+          return (
+            <div className={`grid gap-3 ${gridCols}`}>
               <StatCard
-                label="Walking"
-                value={formatMinutes(todayStats.walkingMinutes)}
-                color="text-teal-700 dark:text-teal-400"
+                label="Sitting"
+                value={isActiveSitting ? formatLiveElapsed(liveSittingTotalSeconds) : formatMinutes(completedSittingMinutes)}
+                color="text-amber-700 dark:text-amber-400"
               />
-            )}
-            <StatCard
-              label="Streak"
-              value={`${todayStats.currentStreak}d`}
-              color="text-violet-700 dark:text-violet-400"
-            />
-          </div>
-        )}
+              <StatCard
+                label="Standing"
+                value={(mode === "standing") ? formatLiveElapsed(liveStandingTotalSeconds) : formatMinutes(completedStandingMinutes)}
+                color="text-emerald-700 dark:text-emerald-400"
+              />
+              {hasWalking && (
+                <StatCard
+                  label="Walking"
+                  value={mode === "walking"
+                    ? formatLiveElapsed(completedWalkingMinutes * 60 + elapsedSeconds)
+                    : formatMinutes(todayStats.walkingMinutes)}
+                  color="text-teal-700 dark:text-teal-400"
+                />
+              )}
+              {hasWorkout && (
+                <StatCard
+                  label="Workout"
+                  value={mode === "workout"
+                    ? formatLiveElapsed(completedWorkoutMinutes * 60 + elapsedSeconds)
+                    : formatMinutes(todayStats.workoutMinutes ?? 0)}
+                  color="text-orange-700 dark:text-orange-400"
+                />
+              )}
+              <StatCard
+                label="Streak"
+                value={`${todayStats.currentStreak}d`}
+                color="text-violet-700 dark:text-violet-400"
+              />
+            </div>
+          );
+        })()}
 
         <TodayCycles />
       </footer>
@@ -825,6 +930,7 @@ function getModeDotColor(mode: TimerMode): string {
     case "standing": return "bg-emerald-500 dark:bg-emerald-400";
     case "resting": return "bg-indigo-500 dark:bg-indigo-400";
     case "walking": return "bg-teal-500 dark:bg-teal-400";
+    case "workout": return "bg-orange-500 dark:bg-orange-400";
     default: return "bg-muted-foreground";
   }
 }

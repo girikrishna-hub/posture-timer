@@ -451,7 +451,7 @@ components:
 
     SessionMode:
       type: string
-      enum: [sitting, standing, resting, walking]
+      enum: [sitting, standing, resting, walking, workout]
 
     RestType:
       type: string
@@ -596,6 +596,8 @@ components:
           type: integer
         walkingMinutes:
           type: integer
+        workoutMinutes:
+          type: integer
         restingMinutes:
           type: integer
         activeMinutes:
@@ -613,6 +615,7 @@ components:
         - sittingMinutes
         - standingMinutes
         - walkingMinutes
+        - workoutMinutes
         - restingMinutes
         - activeMinutes
         - goalMinutes
@@ -632,6 +635,8 @@ components:
           type: integer
         walkingMinutes:
           type: integer
+        workoutMinutes:
+          type: integer
         restingMinutes:
           type: integer
         activeMinutes:
@@ -643,6 +648,7 @@ components:
         - sittingMinutes
         - standingMinutes
         - walkingMinutes
+        - workoutMinutes
         - restingMinutes
         - activeMinutes
         - goalProgressPercent
@@ -916,7 +922,7 @@ components:
       properties:
         mode:
           type: string
-          enum: [sitting, standing, resting, walking, idle]
+          enum: [sitting, standing, resting, walking, workout, idle]
         elapsedSeconds:
           type: integer
           default: 0

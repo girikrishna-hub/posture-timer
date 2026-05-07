@@ -13,4 +13,5 @@ export const SessionMode = {
   standing: "standing",
   resting: "resting",
   walking: "walking",
+  workout: "workout",
 } as const;

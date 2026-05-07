@@ -235,6 +235,7 @@ router.get("/metrics/daily", async (req, res) => {
     sittingMinutes: number;
     standingMinutes: number;
     walkingMinutes: number;
+    workoutMinutes: number;
     napMinutes: number;
     sleepMinutes: number;
     activeMinutes: number;
@@ -251,9 +252,10 @@ router.get("/metrics/daily", async (req, res) => {
     const sittingMinutes = getMinutes(daySessions, "sitting");
     const standingMinutes = getMinutes(daySessions, "standing");
     const walkingMinutes = getWalkingMinutes(daySessions);
+    const workoutMinutes = getMinutes(daySessions, "workout");
     const napMinutes = getMinutes(daySessions, "resting", "nap");
     const sleepMinutes = getMinutes(daySessions, "resting", "sleep");
-    const activeMinutes = sittingMinutes + standingMinutes + walkingMinutes;
+    const activeMinutes = sittingMinutes + standingMinutes + walkingMinutes + workoutMinutes;
     const goalProgressPercent =
       goalMinutes > 0
         ? Math.min(100, Math.round((standingMinutes / goalMinutes) * 100))
@@ -265,6 +267,7 @@ router.get("/metrics/daily", async (req, res) => {
       sittingMinutes,
       standingMinutes,
       walkingMinutes,
+      workoutMinutes,
       napMinutes,
       sleepMinutes,
       activeMinutes,
@@ -305,14 +308,15 @@ router.get("/metrics/summary", async (_req, res) => {
         gte(sessionsTable.startedAt, weekAgo),
         lte(sessionsTable.startedAt, endOfDay(today)),
         isNotNull(sessionsTable.endedAt),
-        inArray(sessionsTable.mode, ["standing", "walking"]),
+        inArray(sessionsTable.mode, ["standing", "walking", "workout"]),
       ),
     );
 
-  type DayStat = { date: string; standingMinutes: number; walkingMinutes: number };
+  type DayStat = { date: string; standingMinutes: number; walkingMinutes: number; workoutMinutes: number };
   const last7Days: DayStat[] = [];
   let weeklyStandingTotal = 0;
   let weeklyWalkingTotal = 0;
+  let weeklyWorkoutTotal = 0;
 
   for (let i = 6; i >= 0; i--) {
     const d = new Date(today);
@@ -325,9 +329,13 @@ router.get("/metrics/summary", async (_req, res) => {
     const walkingMins = daySessions
       .filter((s) => s.mode === "walking")
       .reduce((sum, s) => sum + Math.round((s.durationSeconds ?? 0) / 60), 0);
-    last7Days.push({ date: dateStr, standingMinutes: standingMins, walkingMinutes: walkingMins });
+    const workoutMins = daySessions
+      .filter((s) => s.mode === "workout")
+      .reduce((sum, s) => sum + Math.round((s.durationSeconds ?? 0) / 60), 0);
+    last7Days.push({ date: dateStr, standingMinutes: standingMins, walkingMinutes: walkingMins, workoutMinutes: workoutMins });
     weeklyStandingTotal += standingMins;
     weeklyWalkingTotal += walkingMins;
+    weeklyWorkoutTotal += workoutMins;
   }
 
   const weeklyAverageStandingMinutes = Math.round(weeklyStandingTotal / 7);

@@ -14,5 +14,6 @@ export const PushScheduleBodyMode = {
   standing: "standing",
   resting: "resting",
   walking: "walking",
+  workout: "workout",
   idle: "idle",
 } as const;

@@ -42,7 +42,7 @@ async function getSettings(userId: string) {
 
 function getSessionMinutes(
   sessions: typeof sessionsTable.$inferSelect[],
-  mode: "sitting" | "standing" | "resting" | "walking",
+  mode: "sitting" | "standing" | "resting" | "walking" | "workout",
 ): number {
   return sessions
     .filter((s) => s.mode === mode)
@@ -112,8 +112,9 @@ router.get("/stats/today", requireAuth, async (req, res) => {
   const sittingMinutes  = getSessionMinutes(completedSessions, "sitting");
   const standingMinutes = getSessionMinutes(completedSessions, "standing");
   const walkingMinutes  = getSessionMinutes(completedSessions, "walking");
+  const workoutMinutes  = getSessionMinutes(completedSessions, "workout");
   const restingMinutes  = getSessionMinutes(completedSessions, "resting");
-  const activeMinutes   = sittingMinutes + standingMinutes + walkingMinutes;
+  const activeMinutes   = sittingMinutes + standingMinutes + walkingMinutes + workoutMinutes;
   const goalMinutes     = settings.dailyStandingGoalMinutes;
   const goalProgressPercent =
     goalMinutes > 0
@@ -127,6 +128,7 @@ router.get("/stats/today", requireAuth, async (req, res) => {
     sittingMinutes,
     standingMinutes,
     walkingMinutes,
+    workoutMinutes,
     restingMinutes,
     activeMinutes,
     goalMinutes,
@@ -165,8 +167,9 @@ router.get("/stats/weekly", requireAuth, async (req, res) => {
     const sittingMinutes  = getSessionMinutes(daySessions, "sitting");
     const standingMinutes = getSessionMinutes(daySessions, "standing");
     const walkingMinutes  = getSessionMinutes(daySessions, "walking");
+    const workoutMinutes  = getSessionMinutes(daySessions, "workout");
     const restingMinutes  = getSessionMinutes(daySessions, "resting");
-    const activeMinutes   = sittingMinutes + standingMinutes + walkingMinutes;
+    const activeMinutes   = sittingMinutes + standingMinutes + walkingMinutes + workoutMinutes;
     const goalProgressPercent =
       goalMinutes > 0
         ? Math.min(100, Math.round((standingMinutes / goalMinutes) * 100))
@@ -179,6 +182,7 @@ router.get("/stats/weekly", requireAuth, async (req, res) => {
       sittingMinutes,
       standingMinutes,
       walkingMinutes,
+      workoutMinutes,
       restingMinutes,
       activeMinutes,
       goalProgressPercent,

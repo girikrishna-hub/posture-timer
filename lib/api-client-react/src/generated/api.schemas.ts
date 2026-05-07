@@ -16,6 +16,7 @@ export const SessionMode = {
   standing: "standing",
   resting: "resting",
   walking: "walking",
+  workout: "workout",
 } as const;
 
 export type RestType = (typeof RestType)[keyof typeof RestType] | null;
@@ -82,6 +83,7 @@ export interface TodayStats {
   sittingMinutes: number;
   standingMinutes: number;
   walkingMinutes: number;
+  workoutMinutes: number;
   restingMinutes: number;
   activeMinutes: number;
   goalMinutes: number;
@@ -95,6 +97,7 @@ export interface DayStats {
   sittingMinutes: number;
   standingMinutes: number;
   walkingMinutes: number;
+  workoutMinutes: number;
   restingMinutes: number;
   activeMinutes: number;
   goalProgressPercent: number;
@@ -257,6 +260,7 @@ export const PushScheduleBodyMode = {
   standing: "standing",
   resting: "resting",
   walking: "walking",
+  workout: "workout",
   idle: "idle",
 } as const;
 
