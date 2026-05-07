@@ -18,6 +18,7 @@ import SignUpPage from "@/pages/SignUpPage";
 import LandingPage from "@/pages/LandingPage";
 import NotFound from "@/pages/not-found";
 import { BottomNav } from "@/components/BottomNav";
+import { UpdateBanner } from "@/components/UpdateBanner";
 
 function PushSubscriptionRegistrar() {
   const { notificationPermission } = useTimer();
@@ -184,6 +185,7 @@ function App() {
           </ClerkProviderWithRoutes>
         </WouterRouter>
         <Toaster />
+        <UpdateBanner />
       </TooltipProvider>
     </QueryClientProvider>
   );
