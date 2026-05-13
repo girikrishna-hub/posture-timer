@@ -55,6 +55,7 @@ function showBladderNotification(logId: string) {
     tag: "bladder-reminder",
     renotify: true,
     requireInteraction: true,
+    vibrate: [300, 100, 300, 100, 600],
     data: { url: "/bladder", logId },
     actions: [
       { action: "done", title: "✓ Done" },
@@ -84,6 +85,8 @@ self.addEventListener("message", (event: ExtendableMessageEvent) => {
         badge: "/favicon.svg",
         tag: "timer-reminder",
         renotify: true,
+        requireInteraction: true,
+        vibrate: [300, 100, 300, 100, 600],
         data: { url: "/" },
       } as NotificationOptions)
     );
@@ -114,6 +117,8 @@ self.addEventListener("message", (event: ExtendableMessageEvent) => {
                 badge: "/favicon.svg",
                 tag: "timer-reminder",
                 renotify: true,
+                requireInteraction: true,
+                vibrate: [300, 100, 300, 100, 600],
                 data: { url: "/" },
               } as NotificationOptions)
               .then(resolve)
@@ -147,6 +152,7 @@ self.addEventListener("message", (event: ExtendableMessageEvent) => {
         tag: "bladder-reminder",
         renotify: true,
         requireInteraction: true,
+        vibrate: [300, 100, 300, 100, 600],
         data: { url: "/bladder", logId: bladderPendingLogId },
         actions: [
           { action: "done", title: "✓ Done" },
@@ -183,6 +189,7 @@ self.addEventListener("message", (event: ExtendableMessageEvent) => {
                 tag: "bladder-reminder",
                 renotify: true,
                 requireInteraction: true,
+                vibrate: [300, 100, 300, 100, 600],
                 data: { url: "/bladder", logId: bladderPendingLogId },
                 actions: [
                   { action: "done", title: "✓ Done" },
@@ -239,6 +246,7 @@ self.addEventListener("push", (event: PushEvent) => {
             tag: "bladder-reminder",
             renotify: true,
             requireInteraction: true,
+            vibrate: [300, 100, 300, 100, 600],
             data: { url: "/bladder", logId: capturedLogId },
             actions: [
               { action: "done", title: "✓ Done" },
@@ -265,6 +273,8 @@ self.addEventListener("push", (event: PushEvent) => {
             badge: "/favicon.svg",
             tag: "timer-reminder",
             renotify: true,
+            requireInteraction: true,
+            vibrate: [300, 100, 300, 100, 600],
             data: { url: "/" },
           } as NotificationOptions),
         )

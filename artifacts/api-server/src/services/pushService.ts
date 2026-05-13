@@ -101,6 +101,7 @@ async function sendToSubscriptions(
       return webpush.sendNotification(
         { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
         JSON.stringify(payload),
+        { urgency: "high" },
       );
     }),
   );
