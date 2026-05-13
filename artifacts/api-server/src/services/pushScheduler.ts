@@ -189,7 +189,7 @@ function scheduleNext(
       "Posture notification attempt",
     );
 
-    void sendPushToUser(userId, { title, body, type: "posture", tag: "timer-reminder", traceId: capturedTraceId, userId })
+    void sendPushToUser(userId, { title, body, type: "posture", tag: `posture-${capturedTraceId}`, traceId: capturedTraceId, userId })
       .then(({ success, sent, error }) => {
         recordNotificationSent(userId, capturedTraceId, success, error);
         if (success) {
