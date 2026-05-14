@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, lazy, Suspense } from "react";
 import { Switch, Route, Router as WouterRouter, Redirect, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { ClerkProvider, Show, ClerkLoaded, ClerkLoading, useClerk } from "@clerk/react";
@@ -8,17 +8,28 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { TimerProvider, useTimer } from "@/contexts/TimerContext";
 import { BladderProvider } from "@/contexts/BladderContext";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
+
+// TimerPage is kept eager — it is the first screen authenticated users land on.
+// Every other page is lazy-loaded so its JS (and heavy deps like recharts) are
+// only fetched when the user actually navigates there.
 import TimerPage from "@/pages/TimerPage";
-import SettingsPage from "@/pages/SettingsPage";
-import DashboardPage from "@/pages/DashboardPage";
-import BladderPage from "@/pages/BladderPage";
-import BladderStatsPage from "@/pages/BladderStatsPage";
-import SignInPage from "@/pages/SignInPage";
-import SignUpPage from "@/pages/SignUpPage";
-import LandingPage from "@/pages/LandingPage";
-import NotFound from "@/pages/not-found";
+
+const SettingsPage     = lazy(() => import("@/pages/SettingsPage"));
+const DashboardPage    = lazy(() => import("@/pages/DashboardPage"));
+const BladderPage      = lazy(() => import("@/pages/BladderPage"));
+const BladderStatsPage = lazy(() => import("@/pages/BladderStatsPage"));
+const SignInPage        = lazy(() => import("@/pages/SignInPage"));
+const SignUpPage        = lazy(() => import("@/pages/SignUpPage"));
+const LandingPage       = lazy(() => import("@/pages/LandingPage"));
+const NotFound          = lazy(() => import("@/pages/not-found"));
+
 import { BottomNav } from "@/components/BottomNav";
 import { UpdateBanner } from "@/components/UpdateBanner";
+
+// Thin fallback that matches the app background — avoids white flash
+const PageFallback = () => (
+  <div className="min-h-screen bg-background" aria-hidden />
+);
 
 function PushSubscriptionRegistrar() {
   const { notificationPermission } = useTimer();
@@ -114,45 +125,54 @@ function AppShell() {
   return (
     <>
       <ClerkQueryClientCacheInvalidator />
-      <Switch>
-        <Route path="/sign-in/*?" component={SignInPage} />
-        <Route path="/sign-up/*?" component={SignUpPage} />
-        <Route>
-          <>
-            <ClerkLoading>
-              <div className="min-h-screen bg-background" />
-            </ClerkLoading>
 
-            <ClerkLoaded>
-              <Show when="signed-in">
-                <TimerProvider>
-                  <PushSubscriptionRegistrar />
-                  <BladderProvider>
+      {/* Sign-in / sign-up routes are outside the auth gate so Clerk can
+          render them before the session is established. */}
+      <Suspense fallback={<PageFallback />}>
+        <Switch>
+          <Route path="/sign-in/*?" component={SignInPage} />
+          <Route path="/sign-up/*?" component={SignUpPage} />
+          <Route>
+            <>
+              <ClerkLoading>
+                <div className="min-h-screen bg-background" />
+              </ClerkLoading>
+
+              <ClerkLoaded>
+                <Show when="signed-in">
+                  <TimerProvider>
+                    <PushSubscriptionRegistrar />
+                    <BladderProvider>
+                      <Suspense fallback={<PageFallback />}>
+                        <Switch>
+                          <Route path="/" component={TimerPage} />
+                          <Route path="/settings" component={SettingsPage} />
+                          <Route path="/dashboard" component={DashboardPage} />
+                          <Route path="/bladder/stats" component={BladderStatsPage} />
+                          <Route path="/bladder" component={BladderPage} />
+                          <Route component={NotFound} />
+                        </Switch>
+                      </Suspense>
+                      <BottomNav />
+                    </BladderProvider>
+                  </TimerProvider>
+                </Show>
+
+                <Show when="signed-out">
+                  <Suspense fallback={<PageFallback />}>
                     <Switch>
-                      <Route path="/" component={TimerPage} />
-                      <Route path="/settings" component={SettingsPage} />
-                      <Route path="/dashboard" component={DashboardPage} />
-                      <Route path="/bladder/stats" component={BladderStatsPage} />
-                      <Route path="/bladder" component={BladderPage} />
-                      <Route component={NotFound} />
+                      <Route path="/" component={LandingPage} />
+                      <Route>
+                        <Redirect to="/" />
+                      </Route>
                     </Switch>
-                    <BottomNav />
-                  </BladderProvider>
-                </TimerProvider>
-              </Show>
-
-              <Show when="signed-out">
-                <Switch>
-                  <Route path="/" component={LandingPage} />
-                  <Route>
-                    <Redirect to="/" />
-                  </Route>
-                </Switch>
-              </Show>
-            </ClerkLoaded>
-          </>
-        </Route>
-      </Switch>
+                  </Suspense>
+                </Show>
+              </ClerkLoaded>
+            </>
+          </Route>
+        </Switch>
+      </Suspense>
     </>
   );
 }

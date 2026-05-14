@@ -79,6 +79,56 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // Split vendor libraries into separate cacheable chunks.
+        // Each chunk is fetched in parallel and cached independently,
+        // so a code change only invalidates the app chunk — not the vendors.
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+
+          // @clerk/* — auth library (~350 kB). Separated so it caches across
+          // app deploys (it changes far less often than app code).
+          if (id.includes("@clerk")) return "vendor-clerk";
+
+          // recharts + D3 helpers — only referenced from lazy DashboardPage
+          // and BladderStatsPage, so this chunk is only fetched on first
+          // dashboard visit.
+          if (id.includes("recharts") || id.match(/\/d3-[a-z]/)) {
+            return "vendor-charts";
+          }
+
+          // Radix UI primitives — used across many pages but stable
+          if (id.includes("@radix-ui")) return "vendor-radix";
+
+          // Capacitor runtime — small but completely separate concern
+          if (id.includes("@capacitor")) return "vendor-capacitor";
+
+          // TanStack Query — needed immediately (data fetching)
+          if (id.includes("@tanstack")) return "vendor-query";
+
+          // React core — pinned and rarely changes
+          if (
+            id.match(/[/\\]react[/\\]/) ||
+            id.match(/[/\\]react-dom[/\\]/) ||
+            id.match(/[/\\]scheduler[/\\]/)
+          ) {
+            return "vendor-react";
+          }
+
+          // html2canvas is only imported from the lazy DashboardPage chunk.
+          // Returning undefined lets Rollup co-locate it there automatically
+          // instead of pulling it into the eager initial bundle.
+          if (id.includes("html2canvas")) return undefined;
+
+          // Everything else from node_modules (wouter, zod, etc.)
+          // Only include packages that are actually used from eagerly-loaded code.
+          // Packages only referenced from lazy routes will be naturally co-located
+          // with those routes by Rollup when they fall through here.
+          return "vendor-misc";
+        },
+      },
+    },
   },
   server: {
     port,
