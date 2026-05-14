@@ -1,5 +1,20 @@
+/**
+ * Native notification helpers.
+ *
+ * When running inside a Capacitor Android build the AlarmManager plugin is
+ * used so that alarms fire via AlarmManager.setExactAndAllowWhileIdle() and
+ * are displayed by AlarmFullScreenActivity (full-screen, above the lock
+ * screen).
+ *
+ * When running in a browser the functions are all no-ops so the calling code
+ * (TimerContext) never needs to check the platform itself.
+ */
+
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
+import { AlarmManager } from "@/plugins/alarmManager";
+
+// ─── Platform detection ─────────────────────────────────────────────────────
 
 export function isNativePlatform(): boolean {
   try {
@@ -9,29 +24,30 @@ export function isNativePlatform(): boolean {
   }
 }
 
-const POSTURE_CHANNEL_ID = "posture-reminders";
+// ─── Notification channel (LocalNotifications fallback) ─────────────────────
+// Still created so that web-push / LocalNotification fallback paths have a
+// channel to post to.  The alarm-clock path uses AlarmReceiver's own channel.
 
-// Notification IDs: 1000–1010 reserved for posture reminders
-const BASE_ID = 1000;
+const LC_CHANNEL_ID = "posture-reminders";
 
 export async function setupNativeNotificationChannel(): Promise<void> {
   if (!isNativePlatform()) return;
   try {
     await LocalNotifications.createChannel({
-      id: POSTURE_CHANNEL_ID,
-      name: "Posture Reminders",
+      id:          LC_CHANNEL_ID,
+      name:        "Posture Reminders",
       description: "Sit/Stand posture alerts",
-      importance: 5,       // IMPORTANCE_HIGH — heads-up banner + lock screen
-      visibility: 1,       // VISIBILITY_PUBLIC — show on lock screen
-      vibration: true,
-      sound: "default",
-      lights: true,
-      lightColor: "#7ea58c",
+      importance:  5,   // IMPORTANCE_HIGH
+      visibility:  1,   // VISIBILITY_PUBLIC
+      vibration:   true,
+      sound:       "default",
+      lights:      true,
+      lightColor:  "#7ea58c",
     });
-  } catch {
-    // silent
-  }
+  } catch { /* silent */ }
 }
+
+// ─── Permission ─────────────────────────────────────────────────────────────
 
 export async function requestNativeNotificationPermission(): Promise<boolean> {
   if (!isNativePlatform()) return false;
@@ -43,20 +59,47 @@ export async function requestNativeNotificationPermission(): Promise<boolean> {
   }
 }
 
-export async function cancelAllNativePostureNotifications(): Promise<void> {
+// ─── Alarm IDs ──────────────────────────────────────────────────────────────
+//
+//  2000 … 2010  →  sitting reminders
+//  3000 … 3010  →  standing reminders
+//
+// Using separate ranges means cancelling sitting alarms never touches
+// standing alarms and vice-versa.
+
+const SITTING_BASE  = 2000;
+const STANDING_BASE = 3000;
+const MAX_REMINDERS = 11;
+
+// ─── Cancel helpers ─────────────────────────────────────────────────────────
+
+export async function cancelSittingAlarms(): Promise<void> {
   if (!isNativePlatform()) return;
   try {
-    const ids = Array.from({ length: 12 }, (_, i) => ({ id: BASE_ID + i }));
-    await LocalNotifications.cancel({ notifications: ids });
-  } catch {
-    // silent
-  }
+    const ids = Array.from({ length: MAX_REMINDERS }, (_, i) => SITTING_BASE + i);
+    await AlarmManager.cancelAlarms({ ids });
+  } catch { /* silent */ }
 }
 
+export async function cancelStandingAlarms(): Promise<void> {
+  if (!isNativePlatform()) return;
+  try {
+    const ids = Array.from({ length: MAX_REMINDERS }, (_, i) => STANDING_BASE + i);
+    await AlarmManager.cancelAlarms({ ids });
+  } catch { /* silent */ }
+}
+
+export async function cancelAllNativePostureNotifications(): Promise<void> {
+  await cancelSittingAlarms();
+  await cancelStandingAlarms();
+}
+
+// ─── Schedule sitting reminders ─────────────────────────────────────────────
+
 interface SittingSettings {
-  sittingAlertMinutes: number;
+  sittingAlertMinutes:    number;
   reminderIntervalMinutes: number;
-  remindersCount: number;
+  remindersCount:          number;
 }
 
 export async function scheduleNativeSittingReminders(
@@ -64,48 +107,36 @@ export async function scheduleNativeSittingReminders(
 ): Promise<void> {
   if (!isNativePlatform()) return;
   try {
-    const alertMs = s.sittingAlertMinutes * 60 * 1000;
+    const alertMs = s.sittingAlertMinutes * 60_000;
 
-    const notifications = [
-      {
-        id: BASE_ID,
-        title: "Time to stand!",
-        body: `You've been sitting for ${s.sittingAlertMinutes} minutes. Stand up!`,
-        channelId: POSTURE_CHANNEL_ID,
-        schedule: { at: new Date(Date.now() + alertMs) },
-        sound: "default",
-        smallIcon: "ic_stat_notification",
-        actionTypeId: "",
-        extra: null,
-      },
-    ];
+    // First alert
+    await AlarmManager.scheduleAlarm({
+      id:      SITTING_BASE,
+      title:   "Time to stand!",
+      body:    `You've been sitting for ${s.sittingAlertMinutes} minutes. Stand up!`,
+      delayMs: alertMs,
+    });
 
-    for (let i = 1; i <= s.remindersCount; i++) {
-      const delayMs = alertMs + i * s.reminderIntervalMinutes * 60 * 1000;
-      notifications.push({
-        id: BASE_ID + i,
-        title: `Stand up — reminder ${i}/${s.remindersCount}`,
-        body: `Still sitting after ${s.sittingAlertMinutes + i * s.reminderIntervalMinutes} minutes.`,
-        channelId: POSTURE_CHANNEL_ID,
-        schedule: { at: new Date(Date.now() + delayMs) },
-        sound: "default",
-        smallIcon: "ic_stat_notification",
-        actionTypeId: "",
-        extra: null,
+    // Follow-up reminders
+    for (let i = 1; i <= Math.min(s.remindersCount, MAX_REMINDERS - 1); i++) {
+      const delayMs = alertMs + i * s.reminderIntervalMinutes * 60_000;
+      await AlarmManager.scheduleAlarm({
+        id:      SITTING_BASE + i,
+        title:   `Stand up — reminder ${i}/${s.remindersCount}`,
+        body:    `Still sitting after ${s.sittingAlertMinutes + i * s.reminderIntervalMinutes} minutes.`,
+        delayMs,
       });
     }
-
-    await LocalNotifications.schedule({ notifications });
-  } catch {
-    // silent
-  }
+  } catch { /* silent */ }
 }
 
+// ─── Schedule standing reminders ────────────────────────────────────────────
+
 interface StandingSettings {
-  standingMinMinutes: number;
-  standingMaxMinutes: number;
+  standingMinMinutes:      number;
+  standingMaxMinutes:      number;
   reminderIntervalMinutes: number;
-  remindersCount: number;
+  remindersCount:          number;
 }
 
 export async function scheduleNativeStandingReminders(
@@ -113,54 +144,35 @@ export async function scheduleNativeStandingReminders(
 ): Promise<void> {
   if (!isNativePlatform()) return;
   try {
-    const minMs = s.standingMinMinutes * 60 * 1000;
-    const maxMs = s.standingMaxMinutes * 60 * 1000;
+    const minMs = s.standingMinMinutes  * 60_000;
+    const maxMs = s.standingMaxMinutes  * 60_000;
 
-    const notifications = [
-      {
-        id: BASE_ID,
-        title: "Time to sit!",
-        body: `You've been standing for ${s.standingMinMinutes} minutes. Have a seat.`,
-        channelId: POSTURE_CHANNEL_ID,
-        schedule: { at: new Date(Date.now() + minMs) },
-        sound: "default",
-        smallIcon: "ic_stat_notification",
-        actionTypeId: "",
-        extra: null,
-      },
-    ];
+    // First alert at standingMinMinutes
+    await AlarmManager.scheduleAlarm({
+      id:      STANDING_BASE,
+      title:   "Time to sit!",
+      body:    `You've been standing for ${s.standingMinMinutes} minutes. Have a seat.`,
+      delayMs: minMs,
+    });
 
-    for (let i = 1; i < s.remindersCount; i++) {
-      const delayMs = minMs + i * s.reminderIntervalMinutes * 60 * 1000;
+    // Intermediate reminders
+    for (let i = 1; i < Math.min(s.remindersCount, MAX_REMINDERS - 1); i++) {
+      const delayMs = minMs + i * s.reminderIntervalMinutes * 60_000;
       if (delayMs >= maxMs) break;
-      notifications.push({
-        id: BASE_ID + i,
-        title: `Sit down — reminder ${i}/${s.remindersCount}`,
-        body: `Still standing after ${s.standingMinMinutes + i * s.reminderIntervalMinutes} minutes.`,
-        channelId: POSTURE_CHANNEL_ID,
-        schedule: { at: new Date(Date.now() + delayMs) },
-        sound: "default",
-        smallIcon: "ic_stat_notification",
-        actionTypeId: "",
-        extra: null,
+      await AlarmManager.scheduleAlarm({
+        id:      STANDING_BASE + i,
+        title:   `Sit down — reminder ${i}/${s.remindersCount}`,
+        body:    `Still standing after ${s.standingMinMinutes + i * s.reminderIntervalMinutes} minutes.`,
+        delayMs,
       });
     }
 
-    // Final hard-stop at maxMinutes
-    notifications.push({
-      id: BASE_ID + s.remindersCount,
-      title: "Final reminder — please sit down",
-      body: `Maximum standing time of ${s.standingMaxMinutes} minutes reached.`,
-      channelId: POSTURE_CHANNEL_ID,
-      schedule: { at: new Date(Date.now() + maxMs) },
-      sound: "default",
-      smallIcon: "ic_stat_notification",
-      actionTypeId: "",
-      extra: null,
+    // Hard final alert at standingMaxMinutes
+    await AlarmManager.scheduleAlarm({
+      id:      STANDING_BASE + MAX_REMINDERS - 1,
+      title:   "Final reminder — please sit down",
+      body:    `Maximum standing time of ${s.standingMaxMinutes} minutes reached.`,
+      delayMs: maxMs,
     });
-
-    await LocalNotifications.schedule({ notifications });
-  } catch {
-    // silent
-  }
+  } catch { /* silent */ }
 }

@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+# ─────────────────────────────────────────────────────────────────────────────
+# android-setup.sh
+# Run this ONCE after `npx cap add android` to install the native alarm files.
+# ─────────────────────────────────────────────────────────────────────────────
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ANDROID_JAVA="$SCRIPT_DIR/android/app/src/main/java/com/sitstand/timer"
+SRC="$SCRIPT_DIR/android-src"
+
+echo ""
+echo "╔══════════════════════════════════════════════════════╗"
+echo "║         Sit+Stand Timer — Android alarm setup        ║"
+echo "╚══════════════════════════════════════════════════════╝"
+echo ""
+
+# ── 1. Verify android/ exists ────────────────────────────────────────────────
+if [ ! -d "$SCRIPT_DIR/android" ]; then
+  echo "❌  android/ folder not found."
+  echo "    Run 'npx cap add android' first, then re-run this script."
+  exit 1
+fi
+
+# ── 2. Copy Kotlin source files ──────────────────────────────────────────────
+echo "▸ Copying native Kotlin files to $ANDROID_JAVA …"
+cp "$SRC/AlarmManagerPlugin.kt"    "$ANDROID_JAVA/"
+cp "$SRC/AlarmReceiver.kt"         "$ANDROID_JAVA/"
+cp "$SRC/AlarmFullScreenActivity.kt" "$ANDROID_JAVA/"
+echo "  ✓ AlarmManagerPlugin.kt"
+echo "  ✓ AlarmReceiver.kt"
+echo "  ✓ AlarmFullScreenActivity.kt"
+
+# ── 3. Patch AndroidManifest.xml ─────────────────────────────────────────────
+MANIFEST="$SCRIPT_DIR/android/app/src/main/AndroidManifest.xml"
+echo ""
+echo "▸ Patching $MANIFEST …"
+
+# Helper: insert text after first occurrence of a pattern
+insert_after() {
+  local pattern="$1"
+  local text="$2"
+  local file="$3"
+  # Only insert if the marker text isn't already there
+  if grep -qF "$(echo "$text" | head -1)" "$file"; then
+    echo "  (already present — skipping)"
+    return
+  fi
+  # Use awk to insert after the first matching line
+  awk -v pat="$pattern" -v ins="$text" '
+    !done && $0 ~ pat { print; print ins; done=1; next }
+    { print }
+  ' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+}
+
+PERMISSIONS='    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />'
+
+COMPONENTS='        <activity
+            android:name=".AlarmFullScreenActivity"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.AppCompat.NoActionBar" />
+        <receiver
+            android:name=".AlarmReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>'
+
+# Insert permissions after <manifest ...>
+insert_after '<manifest' "$PERMISSIONS" "$MANIFEST"
+
+# Insert components before </application>
+if ! grep -q "AlarmFullScreenActivity" "$MANIFEST"; then
+  sed -i "s|</application>|${COMPONENTS}\n    </application>|" "$MANIFEST"
+  echo "  ✓ Activity + Receiver entries added"
+else
+  echo "  ✓ Activity + Receiver already present"
+fi
+echo "  ✓ Permissions added"
+
+# ── 4. Patch MainActivity to register the plugin ─────────────────────────────
+echo ""
+echo "▸ Registering AlarmManagerPlugin in MainActivity …"
+
+MAIN="$ANDROID_JAVA/MainActivity.kt"
+if [ ! -f "$MAIN" ]; then
+  echo "  ⚠  $MAIN not found — you may need to register the plugin manually."
+  echo "     See CAPACITOR_SETUP.md for instructions."
+else
+  if grep -q "AlarmManagerPlugin" "$MAIN"; then
+    echo "  ✓ Plugin already registered"
+  else
+    # Replace the class body opening line with registration added
+    sed -i 's/class MainActivity : BridgeActivity() {/class MainActivity : BridgeActivity() {\n    override fun onCreate(savedInstanceState: Bundle?) {\n        registerPlugin(AlarmManagerPlugin::class.java)\n        super.onCreate(savedInstanceState)\n    }/' "$MAIN"
+
+    # Add import if missing
+    if ! grep -q "import android.os.Bundle" "$MAIN"; then
+      sed -i '1s/^/import android.os.Bundle\n/' "$MAIN"
+    fi
+
+    echo "  ✓ Plugin registered"
+  fi
+fi
+
+# ── 5. Done ──────────────────────────────────────────────────────────────────
+echo ""
+echo "╔══════════════════════════════════════════════════════╗"
+echo "║  ✅  Native alarm files installed successfully!      ║"
+echo "╚══════════════════════════════════════════════════════╝"
+echo ""
+echo "Next steps:"
+echo "  npm run build:android"
+echo "  npx cap sync android"
+echo "  npx cap open android   ← build & run in Android Studio"
+echo ""
+echo "On first launch, the app will ask for:"
+echo "  • Notification permission (POST_NOTIFICATIONS)"
+echo "  • Exact alarm permission (SCHEDULE_EXACT_ALARM / Alarms & reminders)"
+echo "  • Battery optimisation exemption"
+echo ""

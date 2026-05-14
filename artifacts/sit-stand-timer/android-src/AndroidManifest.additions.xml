@@ -1,0 +1,62 @@
+<!--
+  ════════════════════════════════════════════════════════════════════════════
+  AndroidManifest.xml additions for full-screen alarm reminders
+  ════════════════════════════════════════════════════════════════════════════
+
+  Merge the <uses-permission> tags into the top-level <manifest> element.
+  Merge the <activity> and <receiver> tags into the <application> element.
+  ════════════════════════════════════════════════════════════════════════════
+-->
+
+<!-- ── Permissions (inside <manifest>) ────────────────────────────────── -->
+
+<!-- Wake the CPU while in Doze (required for RTC_WAKEUP alarms) -->
+<uses-permission android:name="android.permission.WAKE_LOCK" />
+
+<!-- Exact alarms: Android 12+ (API 31+) -->
+<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"
+    android:maxSdkVersion="32" />
+<!-- Android 13+ (API 33+) – silently ignored on older versions -->
+<uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+
+<!-- Show notification over lock screen -->
+<uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
+<!-- Post notifications (required on Android 13+) -->
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+<!-- Vibration -->
+<uses-permission android:name="android.permission.VIBRATE" />
+
+<!-- Reschedule alarms after device reboot -->
+<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+<!-- Foreground service (used by the alarm receiver) -->
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
+<!-- Ask system to ignore battery optimisation for this app -->
+<uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+
+<!-- ── Components (inside <application>) ──────────────────────────────── -->
+
+<!-- Full-screen alarm activity -->
+<activity
+    android:name=".AlarmFullScreenActivity"
+    android:showWhenLocked="true"
+    android:turnScreenOn="true"
+    android:exported="false"
+    android:excludeFromRecents="true"
+    android:launchMode="singleTop"
+    android:screenOrientation="portrait"
+    android:theme="@style/Theme.AppCompat.NoActionBar" />
+
+<!-- Alarm broadcast receiver + boot-completed receiver -->
+<receiver
+    android:name=".AlarmReceiver"
+    android:exported="true">
+    <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+        <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+    </intent-filter>
+</receiver>

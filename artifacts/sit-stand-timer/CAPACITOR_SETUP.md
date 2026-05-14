@@ -1,60 +1,111 @@
-# Capacitor Android Setup
+# Capacitor Android Setup — Full-Screen Alarm Reminders
 
-## First-time setup
+## What this does
 
-Run these commands from the `artifacts/sit-stand-timer/` directory:
+When a posture reminder fires (e.g. after 45 minutes of sitting), the app:
+
+- **Wakes the screen** even if it is off and the phone is locked
+- **Shows a full-screen activity** (like an alarm clock or incoming call) above the lock screen
+- **Plays the device alarm ringtone** on a loop
+- **Vibrates continuously** until dismissed
+- Provides **Dismiss** and **Snooze 5 min** buttons
+- Reschedules all alarms via `AlarmManager.setExactAndAllowWhileIdle()` so they survive Android Doze mode
+
+---
+
+## First-time setup (run once)
+
+Run all commands from `artifacts/sit-stand-timer/`:
 
 ```bash
-# 1. Build the web assets for Android (BASE_PATH=/ is required)
+# 1. Build the web assets for Android
 npm run build:android
 
 # 2. Add the Android platform (first time only)
 npx cap add android
 
-# 3. Sync web assets into the Android project
+# 3. Install native alarm files and patch AndroidManifest + MainActivity
+bash android-setup.sh
+
+# 4. Sync web assets into the Android project
 npx cap sync android
 
-# 4. Open in Android Studio to build and install
+# 5. Open Android Studio
 npx cap open android
 ```
 
-In Android Studio: **Build → Build Bundle(s)/APK(s) → Build APK** to produce a debug APK,
-or use **Run** to install directly on a connected device.
+In Android Studio: **Run ▶** to install on a connected device, or  
+**Build → Build Bundle(s)/APK(s) → Build APK** to produce a debug APK.
 
-## Subsequent builds
+---
 
-After code changes:
+## Subsequent builds (after code changes)
 
 ```bash
 npm run build:android
 npx cap sync android
+# Rebuild / re-run in Android Studio
 ```
 
-Then rebuild in Android Studio.
+---
 
-## Enable full-screen lock-screen notifications
+## Permissions the app will request at runtime
 
-For the notification to splash over the lock screen (like an alarm clock), add this
-permission to `android/app/src/main/AndroidManifest.xml` inside the `<manifest>` tag:
+| Permission | Why |
+|---|---|
+| `POST_NOTIFICATIONS` | Show heads-up notifications (Android 13+) |
+| `SCHEDULE_EXACT_ALARM` / Alarms & reminders | Fire alarms at exact times, even in Doze |
+| Battery optimisation exemption | Prevent Android from killing the alarm scheduler |
 
-```xml
-<uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
-<uses-permission android:name="android.permission.VIBRATE" />
-<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+The app asks for all three on first launch inside `TimerPage` (Enable Notifications button).
+
+To grant the exact-alarm permission manually:  
+**Settings → Apps → Sit+Stand Timer → Alarms & reminders → Allow**
+
+To exempt from battery optimisation:  
+**Settings → Apps → Sit+Stand Timer → Battery → Unrestricted**
+
+---
+
+## How the alarm stack works
+
+```
+JS timer (TimerContext)
+  └─ AlarmManager plugin (Capacitor bridge)
+       └─ AlarmManagerPlugin.kt
+            └─ AlarmManager.setExactAndAllowWhileIdle()
+                 └─ AlarmReceiver.kt  (BroadcastReceiver)
+                      ├─ Shows FullScreenIntent notification
+                      └─ Starts AlarmFullScreenActivity.kt
+                           ├─ FLAG_SHOW_WHEN_LOCKED
+                           ├─ FLAG_TURN_SCREEN_ON
+                           ├─ Looping alarm ringtone (MediaPlayer)
+                           ├─ Continuous vibration (VibrationEffect)
+                           ├─ Dismiss → stops alarm
+                           └─ Snooze → reschedules 5 min via AlarmManager
 ```
 
-> **Note:** On Android 14+, `USE_FULL_SCREEN_INTENT` is restricted. The system only
-> grants it automatically to apps in the "Alarms & reminders" category. You can request
-> it via `Settings → Apps → Special app access → Alarms & reminders`.
-> For a medical/health utility like this, it is routinely granted.
+Alarms survive:
+- App closed ✅
+- Phone locked ✅
+- Screen off ✅
+- Android Doze mode ✅ (via `setExactAndAllowWhileIdle`)
+- Reboot ✅ (AlarmReceiver listens for `BOOT_COMPLETED`)
 
-## Notification behaviour
+---
 
-- **Sitting mode:** notifications scheduled at `sittingAlertMinutes` + each reminder interval
-- **Standing mode:** notifications scheduled at `standingMinMinutes` through `standingMaxMinutes`
-- All pending notifications are **cancelled and rescheduled** on every mode switch
-- Notifications fire even if the app is completely closed
+## Native files reference
+
+| File | Location after `android-setup.sh` |
+|---|---|
+| `AlarmManagerPlugin.kt` | `android/app/src/main/java/com/sitstand/timer/` |
+| `AlarmReceiver.kt` | same |
+| `AlarmFullScreenActivity.kt` | same |
+| `android-src/AndroidManifest.additions.xml` | Reference only (applied by setup script) |
+
+---
 
 ## App ID
 
-`com.sitstand.timer` — change in `capacitor.config.ts` before publishing to Play Store.
+`com.sitstand.timer` — set in `capacitor.config.ts`.  
+Change this before publishing to the Play Store.
