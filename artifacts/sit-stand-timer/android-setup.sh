@@ -94,7 +94,44 @@ else
 fi
 echo "  ✓ Permissions added"
 
-# ── 4. Patch MainActivity to register the plugin ─────────────────────────────
+# ── 4. Fix Android window background (prevent opaque-white overlay) ──────────
+# The default Capacitor styles.xml leaves windowBackground white, which sits
+# on top of the WebView as an opaque native layer until explicitly cleared.
+# We set it to the app background colour so no white flash ever occurs, even
+# on devices where SplashScreen.hide() fires slightly late.
+echo ""
+echo "▸ Patching styles.xml window background …"
+
+STYLES="$SCRIPT_DIR/android/app/src/main/res/values/styles.xml"
+COLORS="$SCRIPT_DIR/android/app/src/main/res/values/colors.xml"
+
+if [ ! -f "$STYLES" ]; then
+  echo "  ⚠  $STYLES not found — skipping theme patch."
+else
+  if grep -q "sitstand_background" "$STYLES"; then
+    echo "  ✓ windowBackground already patched"
+  else
+    # Add app background color to colors.xml (create if missing)
+    if [ ! -f "$COLORS" ]; then
+      echo '<?xml version="1.0" encoding="utf-8"?><resources></resources>' > "$COLORS"
+    fi
+    if ! grep -q "sitstand_background" "$COLORS"; then
+      sed -i 's|</resources>|    <color name="sitstand_background">#f9f5f0</color>\n</resources>|' "$COLORS"
+      echo "  ✓ Added sitstand_background color (#f9f5f0)"
+    fi
+
+    # Inject windowBackground into AppTheme.NoActionBar
+    if grep -q 'AppTheme.NoActionBar' "$STYLES"; then
+      sed -i 's|\(name="AppTheme.NoActionBar"[^>]*>\)|\1\n        <item name="android:windowBackground">@color/sitstand_background</item>|' "$STYLES"
+      echo "  ✓ windowBackground set to #f9f5f0 in AppTheme.NoActionBar"
+    else
+      echo "  ⚠  AppTheme.NoActionBar not found — add manually:"
+      echo '     <item name="android:windowBackground">@color/sitstand_background</item>'
+    fi
+  fi
+fi
+
+# ── 5. Patch MainActivity to register the plugin ─────────────────────────────
 echo ""
 echo "▸ Registering AlarmManagerPlugin in MainActivity …"
 
@@ -118,7 +155,7 @@ else
   fi
 fi
 
-# ── 5. Done ──────────────────────────────────────────────────────────────────
+# ── 6. Done ──────────────────────────────────────────────────────────────────
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"
 echo "║  ✅  Native alarm files installed successfully!      ║"

@@ -8,6 +8,16 @@ const config: CapacitorConfig = {
     androidScheme: "https",
   },
   plugins: {
+    // Splash screen: we hide it manually after React mounts (see main.tsx)
+    // so the native overlay never outlives the first real WebView frame.
+    SplashScreen: {
+      launchAutoHide: false,          // manual control via SplashScreen.hide()
+      launchShowDuration: 0,          // don't enforce a minimum display time
+      backgroundColor: "#f9f5f0",     // matches app background — no white flash
+      androidSpinnerStyle: "small",
+      spinnerColor: "#7ea58c",
+      showSpinner: false,
+    },
     LocalNotifications: {
       smallIcon: "ic_stat_notification",
       iconColor: "#7ea58c",
