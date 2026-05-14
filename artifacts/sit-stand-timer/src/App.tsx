@@ -1,7 +1,7 @@
-import { useEffect, useRef, lazy, Suspense } from "react";
+import { useEffect, useLayoutEffect, useRef, lazy, Suspense } from "react";
 import { Switch, Route, Router as WouterRouter, Redirect, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { ClerkProvider, Show, ClerkLoaded, ClerkLoading, useClerk } from "@clerk/react";
+import { ClerkProvider, Show, ClerkLoaded, ClerkLoading, useClerk, useAuth } from "@clerk/react";
 import { publishableKeyFromHost } from "@clerk/react/internal";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -25,6 +25,31 @@ const NotFound          = lazy(() => import("@/pages/not-found"));
 
 import { BottomNav } from "@/components/BottomNav";
 import { UpdateBanner } from "@/components/UpdateBanner";
+
+// Side-effect import: registers the Bearer-token getter and API base URL for
+// native Capacitor builds at module load time (before any React renders).
+import { IS_NATIVE, bindClerkGetToken } from "@/lib/nativeAuth";
+
+/**
+ * Wires Clerk's getToken into the customFetch auth-token getter for native
+ * (Capacitor Android/iOS) builds.
+ *
+ * Why useLayoutEffect: TanStack Query schedules its first fetch in useEffect.
+ * useLayoutEffect fires synchronously before any useEffect in the same render
+ * cycle, so _getToken is guaranteed to be set before the first API call fires.
+ * On web (IS_NATIVE = false) this component is a no-op.
+ */
+function CapacitorAuthBridge() {
+  const { getToken } = useAuth();
+
+  useLayoutEffect(() => {
+    if (!IS_NATIVE) return;
+    bindClerkGetToken(getToken);
+    return () => bindClerkGetToken(null);
+  }, [getToken]);
+
+  return null;
+}
 
 // Thin fallback that matches the app background — avoids white flash
 const PageFallback = () => (
@@ -125,6 +150,9 @@ function AppShell() {
   return (
     <>
       <ClerkQueryClientCacheInvalidator />
+      {/* On native Capacitor builds: binds Clerk's getToken into the
+          customFetch Bearer-token getter before any API useEffect fires. */}
+      <CapacitorAuthBridge />
 
       {/* Sign-in / sign-up routes are outside the auth gate so Clerk can
           render them before the session is established. */}
