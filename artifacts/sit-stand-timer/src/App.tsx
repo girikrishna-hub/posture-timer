@@ -25,6 +25,7 @@ const NotFound          = lazy(() => import("@/pages/not-found"));
 
 import { BottomNav } from "@/components/BottomNav";
 import { UpdateBanner } from "@/components/UpdateBanner";
+import { NativeDebugPanel } from "@/components/NativeDebugPanel";
 
 // Side-effect import: registers the Bearer-token getter and API base URL for
 // native Capacitor builds at module load time (before any React renders).
@@ -66,7 +67,24 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 1000 * 30,
-      retry: 1,
+      // On native: never retry 401s — the Bearer token either worked or it
+      // didn't; retrying immediately won't help and causes log spam.
+      // Log 401s clearly so they appear in Android logcat.
+      retry: IS_NATIVE
+        ? (failureCount, error) => {
+            const status = (error as { status?: number })?.status;
+            if (status === 401) {
+              console.error(
+                "[NativeAuth] 401 Unauthorized on API call — " +
+                  "token getter may not be ready or getToken() returned null. " +
+                  "Check NativeDebugPanel for auth state.",
+                error,
+              );
+              return false; // do NOT retry 401s
+            }
+            return failureCount < 1;
+          }
+        : 1,
     },
   },
 });
@@ -146,7 +164,51 @@ function ClerkQueryClientCacheInvalidator() {
   return null;
 }
 
+/**
+ * Native (Capacitor Android/iOS) app shell — DEBUG MODE.
+ *
+ * Bypasses all Clerk loading/auth-gating so we can see whether the white
+ * screen comes from Clerk initialization, route gating, or something else.
+ * NativeDebugPanel overlays the real auth state so the exact failure point
+ * is visible.
+ *
+ * TODO: remove this branch once the root cause is confirmed and fixed.
+ */
+function NativeAppShell() {
+  return (
+    <>
+      <ClerkQueryClientCacheInvalidator />
+      <CapacitorAuthBridge />
+
+      {/* Render the full app immediately — no auth gate, no loading wait */}
+      <TimerProvider>
+        <PushSubscriptionRegistrar />
+        <BladderProvider>
+          <Suspense fallback={<PageFallback />}>
+            <Switch>
+              <Route path="/" component={TimerPage} />
+              <Route path="/settings" component={SettingsPage} />
+              <Route path="/dashboard" component={DashboardPage} />
+              <Route path="/bladder/stats" component={BladderStatsPage} />
+              <Route path="/bladder" component={BladderPage} />
+              <Route component={NotFound} />
+            </Switch>
+          </Suspense>
+          <BottomNav />
+        </BladderProvider>
+      </TimerProvider>
+
+      {/* Diagnostic overlay — shows Clerk state, token result, API base URL */}
+      <NativeDebugPanel />
+    </>
+  );
+}
+
 function AppShell() {
+  // ── DEBUG: bypass auth gates on native to isolate startup failure ──────────
+  if (IS_NATIVE) return <NativeAppShell />;
+  // ──────────────────────────────────────────────────────────────────────────
+
   return (
     <>
       <ClerkQueryClientCacheInvalidator />
