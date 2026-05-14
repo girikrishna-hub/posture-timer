@@ -19,6 +19,14 @@ import {
 import { playStandTone, playSitTone, playConfirmTone, playRestTone } from "@/utils/audio";
 import { useWalkingDetection, type GpsStatus } from "@/hooks/useWalkingDetection";
 import { useNotificationPermission } from "@/hooks/useNotificationPermission";
+import {
+  isNativePlatform,
+  setupNativeNotificationChannel,
+  requestNativeNotificationPermission,
+  scheduleNativeSittingReminders,
+  scheduleNativeStandingReminders,
+  cancelAllNativePostureNotifications,
+} from "@/utils/nativeNotifications";
 
 export type TimerMode = "idle" | "sitting" | "standing" | "resting" | "walking" | "workout";
 
@@ -282,6 +290,36 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       setInitialized(true);
     }
   }, [activeSessionData, initialized]);
+
+  // ─── Native (Capacitor) notification setup ────────────────────────────────
+
+  // Create high-importance Android notification channel once on mount
+  useEffect(() => {
+    void setupNativeNotificationChannel();
+  }, []);
+
+  // On every mode change: cancel stale notifications and schedule fresh ones.
+  // This fires even when the app is backgrounded or killed — the OS holds the schedule.
+  useEffect(() => {
+    if (!initialized) return;
+    void cancelAllNativePostureNotifications();
+    const s = settingsRef.current;
+    if (mode === "sitting") {
+      void scheduleNativeSittingReminders({
+        sittingAlertMinutes: s.sittingAlertMinutes,
+        reminderIntervalMinutes: s.reminderIntervalMinutes,
+        remindersCount: s.remindersCount,
+      });
+    } else if (mode === "standing") {
+      void scheduleNativeStandingReminders({
+        standingMinMinutes: s.standingMinMinutes,
+        standingMaxMinutes: s.standingMaxMinutes,
+        reminderIntervalMinutes: s.reminderIntervalMinutes,
+        remindersCount: s.remindersCount,
+      });
+    }
+    // idle / resting / walking / workout: no posture reminders needed
+  }, [mode, initialized]);
 
   // Drain offline queue on reconnect
   useEffect(() => {
@@ -756,6 +794,10 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       await Notification.requestPermission();
       // No setState needed — useNotificationPermission hook reacts to the
       // permissionchange event and updates notificationPermission automatically.
+    }
+    // Also request native permission when running inside Capacitor
+    if (isNativePlatform()) {
+      await requestNativeNotificationPermission();
     }
   }, []);
 
