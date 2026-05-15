@@ -22,10 +22,18 @@ const router = Router();
  */
 router.get("/native-oauth-complete", (req, res) => {
   const ticket = req.query["__clerk_ticket"];
-  const deepLink = ticket
+  const hasTicket = typeof ticket === "string" && ticket.length > 0;
+
+  req.log.info(
+    { hasTicket, ticketPrefix: hasTicket ? String(ticket).slice(0, 16) + "…" : null },
+    "native-oauth-complete reached",
+  );
+
+  const deepLink = hasTicket
     ? `posture-timer://oauth-callback?__clerk_ticket=${encodeURIComponent(String(ticket))}`
     : "posture-timer://oauth-callback";
 
+  req.log.info({ deepLink: deepLink.slice(0, 60) + "…" }, "302 redirecting to deep link");
   res.redirect(302, deepLink);
 });
 

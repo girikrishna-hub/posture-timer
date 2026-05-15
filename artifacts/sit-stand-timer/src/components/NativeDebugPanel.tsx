@@ -24,7 +24,12 @@ import {
   NATIVE_CLERK_PUBLISHABLE_KEY,
   NATIVE_CLERK_PROXY_URL,
 } from "@/lib/nativeConfig";
+import { subscribeAuthLog, type AuthLogEntry } from "@/lib/authLog";
 import { Capacitor } from "@capacitor/core";
+
+// Injected at build time by vite.config.ts define
+declare const __BUILD_TIME__: string;
+declare const __BUILD_COMMIT__: string;
 
 type TokenStatus = "idle" | "testing" | "ok" | "null" | "error";
 
@@ -104,11 +109,18 @@ export function NativeDebugPanel() {
     setLog((prev) => [entry, ...prev].slice(0, 60));
   }, []);
 
-  // wire the global interceptor to our state
+  // wire the global fetch interceptor to our state
   useEffect(() => {
     addLogRef.current = addLog;
     _netLog = (msg, kind) => addLogRef.current(msg, kind);
     return () => { _netLog = () => {}; };
+  }, [addLog]);
+
+  // subscribe to auth flow events from NativeSignIn
+  useEffect(() => {
+    return subscribeAuthLog((entry: AuthLogEntry) => {
+      addLog(`[AUTH] ${entry.msg}`, entry.kind);
+    });
   }, [addLog]);
 
   // capture global JS errors and unhandled rejections
@@ -237,6 +249,8 @@ export function NativeDebugPanel() {
 
           {/* Static build info */}
           <div style={{ marginBottom: 5, lineHeight: 1.6 }}>
+            <Row label="Built"      value={__BUILD_TIME__.slice(0, 19).replace("T", " ")} ok />
+            <Row label="Commit"     value={__BUILD_COMMIT__} ok />
             <Row label="Platform"   value={platform}    ok={IS_NATIVE} />
             <Row label="IS_NATIVE"  value={String(IS_NATIVE)} ok={IS_NATIVE} />
             <Row label="API base"   value={apiBase}     ok={apiBase !== "(not set)"} />

@@ -1,38 +1,33 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSignIn } from "@clerk/react/legacy";
 import { Browser } from "@capacitor/browser";
 import { App } from "@capacitor/app";
+import { authLog } from "@/lib/authLog";
 
 /**
  * Native (Capacitor) sign-in screen.
  *
  * Email + password: calls signIn.create() + setActive() — no navigation needed.
  *
- * Google OAuth:
- *  1. signIn.create({ strategy: 'oauth_google', ... }) returns the resource
- *     WITHOUT navigating. We read firstFactorVerification.externalVerificationRedirectURL.
- *  2. Open that URL in @capacitor/browser (Android Custom Tab).
- *  3. After Google → Clerk SSO callback → redirects to posture-timer://oauth-callback
- *     with __clerk_ticket in the query string.
- *  4. @capacitor/app fires appUrlOpen; we call signIn.create({ strategy: 'ticket' })
- *     + setActive() to complete sign-in — still no window.location navigation.
- *
- * Why not <SignIn routing="...">:
- *   Clerk's component navigates via window.location after auth which resolves
- *   to http://localhost/ in the Capacitor WebView → "localhost refused connection".
+ * Google OAuth flow:
+ *  1. signIn.create({ strategy:'oauth_google', redirectUrl, actionCompleteRedirectUrl })
+ *  2. Open externalVerificationRedirectURL in Chrome Custom Tab (@capacitor/browser)
+ *  3. Google auth → Clerk SSO callback → Clerk 302s to actionCompleteRedirectUrl
+ *  4. Our /api/native-oauth-complete endpoint 302s to posture-timer://oauth-callback?__clerk_ticket=…
+ *  5. Android intent filter fires appUrlOpen in the Capacitor WebView
+ *  6. We extract __clerk_ticket → signIn.create({ strategy:'ticket', ticket })
+ *  7. setActive() → isSignedIn=true → app renders
+ *  8. Browser.close() after setActive (Variant B — browser stays open during exchange)
  */
 
-// SSO callback URL: Clerk processes the OAuth tokens here and then
-// redirects to actionCompleteRedirectUrl.
-const SSO_CALLBACK_URL = "https://posture-timer.replit.app/sign-in/sso-callback";
+const SSO_CALLBACK_URL =
+  "https://posture-timer.replit.app/sign-in/sso-callback";
 
-// Clerk only accepts https:// / http:// for actionCompleteRedirectUrl — custom
-// URI schemes like posture-timer:// are rejected with invalid_url_scheme.
-// This server-side endpoint receives the __clerk_ticket from Clerk and
-// 302-redirects to posture-timer://oauth-callback?__clerk_ticket=... so that
-// Android fires the appUrlOpen event in the Capacitor WebView.
 const OAUTH_COMPLETE_URL =
   "https://posture-timer.replit.app/api/native-oauth-complete";
+
+// Module-level mount counter so we can detect activity recreation.
+let _mountCount = 0;
 
 export function NativeSignIn() {
   const { isLoaded, signIn, setActive } = useSignIn();
@@ -41,51 +36,139 @@ export function NativeSignIn() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const mountId = useRef(0);
 
-  // Listen for the OAuth deep-link callback from the in-app browser.
+  // ── mount / unmount logging (detects app recreation after OAuth) ───────────
   useEffect(() => {
-    if (!isLoaded || !signIn || !setActive) return;
+    _mountCount += 1;
+    mountId.current = _mountCount;
+    authLog(
+      `NativeSignIn mounted (instance #${mountId.current}, isLoaded=${isLoaded}, signIn=${!!signIn})`,
+      "info",
+    );
+    return () => {
+      authLog(`NativeSignIn unmounted (instance #${mountId.current})`, "warn");
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── log Clerk hook state changes ───────────────────────────────────────────
+  useEffect(() => {
+    authLog(
+      `Clerk hook state → isLoaded=${isLoaded}  signIn=${!!signIn}  setActive=${!!setActive}`,
+      isLoaded ? "ok" : "info",
+    );
+  }, [isLoaded, signIn, setActive]);
+
+  // ── appUrlOpen listener (OAuth deep-link callback) ─────────────────────────
+  useEffect(() => {
+    authLog(
+      `Registering appUrlOpen listener (isLoaded=${isLoaded}, signIn=${!!signIn})`,
+      "info",
+    );
+
+    if (!isLoaded || !signIn || !setActive) {
+      authLog("appUrlOpen listener NOT registered — Clerk not ready yet", "warn");
+      return;
+    }
+
+    authLog("appUrlOpen listener REGISTERED ✓", "ok");
 
     const listenerPromise = App.addListener("appUrlOpen", async ({ url }) => {
-      if (!url.startsWith("posture-timer://")) return;
+      const t0 = Date.now();
+      authLog(`appUrlOpen fired  url="${url}"`, "info");
+
+      if (!url.startsWith("posture-timer://")) {
+        authLog(`appUrlOpen: ignoring non-posture-timer URL`, "warn");
+        return;
+      }
+
+      authLog(`appUrlOpen: posture-timer:// scheme matched ✓`, "ok");
+      authLog(`Clerk state at callback → isLoaded=${isLoaded}  signIn=${!!signIn}`, "info");
 
       setLoading(true);
       setError("");
-      try {
-        await Browser.close();
 
-        // Clerk appends __clerk_ticket (short-lived token) to the redirect URL.
+      try {
+        // ── parse ticket ────────────────────────────────────────────────────
+        // url format: posture-timer://oauth-callback?__clerk_ticket=XYZ
         const parsed = new URL(url.replace(/^posture-timer:\/\//, "https://x/"));
         const ticket = parsed.searchParams.get("__clerk_ticket");
+        authLog(`Parsed URL path="${parsed.pathname}" searchParams="${parsed.search}"`, "info");
+        authLog(ticket ? `Ticket extracted: ${ticket.slice(0, 16)}…` : "NO ticket in URL — missing __clerk_ticket", ticket ? "ok" : "error");
 
-        if (ticket) {
+        if (!ticket) {
+          setError("OAuth callback missing ticket. Please try again.");
+          setLoading(false);
+          return;
+        }
+
+        // ── Variant B: Browser.close AFTER setActive ────────────────────────
+        // We keep the Custom Tab open during the ticket exchange so Android
+        // doesn't consider the app lifecycle "resumed" mid-flight.
+
+        // ── ticket exchange ─────────────────────────────────────────────────
+        authLog(`Calling signIn.create({ strategy:'ticket' }) …`, "info");
+        let result: { status: string; createdSessionId?: string };
+        try {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const result = await (signIn.create as (p: any) => Promise<any>)({
+          result = await (signIn.create as (p: any) => Promise<any>)({
             strategy: "ticket",
             ticket,
           });
-          if (result.status === "complete") {
-            await setActive({ session: result.createdSessionId });
-            // isSignedIn → true → NativeAppShell re-renders to show the app.
-          } else {
-            setError("OAuth sign-in incomplete. Please try again.");
-          }
-        } else {
-          setError("OAuth callback missing ticket. Please try again.");
+          authLog(
+            `signIn.create ticket → status="${result.status}"  sessionId="${result.createdSessionId ?? "none"}"`,
+            result.status === "complete" ? "ok" : "warn",
+          );
+        } catch (exchErr: unknown) {
+          const clerkErr = exchErr as { errors?: { message: string; code: string }[] };
+          const msg = clerkErr.errors?.[0]?.message ?? (exchErr instanceof Error ? exchErr.message : String(exchErr));
+          const code = clerkErr.errors?.[0]?.code ?? "unknown";
+          authLog(`signIn.create ticket FAILED  code="${code}"  msg="${msg}"`, "error");
+          setError(msg);
+          setLoading(false);
+          return;
         }
+
+        if (result.status !== "complete") {
+          authLog(`Ticket exchange incomplete — status="${result.status}"`, "error");
+          setError("OAuth sign-in incomplete. Please try again.");
+          setLoading(false);
+          return;
+        }
+
+        // ── setActive ───────────────────────────────────────────────────────
+        authLog(`Calling setActive({ session:"${result.createdSessionId}" }) …`, "info");
+        await setActive({ session: result.createdSessionId });
+        const elapsed = Date.now() - t0;
+        authLog(`setActive() resolved — auth complete in ${elapsed}ms ✓`, "ok");
+
+        // ── close browser AFTER successful setActive (Variant B) ────────────
+        authLog("Closing Custom Tab (Variant B — after setActive) …", "info");
+        await Browser.close();
+        authLog("Browser.close() resolved ✓", "ok");
+
+        // isSignedIn → true → NativeAppShell re-renders to show the app.
+
       } catch (err: unknown) {
         const clerkErr = err as { errors?: { message: string }[] };
-        setError(clerkErr.errors?.[0]?.message ?? "Google sign-in failed.");
+        const msg = clerkErr.errors?.[0]?.message ?? (err instanceof Error ? err.message : String(err));
+        authLog(`appUrlOpen outer catch: ${msg}`, "error");
+        setError(msg);
+        // Try to close browser even on unexpected errors
+        Browser.close().catch(() => {});
       } finally {
         setLoading(false);
       }
     });
 
     return () => {
+      authLog("appUrlOpen listener removed (effect cleanup)", "warn");
       listenerPromise.then((l) => l.remove()).catch(() => {});
     };
   }, [isLoaded, signIn, setActive]);
 
+  // ── email / password sign-in ───────────────────────────────────────────────
   async function handleSignIn(e: React.FormEvent) {
     e.preventDefault();
     if (!signIn || !setActive) return;
@@ -106,14 +189,18 @@ export function NativeSignIn() {
     }
   }
 
+  // ── Google OAuth sign-in ───────────────────────────────────────────────────
   async function handleGoogleSignIn() {
-    if (!signIn) return;
+    if (!signIn) {
+      authLog("handleGoogleSignIn: signIn is null — Clerk not ready", "error");
+      return;
+    }
+    authLog("handleGoogleSignIn: starting …", "info");
     setLoading(true);
     setError("");
     try {
-      // create() returns the resource WITHOUT navigating.
-      // firstFactorVerification.externalVerificationRedirectURL holds the
-      // Google OAuth URL we need to open in the in-app browser.
+      authLog(`signIn.create({ strategy:'oauth_google', redirectUrl:'${SSO_CALLBACK_URL}', actionCompleteRedirectUrl:'${OAUTH_COMPLETE_URL}' })`, "info");
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (signIn.create as (p: any) => Promise<any>)({
         strategy: "oauth_google",
@@ -125,22 +212,28 @@ export function NativeSignIn() {
         result?.firstFactorVerification?.externalVerificationRedirectURL?.href ??
         result?.firstFactorVerification?.externalVerificationRedirectURL;
 
+      authLog(`signIn.create OAuth → status="${result?.status}"  redirectUrl=${redirectUrl ? redirectUrl.slice(0, 60) + "…" : "MISSING"}`, redirectUrl ? "ok" : "error");
+
       if (!redirectUrl) {
         setError("Could not start Google sign-in. Please try again.");
         setLoading(false);
         return;
       }
 
-      // Opens in Android Custom Tab — does NOT navigate the WebView.
+      authLog("Browser.open() — opening Custom Tab …", "info");
       await Browser.open({ url: redirectUrl });
-      // setLoading stays true until the appUrlOpen handler resolves.
+      authLog("Browser.open() resolved — Custom Tab launched ✓", "ok");
+      // setLoading stays true until appUrlOpen handler resolves.
     } catch (err: unknown) {
       const clerkErr = err as { errors?: { message: string }[] };
-      setError(clerkErr.errors?.[0]?.message ?? "Google sign-in failed.");
+      const msg = clerkErr.errors?.[0]?.message ?? (err instanceof Error ? err.message : String(err));
+      authLog(`handleGoogleSignIn error: ${msg}`, "error");
+      setError(msg);
       setLoading(false);
     }
   }
 
+  // ── forgot password ────────────────────────────────────────────────────────
   async function handleForgotPassword(e: React.FormEvent) {
     e.preventDefault();
     if (!signIn) return;

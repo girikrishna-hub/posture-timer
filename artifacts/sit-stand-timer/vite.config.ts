@@ -22,8 +22,18 @@ const basePath = process.env.BASE_PATH ?? (isBuildOnly ? "/" : (() => {
   throw new Error("BASE_PATH environment variable is required but was not provided.");
 })());
 
+// Bake build identity into the bundle so the debug panel can prove which APK
+// is actually running. GIT_COMMIT can be set by the build command; falls back
+// to a placeholder for local builds that don't set it.
+const buildTime = new Date().toISOString();
+const buildCommit = process.env.GIT_COMMIT ?? "dev";
+
 export default defineConfig({
   base: basePath,
+  define: {
+    __BUILD_TIME__: JSON.stringify(buildTime),
+    __BUILD_COMMIT__: JSON.stringify(buildCommit),
+  },
   plugins: [
     react(),
     tailwindcss({ optimize: false }),

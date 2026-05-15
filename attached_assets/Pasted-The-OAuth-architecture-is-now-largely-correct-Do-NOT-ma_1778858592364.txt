@@ -1,0 +1,179 @@
+The OAuth architecture is now largely correct.
+
+Do NOT make random auth changes.
+
+Do NOT change Clerk configuration again.
+
+Do NOT modify redirect URLs again.
+
+The remaining issue is almost certainly inside:
+the native deep-link callback + session exchange chain.
+
+Your task is:
+FULLY INSTRUMENT THE POST-OAUTH RESUME FLOW.
+
+========================================================
+PRIMARY GOAL
+============
+
+Identify EXACTLY where the flow breaks AFTER Google authentication succeeds.
+
+The critical chain is:
+
+Google auth
+→ Clerk callback
+→ /api/native-oauth-complete
+→ posture-timer://oauth-callback
+→ appUrlOpen
+→ ticket exchange
+→ setActive()
+→ authenticated app render
+
+We now need definitive proof of:
+which exact step fails.
+
+========================================================
+STEP 1 — appUrlOpen INSTRUMENTATION
+===================================
+
+Instrument the appUrlOpen listener heavily.
+
+Add logs for:
+
+* listener registration
+* callback fired
+* full event payload
+* callback timing
+* parsed URL
+* parsed ticket
+* Browser.close execution
+* signIn availability
+* Clerk isLoaded state
+
+Example:
+
+console.log('[AUTH] appUrlOpen fired', event);
+console.log('[AUTH] parsed ticket', ticket);
+console.log('[AUTH] Clerk loaded?', isLoaded);
+console.log('[AUTH] signIn exists?', !!signIn);
+
+========================================================
+STEP 2 — VERIFY SINGLE ACTIVITY BEHAVIOR
+========================================
+
+Determine whether Android:
+
+* resumes existing activity
+  OR
+* launches a new app instance
+
+Add logging for:
+
+* app startup timestamp
+* React root mount
+* auth provider mount
+* NativeSignIn mount
+
+We need to know whether:
+OAuth callback causes app recreation.
+
+========================================================
+STEP 3 — VERIFY CLERK STATE AFTER RESUME
+========================================
+
+Immediately after appUrlOpen:
+log:
+
+* isLoaded
+* signIn object
+* session state
+* active session ID
+* Clerk client readiness
+
+Need definitive proof:
+that Clerk survives app resume correctly.
+
+========================================================
+STEP 4 — INSTRUMENT TICKET EXCHANGE
+===================================
+
+Add detailed logging around:
+
+signIn.create({
+strategy: 'ticket',
+ticket
+})
+
+Log:
+
+* request start
+* request completion
+* returned status
+* returned session ID
+* all thrown errors
+* exact response payload
+
+========================================================
+STEP 5 — VERIFY BROWSER CLOSE TIMING
+====================================
+
+Temporarily test BOTH variants:
+
+Variant A:
+Browser.close BEFORE ticket exchange
+
+Variant B:
+Browser.close AFTER successful setActive()
+
+Determine whether Browser.close timing interferes with resume/auth lifecycle.
+
+========================================================
+STEP 6 — LOG FULL REDIRECT TRACE
+================================
+
+Capture definitive proof for:
+
+1. Google auth success
+2. Clerk callback success
+3. /api/native-oauth-complete reached
+4. 302 redirect executed
+5. posture-timer:// callback emitted
+6. appUrlOpen fired
+7. ticket parsed
+8. ticket exchange attempted
+9. setActive called
+10. authenticated render reached
+
+========================================================
+STEP 7 — APK VALIDATION
+=======================
+
+Before further testing:
+verify the installed APK actually contains:
+
+* latest JS bundle
+* latest Capacitor sync
+* latest AndroidManifest
+* latest nativeConfig.ts
+
+Display:
+
+* build timestamp
+* git commit hash
+* embedded app version
+
+inside the debug panel.
+
+We must eliminate stale APK confusion.
+
+========================================================
+IMPORTANT
+=========
+
+Do NOT continue making speculative fixes.
+
+The architecture is now mostly correct.
+
+We now need:
+precise lifecycle instrumentation
+to identify the exact remaining break point.
