@@ -27,7 +27,9 @@ echo "║         Sit+Stand Timer — Android web build          ║"
 echo "╚══════════════════════════════════════════════════════╝"
 echo ""
 
-BASE_PATH=/ VITE_API_BASE_URL=https://posture-timer.replit.app \
+BASE_PATH=/ \
+  VITE_API_BASE_URL=https://posture-timer.replit.app \
+  VITE_CLERK_PUBLISHABLE_KEY=pk_live_Y2xlcmsucG9zdHVyZS10aW1lci5yZXBsaXQuYXBwJA \
   "$VITE" build --config vite.config.ts
 
 echo ""
