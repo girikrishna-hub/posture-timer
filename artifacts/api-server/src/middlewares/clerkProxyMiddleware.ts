@@ -144,34 +144,26 @@ export function clerkProxyMiddleware(): RequestHandler {
         proxyReq.setHeader("Clerk-Proxy-Url", proxyUrl);
         proxyReq.setHeader("Clerk-Secret-Key", secretKey);
 
-        // Clerk's FAPI behaves differently depending on the request method:
+        // Clerk's FAPI has per-route Origin requirements (confirmed by 400 logs):
         //
-        // GET /v1/client, GET /v1/environment (FAPI init):
-        //   Clerk validates Origin as a Clerk-owned domain. Any other Origin
-        //   (capacitor://localhost, https://posture-timer.replit.app, etc.)
-        //   causes origin_invalid 400. Strip it so init always succeeds.
+        //  GET  /v1/client|environment  — strip Origin (origin_invalid if kept)
+        //  POST /v1/client/sign_ups     — keep https:// Origin (bot-protection
+        //                                 rejects request without it → 400)
+        //  POST /v1/client/sign_ins     — strip Origin (works without it; Google
+        //                                 OAuth returns 400 if Origin is present)
+        //  everything else              — strip Origin (safe default)
         //
-        // POST /v1/client/sign_ups (sign-up):
-        //   Clerk's bot-protection validates the request source using Origin.
-        //   Without Origin the check fails → "failed security validations" 400.
-        //   We must keep https:// origins so Clerk can recognise our app domain.
-        //
-        // POST /v1/client/sign_ins (sign-in) works either way — 200 with or
-        // without Origin — so we leave it as-is (keep https://).
-        //
-        // Non-HTTP origins (capacitor://, file://) are always stripped because
-        // Clerk would reject them as origin_invalid.
+        // Non-HTTP origins (capacitor://, file://) are always stripped.
         const requestOrigin = proxyReq.getHeader("Origin") as string | undefined;
-        const isReadMethod = req.method === "GET" || req.method === "HEAD";
         const isHttpOrigin =
           typeof requestOrigin === "string" &&
           (requestOrigin.startsWith("https://") || requestOrigin.startsWith("http://"));
+        const isSignUp = req.method === "POST" && req.path.includes("/sign_ups");
 
-        if (!isHttpOrigin || isReadMethod) {
-          // Strip: non-HTTP origin (always unsafe) OR read request (FAPI init).
+        if (!isHttpOrigin || !isSignUp) {
           proxyReq.removeHeader("Origin");
         }
-        // else: keep https:// Origin for POST/PUT/PATCH — needed for bot protection.
+        // else: keep https:// Origin only for POST .../sign_ups (bot protection).
 
         const xff = req.headers["x-forwarded-for"];
         const clientIp =
