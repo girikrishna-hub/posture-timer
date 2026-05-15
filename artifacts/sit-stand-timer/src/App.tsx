@@ -103,7 +103,16 @@ const clerkPubKey = IS_NATIVE
       import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
     );
 
-const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL as string | undefined;
+// On web: VITE_CLERK_PROXY_URL routes Clerk FAPI through /api/__clerk (same origin).
+// On native: do NOT use the proxy — when proxyUrl is an absolute URL Clerk
+// constructs the clerk.browser.js URL as proxy/npm/... which then gets forwarded
+// to frontend-api.clerk.dev (the FAPI endpoint, NOT a CDN). The bundle fails to
+// load and isLoaded stays false forever. Without proxyUrl, Clerk loads its bundle
+// from clerk.posture-timer.replit.app directly — the same CDN the web app uses —
+// and FAPI calls go there too. Bearer tokens (nativeAuth.ts) handle API auth.
+const clerkProxyUrl = IS_NATIVE
+  ? undefined
+  : (import.meta.env.VITE_CLERK_PROXY_URL as string | undefined);
 
 function stripBase(path: string): string {
   return basePath && path.startsWith(basePath)
