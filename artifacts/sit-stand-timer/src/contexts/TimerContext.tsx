@@ -208,6 +208,8 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   // Refs used inside intervals/event handlers to avoid stale closures
   const modeRef = useRef(mode);
   const lastManualActionAt = useRef<number | null>(null);
+  // Timestamp until which GPS walk auto-detection is blocked after a manual press.
+  const walkAutoLockUntilRef = useRef<number>(0);
   const reminderCountRef = useRef(reminderCount);
   const inReminderPhaseRef = useRef(inReminderPhase);
   const activeSessionIdRef = useRef(activeSessionId);
@@ -383,7 +385,12 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
 
       const transitionTime = new Date().toISOString();
       lastActivityRef.current = Date.now();
-      if (source === "manual") lastManualActionAt.current = Date.now();
+      if (source === "manual") {
+        lastManualActionAt.current = Date.now();
+        // Block GPS walk auto-detection for the lock window of the new mode.
+        const lockDuration = LOCK_WINDOW_MS[newMode] ?? 10 * 60 * 1000;
+        walkAutoLockUntilRef.current = Date.now() + lockDuration;
+      }
       setStateSource(source);
 
       if (newMode === "resting") {
@@ -505,7 +512,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     currentMode: mode,
     switchMode,
     endCurrentSession,
-    isManuallyLocked: isInLockWindow,
+    walkAutoLockUntilRef,
   });
 
   // Main 1-second tick — pure increment only (no side-effects inside updater)
