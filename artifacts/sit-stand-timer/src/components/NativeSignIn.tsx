@@ -22,11 +22,17 @@ import { App } from "@capacitor/app";
  *   to http://localhost/ in the Capacitor WebView → "localhost refused connection".
  */
 
-const OAUTH_CALLBACK_SCHEME = "posture-timer://oauth-callback";
-
 // SSO callback URL: Clerk processes the OAuth tokens here and then
-// redirects to actionCompleteRedirectUrl (our deep link).
+// redirects to actionCompleteRedirectUrl.
 const SSO_CALLBACK_URL = "https://posture-timer.replit.app/sign-in/sso-callback";
+
+// Clerk only accepts https:// / http:// for actionCompleteRedirectUrl — custom
+// URI schemes like posture-timer:// are rejected with invalid_url_scheme.
+// This server-side endpoint receives the __clerk_ticket from Clerk and
+// 302-redirects to posture-timer://oauth-callback?__clerk_ticket=... so that
+// Android fires the appUrlOpen event in the Capacitor WebView.
+const OAUTH_COMPLETE_URL =
+  "https://posture-timer.replit.app/api/native-oauth-complete";
 
 export function NativeSignIn() {
   const { isLoaded, signIn, setActive } = useSignIn();
@@ -112,7 +118,7 @@ export function NativeSignIn() {
       const result = await (signIn.create as (p: any) => Promise<any>)({
         strategy: "oauth_google",
         redirectUrl: SSO_CALLBACK_URL,
-        actionCompleteRedirectUrl: OAUTH_CALLBACK_SCHEME,
+        actionCompleteRedirectUrl: OAUTH_COMPLETE_URL,
       });
 
       const redirectUrl: string | undefined =

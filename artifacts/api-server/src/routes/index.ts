@@ -7,9 +7,11 @@ import metricsRouter from "./metrics";
 import fitbitRouter from "./fitbit";
 import pushRouter from "./push";
 import debugRouter from "./debug";
+import nativeOauthRouter from "./nativeOauth";
 
 const router: IRouter = Router();
 
+router.use(nativeOauthRouter);
 router.use(healthRouter);
 router.use(sessionsRouter);
 router.use(settingsRouter);
