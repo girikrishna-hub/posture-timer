@@ -1,0 +1,232 @@
+I need a COMPLETE diagnostic package for the persistent Google Authentication issue in the Posture Timer Capacitor app.
+
+Do NOT attempt random fixes yet.
+
+First gather and present ALL relevant information in a structured report so the auth chain can be analyzed end-to-end.
+
+The goal is:
+identify exactly where the Google OAuth flow is breaking.
+
+========================================================
+PART 1 — FAILURE DESCRIPTION
+============================
+
+Describe the exact runtime behavior.
+
+Answer ALL of these:
+
+1. What exactly happens when the user taps “Sign in with Google”?
+2. Does the popup/browser open?
+3. Does Google authentication succeed?
+4. Does the app redirect back correctly?
+5. Does the user session persist?
+6. Is there an infinite spinner?
+7. Is there a blank screen?
+8. Is there a redirect loop?
+9. Is there an explicit error message?
+10. Does the issue happen:
+
+* Web only?
+* Android only?
+* iOS only?
+* Debug APK only?
+* Production build only?
+
+========================================================
+PART 2 — AUTHENTICATION ARCHITECTURE
+====================================
+
+Identify exactly which authentication stack is being used.
+
+Examples:
+
+* Firebase Auth
+* Supabase Auth
+* Google Identity Services
+* Capacitor Google Auth plugin
+* OAuth redirect flow
+* OAuth popup flow
+* Custom backend auth
+
+List:
+
+* all auth libraries
+* all plugins
+* all SDKs
+* all providers
+
+========================================================
+PART 3 — GOOGLE SIGN-IN IMPLEMENTATION
+======================================
+
+Show the exact implementation details.
+
+Find and display:
+
+* auth.ts
+* firebase.ts
+* login component
+* Google sign-in handler
+* callback handler
+
+Explain:
+
+* which sign-in method is used
+* popup vs redirect
+* native plugin vs web auth
+
+Include exact code snippets.
+
+========================================================
+PART 4 — CAPACITOR CONFIGURATION
+================================
+
+Display:
+
+* capacitor.config.ts
+* appId
+* appName
+* androidScheme
+* hostname
+* server config
+
+Explain whether:
+
+* embedded WebView auth is used
+* external browser auth is used
+* deep links are configured
+
+========================================================
+PART 5 — GOOGLE/FIREBASE CONFIGURATION
+======================================
+
+Extract ALL OAuth-related configuration.
+
+Display:
+
+1. Authorized JavaScript origins
+2. Authorized redirect URIs
+3. OAuth client IDs
+4. Android package name
+5. SHA-1 fingerprints
+6. SHA-256 fingerprints
+7. Firebase authorized domains
+8. Web OAuth client config
+9. Android OAuth client config
+
+Identify:
+
+* missing entries
+* mismatches
+* likely misconfigurations
+
+========================================================
+PART 6 — ANDROID CONFIGURATION
+==============================
+
+Show:
+
+* AndroidManifest.xml intent filters
+* build.gradle auth-related sections
+* package name
+* deep-link configuration
+* Google services configuration
+
+Verify:
+
+* package name consistency
+* SHA consistency
+* callback handling
+
+========================================================
+PART 7 — SESSION PERSISTENCE
+============================
+
+Identify how auth sessions are stored.
+
+Explain whether the app uses:
+
+* localStorage
+* IndexedDB
+* Capacitor Preferences
+* cookies
+* Firebase persistence
+
+Verify:
+
+* whether sessions survive app restart
+* whether sessions survive refresh
+* whether sessions are cleared unexpectedly
+
+========================================================
+PART 8 — RUNTIME LOGS
+=====================
+
+Capture and display:
+
+1. Browser console logs
+2. Android Logcat logs
+3. Capacitor logs
+4. Network request failures
+5. OAuth-related errors
+
+Specifically look for:
+
+* redirect_uri_mismatch
+* invalid_client
+* origin_mismatch
+* DEVELOPER_ERROR
+* disallowed_useragent
+* popup_blocked
+* auth/network-request-failed
+* auth/internal-error
+
+========================================================
+PART 9 — FLOW TRACE
+===================
+
+Provide a step-by-step auth execution trace.
+
+Example:
+
+1. User taps Google login
+2. OAuth browser opens
+3. Google auth succeeds
+4. Redirect initiated
+5. Capacitor callback received
+6. Session token stored
+7. App reloads
+8. Session validation fails
+
+Clearly identify:
+WHERE the flow breaks.
+
+========================================================
+PART 10 — ROOT CAUSE ANALYSIS
+=============================
+
+Based on the collected evidence:
+
+List:
+
+* probable root causes
+* confidence level
+* exact broken link in the auth chain
+
+Rank by probability.
+
+========================================================
+PART 11 — FIX PLAN
+==================
+
+Provide:
+
+* exact code/config changes required
+* exact Google Console changes required
+* exact Firebase changes required
+* exact Capacitor changes required
+
+DO NOT apply fixes yet.
+
+First produce:
+a comprehensive diagnosis report.
