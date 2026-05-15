@@ -218,16 +218,38 @@ else
   cp "$ICONS_SRC/mipmap-anydpi-v26/ic_launcher_round.xml" "$ANYDPI/"
   echo "  ✓ mipmap-anydpi-v26 (adaptive XML)"
 
-  # Background color for adaptive icon
-  COLORS="$SCRIPT_DIR/android/app/src/main/res/values/colors.xml"
-  if [ ! -f "$COLORS" ]; then
-    echo '<?xml version="1.0" encoding="utf-8"?><resources></resources>' > "$COLORS"
-  fi
-  if ! grep -q "ic_launcher_background" "$COLORS"; then
-    sedi 's|</resources>|    <color name="ic_launcher_background">#FF3C00</color>\n</resources>|' "$COLORS"
-    echo "  ✓ ic_launcher_background color added (#FF3C00)"
+  # Background color for adaptive icon.
+  # Capacitor generates a standalone ic_launcher_background.xml — update that
+  # file if it exists to avoid a duplicate-resource build error. Only fall back
+  # to colors.xml if the standalone file is absent.
+  VALUES="$SCRIPT_DIR/android/app/src/main/res/values"
+  BG_XML="$VALUES/ic_launcher_background.xml"
+  COLORS="$VALUES/colors.xml"
+
+  if [ -f "$BG_XML" ]; then
+    # Replace whatever color is already there with our brand orange
+    sedi 's|<color name="ic_launcher_background">[^<]*</color>|<color name="ic_launcher_background">#FF3C00</color>|' "$BG_XML"
+    echo "  ✓ ic_launcher_background updated to #FF3C00 in ic_launcher_background.xml"
+    # Remove any duplicate entry from colors.xml to prevent a build error
+    if [ -f "$COLORS" ] && grep -q "ic_launcher_background" "$COLORS"; then
+      sedi '/ic_launcher_background/d' "$COLORS"
+      echo "  ✓ Removed duplicate ic_launcher_background from colors.xml"
+    fi
   else
-    echo "  ✓ ic_launcher_background already present"
+    # Standalone file not present — write a new one (safer than patching colors.xml)
+    mkdir -p "$VALUES"
+    cat > "$BG_XML" << 'XML'
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#FF3C00</color>
+</resources>
+XML
+    echo "  ✓ ic_launcher_background.xml created (#FF3C00)"
+    # Guard: remove from colors.xml if it somehow already exists there
+    if [ -f "$COLORS" ] && grep -q "ic_launcher_background" "$COLORS"; then
+      sedi '/ic_launcher_background/d' "$COLORS"
+      echo "  ✓ Removed duplicate ic_launcher_background from colors.xml"
+    fi
   fi
 fi
 
