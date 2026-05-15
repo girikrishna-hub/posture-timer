@@ -166,11 +166,15 @@ fi
 echo ""
 echo "▸ Registering AlarmManagerPlugin in MainActivity …"
 
-MAIN="$ANDROID_JAVA/MainActivity.kt"
-if [ ! -f "$MAIN" ]; then
-  echo "  ⚠  $MAIN not found — you may need to register the plugin manually."
-  echo "     See CAPACITOR_SETUP.md for instructions."
+# Search for MainActivity.kt anywhere under android/ — Capacitor may place it
+# at a different subpath depending on the project setup or OS.
+MAIN=$(find "$SCRIPT_DIR/android" -name "MainActivity.kt" 2>/dev/null | head -1)
+
+if [ -z "$MAIN" ]; then
+  echo "  ⚠  MainActivity.kt not found anywhere under android/."
+  echo "     Run 'npx cap add android' first, then re-run this script."
 else
+  echo "  (found: $MAIN)"
   if grep -q "AlarmManagerPlugin" "$MAIN"; then
     echo "  ✓ Plugin already registered"
   else
