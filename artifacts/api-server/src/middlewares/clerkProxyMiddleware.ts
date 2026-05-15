@@ -86,6 +86,19 @@ export function clerkProxyMiddleware(): RequestHandler {
           proxyReq.setHeader("X-Forwarded-For", clientIp);
         }
       },
+      // Inject CORS headers into every proxied response so that Capacitor
+      // Android WebViews (origin: capacitor://localhost) are not blocked.
+      // The target (frontend-api.clerk.dev) may return its own ACAO header
+      // that doesn't cover capacitor:// origins, so we override it here.
+      proxyRes: (proxyRes, req) => {
+        const origin = (req as { headers: Record<string, string | string[] | undefined> }).headers["origin"] as string | undefined;
+        proxyRes.headers["access-control-allow-origin"] = origin || "*";
+        proxyRes.headers["access-control-allow-credentials"] = "true";
+        proxyRes.headers["access-control-allow-headers"] =
+          "Content-Type, Authorization, Clerk-Backend-API-Version";
+        proxyRes.headers["access-control-allow-methods"] =
+          "GET, POST, PUT, PATCH, DELETE, OPTIONS";
+      },
     },
   }) as RequestHandler;
 }

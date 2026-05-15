@@ -31,9 +31,17 @@ app.use(
   }),
 );
 
-app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
-
+// CORS must be before the Clerk proxy so:
+//   a) OPTIONS preflight requests are answered immediately (cors calls res.end())
+//      and the proxy never sees them.
+//   b) res.setHeader() calls from cors are in place before http-proxy-middleware
+//      writes the response — Node's http layer merges them into writeHead().
+// Without this, Android WebView (origin: capacitor://localhost) gets responses
+// with no Access-Control-Allow-Origin header and blocks every Clerk FAPI call,
+// keeping isLoaded=false forever.
 app.use(cors({ credentials: true, origin: true }));
+
+app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
