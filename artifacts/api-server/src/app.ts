@@ -6,6 +6,7 @@ import { publishableKeyFromHost } from "@clerk/shared/keys";
 import {
   CLERK_PROXY_PATH,
   clerkProxyMiddleware,
+  clerkNpmBundleMiddleware,
   getClerkProxyHost,
 } from "./middlewares/clerkProxyMiddleware";
 import router from "./routes";
@@ -41,6 +42,11 @@ app.use(
 // keeping isLoaded=false forever.
 app.use(cors({ credentials: true, origin: true }));
 
+// npm bundle handler MUST be before the main proxy. It fetches Clerk's
+// clerk-js and ui bundles server-side (following 307 redirects) so the
+// Android WebView receives the final script body from our origin — no
+// redirect to Clerk's CDN, no CORS exposure for capacitor://localhost.
+app.use(`${CLERK_PROXY_PATH}/npm`, clerkNpmBundleMiddleware());
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
