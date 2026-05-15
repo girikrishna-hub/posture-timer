@@ -69,15 +69,17 @@ catalog:
 autoInstallPeers: false
 
 onlyBuiltDependencies:
+  - '@clerk/shared'
   - '@swc/core'
   - esbuild
   - msw
   - unrs-resolver
 
 overrides:
-  # replit uses linux-x64 only, we can exclude all other platforms
-  "esbuild>@esbuild/darwin-arm64": "-"
-  "esbuild>@esbuild/darwin-x64": "-"
+  # Exclude non-native esbuild platform binaries.
+  # darwin-arm64 and darwin-x64 are intentionally kept so local Mac builds work.
+  # pnpm already filters platform-specific optional deps by OS, so keeping these
+  # entries does not cause them to be installed on Linux/Replit.
   "esbuild>@esbuild/freebsd-arm64": "-"
   "esbuild>@esbuild/freebsd-x64": "-"
   "esbuild>@esbuild/linux-arm": "-"

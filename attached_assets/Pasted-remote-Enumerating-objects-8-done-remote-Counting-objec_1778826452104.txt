@@ -1,0 +1,36 @@
+remote: Enumerating objects: 8, done.
+remote: Counting objects: 100% (8/8), done.
+remote: Compressing objects: 100% (2/2), done.
+remote: Total 5 (delta 3), reused 5 (delta 3), pack-reused 0 (from 0)
+Unpacking objects: 100% (5/5), 2.43 KiB | 355.00 KiB/s, done.
+From https://github.com/girikrishna-hub/posture-timer
+   4460b4d..ecd7449  main       -> origin/main
+Updating 4460b4d..ecd7449
+Fast-forward
+ ...-sit-stand-timer-pnpm-run-bui_1778826215774.txt | 114 +++++++++++++++++++++
+ package.json                                       |   2 +-
+ 2 files changed, 115 insertions(+), 1 deletion(-)
+ create mode 100644 attached_assets/Pasted-giri-Giridhars-MacBook-Air-sit-stand-timer-pnpm-run-bui_1778826215774.txt
+giri@Giridhars-MacBook-Air posture-timer % cd artifacts          
+giri@Giridhars-MacBook-Air artifacts % cd sit-stand-timer    
+giri@Giridhars-MacBook-Air sit-stand-timer % pnpm run build:android
+Scope: all 9 workspace projects
+../.. preinstall$ sh -c 'rm -f package-lock.json yarn.lock; if [ -n "$REPL_ID…
+└─ Done in 31ms
+[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: @clerk/shared@3.47.5, @clerk/shared@4.10.2, esbuild@0.27.3
+
+Run "pnpm approve-builds" to pick which dependencies should be allowed to run scripts.
+[ERROR] Command failed with exit code 1: /Users/giri/.nvm/versions/node/v22.22.3/bin/node /Users/giri/.cache/node/corepack/v1/pnpm/11.1.2/bin/pnpm.mjs install
+
+pnpm: Command failed with exit code 1: /Users/giri/.nvm/versions/node/v22.22.3/bin/node /Users/giri/.cache/node/corepack/v1/pnpm/11.1.2/bin/pnpm.mjs install
+    at getFinalError (file:///Users/giri/.cache/node/corepack/v1/pnpm/11.1.2/dist/pnpm.mjs:28776:14)
+    at makeError (file:///Users/giri/.cache/node/corepack/v1/pnpm/11.1.2/dist/pnpm.mjs:31083:21)
+    at getSyncResult (file:///Users/giri/.cache/node/corepack/v1/pnpm/11.1.2/dist/pnpm.mjs:32927:10)
+    at spawnSubprocessSync (file:///Users/giri/.cache/node/corepack/v1/pnpm/11.1.2/dist/pnpm.mjs:32887:14)
+    at execaCoreSync (file:///Users/giri/.cache/node/corepack/v1/pnpm/11.1.2/dist/pnpm.mjs:32817:23)
+    at callBoundExeca (file:///Users/giri/.cache/node/corepack/v1/pnpm/11.1.2/dist/pnpm.mjs:35345:23)
+    at boundExeca (file:///Users/giri/.cache/node/corepack/v1/pnpm/11.1.2/dist/pnpm.mjs:35322:49)
+    at sync (file:///Users/giri/.cache/node/corepack/v1/pnpm/11.1.2/dist/pnpm.mjs:35481:10)
+    at runPnpmCli (file:///Users/giri/.cache/node/corepack/v1/pnpm/11.1.2/dist/pnpm.mjs:211258:5)
+    at runDepsStatusCheck (file:///Users/giri/.cache/node/corepack/v1/pnpm/11.1.2/dist/pnpm.mjs:212964:7)
+giri@Giridhars-MacBook-Air sit-stand-timer % 
