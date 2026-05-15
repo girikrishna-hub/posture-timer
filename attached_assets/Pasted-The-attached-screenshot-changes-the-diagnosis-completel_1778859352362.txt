@@ -1,0 +1,208 @@
+The attached screenshot changes the diagnosis completely.
+
+The failure is NOT currently in:
+
+* OAuth redirect handling
+* appUrlOpen
+* ticket exchange
+* Browser.close timing
+
+The auth flow is failing MUCH EARLIER.
+
+========================================================
+CRITICAL OBSERVATION
+====================
+
+Debug panel shows:
+
+1 clerk.js:
+✓ window.Clerk set
+
+2 FAPI init:
+✗ not yet
+
+3 ui.js:
+✓ __internal_ClerkUICtor
+
+isLoaded:
+false
+
+This means:
+Clerk NEVER finishes initialization.
+
+OAuth flow is never reached.
+
+========================================================
+NEW PRIMARY OBJECTIVE
+=====================
+
+FULLY DIAGNOSE WHY CLERK FAPI INITIALIZATION FAILS INSIDE THE ANDROID WEBVIEW.
+
+The failing chain is now:
+
+clerk.browser.js loads
+→ Clerk.load()
+→ FAPI bootstrap request
+→ FAILURE
+→ isLoaded remains false
+
+That is now the ONLY priority.
+
+STOP debugging redirect flows until this is solved.
+
+========================================================
+STEP 1 — INSTRUMENT Clerk.load()
+================================
+
+Add detailed logging around:
+window.Clerk.load()
+
+Capture:
+
+* load start
+* load completion
+* thrown errors
+* timeout behavior
+* network responses
+* rejected promises
+
+Example:
+
+console.log('[CLERK] load start');
+
+try {
+await window.Clerk.load(...);
+console.log('[CLERK] load success');
+} catch (err) {
+console.error('[CLERK] load failed', err);
+}
+
+========================================================
+STEP 2 — INSTRUMENT ALL FAPI REQUESTS
+=====================================
+
+Capture ALL requests to:
+
+/api/__clerk/*
+/v1/client
+/v1/environment
+/v1/client/sync
+etc.
+
+For each request log:
+
+* full URL
+* request method
+* headers
+* Origin header
+* response status
+* response body
+* timing
+* failure reason
+
+========================================================
+STEP 3 — VERIFY WHICH REQUEST FAILS
+===================================
+
+We need definitive proof of:
+which exact request prevents FAPI initialization.
+
+The screenshot currently only shows:
+400
+
+That is insufficient.
+
+Identify:
+
+* exact endpoint
+* exact response body
+* exact rejection reason
+
+========================================================
+STEP 4 — VERIFY ANDROID WEBVIEW HEADERS
+=======================================
+
+Log ALL outbound request headers from Android WebView.
+
+Especially:
+
+* Origin
+* Referer
+* Host
+* X-Forwarded-Host
+
+We strongly suspect:
+Android WebView is sending a header Clerk rejects.
+
+========================================================
+STEP 5 — VERIFY PROXY BEHAVIOR FOR GET REQUESTS
+===============================================
+
+The earlier fix only mentioned:
+Origin stripping for sign_in POST requests.
+
+Verify whether:
+GET /v1/client
+still forwards problematic Origin headers.
+
+This is HIGHLY likely.
+
+========================================================
+STEP 6 — VERIFY https://localhost ORIGIN HANDLING
+=================================================
+
+Because:
+androidScheme = "https"
+
+the WebView origin becomes:
+https://localhost
+
+Determine whether Clerk rejects:
+https://localhost
+through the proxy chain.
+
+Log:
+
+* actual runtime Origin
+* actual forwarded Origin
+* final Origin reaching Clerk
+
+========================================================
+STEP 7 — DISPLAY RAW ERROR IN DEBUG PANEL
+=========================================
+
+The debug panel must display:
+
+* exact failing endpoint
+* exact HTTP status
+* exact response body
+* exact thrown exception
+
+Current:
+“FAPI init: not yet”
+
+is not sufficient.
+
+========================================================
+STEP 8 — VERIFY APK CONSISTENCY
+===============================
+
+Display prominently:
+
+* build timestamp
+* git commit hash
+* embedded app version
+
+Verify installed APK actually contains:
+latest fixes and latest JS bundle.
+
+========================================================
+IMPORTANT
+=========
+
+Do NOT continue OAuth redirect debugging.
+
+The system is currently failing BEFORE OAuth begins.
+
+The ONLY priority now is:
+why Clerk initialization fails inside Android WebView.

@@ -39,6 +39,12 @@ interface LogEntry {
   kind: "info" | "ok" | "warn" | "error";
 }
 
+interface FapiErr {
+  status: number;
+  url: string;
+  body: string;
+}
+
 function ts(): string {
   return new Date().toISOString().slice(11, 23);
 }
@@ -47,6 +53,7 @@ function ts(): string {
 // Installed once at module level so it captures requests before React mounts.
 type NetLog = (msg: string, kind: LogEntry["kind"]) => void;
 let _netLog: NetLog = () => {};
+let _fapiErrSink: ((e: FapiErr) => void) = () => {};
 
 const INTERESTING = ["__clerk", "clerk.dev", "clerk.io", "clerk.com", "jsdelivr"];
 
@@ -55,23 +62,45 @@ function isInteresting(url: string): boolean {
   return INTERESTING.some((s) => u.includes(s));
 }
 
+// Read Origin from various header formats (Headers object, plain object, or array).
+function extractOrigin(init?: RequestInit): string {
+  if (!init?.headers) return "(browser-set)";
+  const h = init.headers;
+  if (h instanceof Headers) return h.get("origin") ?? h.get("Origin") ?? "(none)";
+  if (Array.isArray(h)) {
+    const pair = h.find(([k]) => k.toLowerCase() === "origin");
+    return pair?.[1] ?? "(none)";
+  }
+  const rec = h as Record<string, string>;
+  return rec["origin"] ?? rec["Origin"] ?? "(none)";
+}
+
 const _origFetch = window.fetch.bind(window);
 window.fetch = async function interceptedFetch(input, init) {
   const url = typeof input === "string" ? input : (input as Request).url ?? String(input);
   if (isInteresting(url)) {
-    _netLog(`→ fetch ${url.slice(0, 80)}`, "info");
+    const origin = extractOrigin(init);
+    _netLog(`→ ${(init?.method ?? "GET").padEnd(4)} ${url.slice(0, 65)}  Orig:${origin}`, "info");
   }
   try {
     const res = await _origFetch(input, init);
     if (isInteresting(url)) {
-      const kind = res.ok ? "ok" : "warn";
-      _netLog(`← ${res.status} ${url.slice(0, 70)}`, kind);
+      if (!res.ok) {
+        // Clone so Clerk can still read the original body.
+        let body = "(unreadable)";
+        try { body = await res.clone().text(); } catch { /* ignore */ }
+        const snippet = body.slice(0, 400);
+        _netLog(`← ${res.status} ${url.slice(0, 55)}  BODY: ${snippet}`, "error");
+        _fapiErrSink({ status: res.status, url, body: snippet });
+      } else {
+        _netLog(`← ${res.status} ${url.slice(0, 70)}`, "ok");
+      }
     }
     return res;
   } catch (err) {
     if (isInteresting(url)) {
       const msg = err instanceof Error ? err.message : String(err);
-      _netLog(`✗ fetch ERR ${url.slice(0, 60)}: ${msg}`, "error");
+      _netLog(`✗ ERR ${url.slice(0, 55)}: ${msg}`, "error");
     }
     throw err;
   }
@@ -94,6 +123,7 @@ export function NativeDebugPanel() {
   const [tokenStatus, setTokenStatus] = useState<TokenStatus>("idle");
   const [tokenPreview, setTokenPreview] = useState("");
   const [log, setLog] = useState<LogEntry[]>([]);
+  const [fapiErr, setFapiErr] = useState<FapiErr | null>(null);
   const addLogRef = useRef<NetLog>(() => {});
 
   // Clerk init-chain checkpoint state (polled every 500 ms)
@@ -115,6 +145,12 @@ export function NativeDebugPanel() {
     _netLog = (msg, kind) => addLogRef.current(msg, kind);
     return () => { _netLog = () => {}; };
   }, [addLog]);
+
+  // wire FAPI error sink to state (first non-OK Clerk response wins)
+  useEffect(() => {
+    _fapiErrSink = (e) => setFapiErr((prev) => prev ?? e);
+    return () => { _fapiErrSink = () => {}; };
+  }, []);
 
   // subscribe to auth flow events from NativeSignIn
   useEffect(() => {
@@ -286,11 +322,41 @@ export function NativeDebugPanel() {
               bad={tokenStatus === "error"} />
           </div>
 
-          <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+          {/* FAPI error — shown prominently when first non-OK Clerk response hits */}
+          {fapiErr && (
+            <div style={{ margin: "4px 0 6px", padding: "4px 6px",
+              background: "rgba(244,67,54,0.15)", border: "1px solid #f44336",
+              borderRadius: 3, wordBreak: "break-all" }}>
+              <div style={{ color: "#f44336", fontWeight: "bold", marginBottom: 2 }}>
+                FAPI ERROR {fapiErr.status}
+              </div>
+              <div style={{ color: "#ff9800", fontSize: 10 }}>{fapiErr.url}</div>
+              <div style={{ color: "#eee", fontSize: 10, marginTop: 2 }}>{fapiErr.body}</div>
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
             <Btn onClick={testToken} disabled={tokenStatus === "testing"}>
               {tokenStatus === "testing" ? "Testing…" : "Test Token"}
             </Btn>
-            <Btn onClick={() => setLog([])}>Clear Log</Btn>
+            <Btn onClick={() => { setLog([]); setFapiErr(null); }}>Clear Log</Btn>
+            <Btn onClick={() => {
+              const lines = log.slice().reverse().map(
+                (e) => `${e.time} [${e.kind}] ${e.msg}`
+              ).join("\n");
+              const info = [
+                `Built:    ${__BUILD_TIME__}`,
+                `Commit:   ${__BUILD_COMMIT__}`,
+                `Platform: ${Capacitor.getPlatform()}`,
+                `API base: ${(import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "(not set)"}`,
+                `Clerk key: ${NATIVE_CLERK_PUBLISHABLE_KEY.slice(0, 30)}…`,
+                `Proxy URL: ${NATIVE_CLERK_PROXY_URL}`,
+                fapiErr ? `\nFAPI ERROR ${fapiErr.status}\n${fapiErr.url}\n${fapiErr.body}` : "",
+                "\n--- LOG ---",
+                lines,
+              ].join("\n");
+              navigator.clipboard?.writeText(info).catch(() => {});
+            }}>Copy Log</Btn>
           </div>
 
           {log.length > 0 && (
