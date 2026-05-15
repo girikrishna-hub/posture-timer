@@ -1,13 +1,63 @@
 /// <reference lib="webworker" />
 import { precacheAndRoute, cleanupOutdatedCaches } from "workbox-precaching";
+import { registerRoute, NavigationRoute } from "workbox-routing";
+import { NetworkFirst } from "workbox-strategies";
 
 declare const self: ServiceWorkerGlobalScope;
 
 cleanupOutdatedCaches();
-precacheAndRoute(self.__WB_MANIFEST);
 
-// Activate immediately and claim all open clients so updates take effect
-// without requiring the user to close and reopen the app.
+// ─── Asset precaching ─────────────────────────────────────────────────────────
+//
+// Only precache hashed JS/CSS/image assets — NOT index.html.
+//
+// Why exclude index.html: every deployment changes chunk filenames (content
+// hashes).  If index.html is served cache-first, an old cached shell can
+// reference chunk filenames that no longer exist, producing a white screen
+// before any JS even runs.  We handle index.html separately below with a
+// network-first strategy.
+//
+// Hashed assets are immutable at their URL so cache-first is always safe.
+
+type ManifestEntry = { url: string; revision: string | null };
+const assetEntries = (self.__WB_MANIFEST as ManifestEntry[]).filter(
+  (e) => !e.url.endsWith(".html"),
+);
+precacheAndRoute(assetEntries);
+
+// ─── Navigation: network-first ────────────────────────────────────────────────
+//
+// All page navigations (requests for index.html) use network-first.
+// This guarantees that after a deployment the browser receives a fresh shell
+// whose <script> tags reference the new chunk hashes.
+//
+// Behaviour:
+//   • Online:  fetches from the network, caches the result, returns it.
+//   • Offline: serves the previously cached copy (PWA works offline).
+//   • Slow network: falls back to cache after 3 s so the app still opens.
+//
+// Cache name is versioned so an older SW's stale navigation cache is not
+// accidentally reused by a newer SW.
+
+registerRoute(
+  new NavigationRoute(
+    new NetworkFirst({
+      cacheName: "posture-nav-v2",
+      networkTimeoutSeconds: 3,
+    }),
+  ),
+);
+
+// ─── Immediate activation ─────────────────────────────────────────────────────
+//
+// skipWaiting: the new SW activates as soon as it finishes installing,
+//   without waiting for existing tabs to close.
+// clients.claim: the activated SW immediately controls all open pages.
+//
+// The vite-plugin-pwa autoUpdate registration code listens for the resulting
+// `controllerchange` event and calls `location.reload()`, so every open tab
+// gets a fresh network-first index.html and correct chunk URLs.
+
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event: ExtendableEvent) =>
   event.waitUntil(self.clients.claim()),
@@ -138,9 +188,6 @@ self.addEventListener("message", (event: ExtendableMessageEvent) => {
 
   // ── Bladder notifications ─────────────────────────────────────────────────
 
-  // Immediate bladder notification — mirrors posture's SHOW_NOTIFICATION.
-  // Called from the page when fireCycle fires so the SW context (not the page)
-  // shows the notification; more reliable when the tab is backgrounded.
   if (event.data?.type === "SHOW_BLADDER_NOTIFICATION") {
     const { logId } = event.data as { type: string; logId?: string };
     if (logId) bladderPendingLogId = logId;
@@ -225,14 +272,12 @@ self.addEventListener("push", (event: PushEvent) => {
       })
     : {};
 
-  // Extract correlation fields embedded in the server push payload.
   const traceId = data.traceId ?? `unknown-${Date.now()}`;
   const userId = data.userId ?? "unknown";
   const payloadType = data.type ?? "posture";
   const now = Date.now();
 
   if (data.type === "bladder") {
-    // ── Bladder reminder ─────────────────────────────────────────────────────
     if (data.logId) bladderPendingLogId = data.logId;
     const capturedLogId = bladderPendingLogId;
 
@@ -263,7 +308,6 @@ self.addEventListener("push", (event: PushEvent) => {
   }
 
   if (data.type === "posture" || data.type == null) {
-    // ── Posture timer notification ────────────────────────────────────────────
     event.waitUntil(
       sendDebugBeacon("/api/debug/push-received", { timestamp: now, payloadType, traceId, userId })
         .then(() =>
@@ -286,10 +330,6 @@ self.addEventListener("push", (event: PushEvent) => {
   }
 });
 
-// Navigate an existing window to the given URL (or open a new one).
-// Uses WindowClient.navigate() so the app routes to the right page even if
-// a different page is currently open — important when both posture and bladder
-// notifications can be live at the same time.
 function openOrNavigate(
   windowClients: readonly WindowClient[],
   url: string,
@@ -298,8 +338,6 @@ function openOrNavigate(
     return self.clients.openWindow(url);
   }
   const target = windowClients[0];
-  // Only navigate if not already on the target page — avoids an unnecessary
-  // reload when the user happens to already be viewing that page.
   const currentPath = new URL(target.url as string).pathname;
   const targetPath = new URL(url, "https://placeholder").pathname;
   if (currentPath === targetPath) {
@@ -318,10 +356,8 @@ self.addEventListener("notificationclick", (event: NotificationEvent) => {
   const action = event.action as string;
   const notifData = event.notification.data as { url?: string; logId?: string } | null;
 
-  // ── Bladder actions ────────────────────────────────────────────────────────
   if (tag === "bladder-reminder") {
     if (action === "done") {
-      // Notify all open clients so BladderContext can record done_on_time
       event.waitUntil(
         self.clients
           .matchAll({ type: "window", includeUncontrolled: true })
@@ -330,7 +366,6 @@ self.addEventListener("notificationclick", (event: NotificationEvent) => {
               c.postMessage({ type: "BLADDER_ACTION_DONE", logId: notifData?.logId ?? "" }),
             );
             if (clients.length === 0) {
-              // App not open — open it so user can confirm
               return self.clients.openWindow(notifData?.url ?? "/bladder");
             }
             return undefined;
@@ -340,12 +375,10 @@ self.addEventListener("notificationclick", (event: NotificationEvent) => {
     }
 
     if (action === "snooze") {
-      // Re-show notification in 5 minutes
       const snoozeMs = 5 * 60 * 1000;
       const currentLogId = bladderPendingLogId || (notifData?.logId ?? "");
       event.waitUntil(
         new Promise<void>((resolve) => {
-          // Notify clients of snooze so they can acknowledge in UI
           self.clients
             .matchAll({ type: "window", includeUncontrolled: true })
             .then((clients) =>
@@ -363,7 +396,6 @@ self.addEventListener("notificationclick", (event: NotificationEvent) => {
       return;
     }
 
-    // Default click → navigate to bladder page regardless of current page
     event.waitUntil(
       self.clients
         .matchAll({ type: "window", includeUncontrolled: true })
@@ -372,7 +404,6 @@ self.addEventListener("notificationclick", (event: NotificationEvent) => {
     return;
   }
 
-  // ── Posture notification click → navigate to timer page ───────────────────
   event.waitUntil(
     self.clients
       .matchAll({ type: "window", includeUncontrolled: true })

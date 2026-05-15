@@ -39,6 +39,10 @@ export default defineConfig({
       },
       injectManifest: {
         rollupFormat: "es",
+        // Exclude HTML files from the precache manifest entirely.
+        // index.html is served network-first via a NavigationRoute in sw.ts,
+        // so it must NOT appear in the precache (which uses cache-first).
+        globIgnores: ["**/*.html"],
       },
       manifest: {
         name: "Sit + Stand Timer",
@@ -107,7 +111,11 @@ export default defineConfig({
           // TanStack Query — needed immediately (data fetching)
           if (id.includes("@tanstack")) return "vendor-query";
 
-          // React core — pinned and rarely changes
+          // React core + scheduler — pinned and rarely changes.
+          // scheduler and react-dom have a tight internal coupling; keeping them
+          // in the same chunk avoids the vendor-react ↔ vendor-misc circular
+          // chunk warning that Rollup emits when scheduler ends up in vendor-react
+          // while one of its dependents lands in vendor-misc.
           if (
             id.match(/[/\\]react[/\\]/) ||
             id.match(/[/\\]react-dom[/\\]/) ||
@@ -121,11 +129,17 @@ export default defineConfig({
           // instead of pulling it into the eager initial bundle.
           if (id.includes("html2canvas")) return undefined;
 
+          // workbox-* packages are only used in sw.ts (built separately).
+          // Excluding them from manualChunks prevents them from appearing in
+          // the main app bundle should Rollup ever follow the import graph here.
+          if (id.includes("workbox-")) return undefined;
+
           // Everything else from node_modules (wouter, zod, etc.)
-          // Only include packages that are actually used from eagerly-loaded code.
-          // Packages only referenced from lazy routes will be naturally co-located
-          // with those routes by Rollup when they fall through here.
-          return "vendor-misc";
+          // Packages only referenced from lazy routes are naturally co-located
+          // with those routes by Rollup when they fall through to undefined.
+          // Avoid a catch-all "vendor-misc" chunk — it tends to pull in
+          // scheduler/react transitive deps and create circular chunk edges.
+          return undefined;
         },
       },
     },
