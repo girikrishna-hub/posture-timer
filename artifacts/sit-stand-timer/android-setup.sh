@@ -125,7 +125,42 @@ else
 fi
 echo "  ✓ Permissions added"
 
-# ── 4. Fix Android window background (prevent opaque-white overlay) ──────────
+# ── 4. Add deep-link intent filter for Clerk OAuth callbacks ─────────────────
+# After Google OAuth, Clerk redirects to posture-timer://oauth-callback
+# so the WebView can complete sign-in via @capacitor/app's appUrlOpen event.
+echo ""
+echo "▸ Adding posture-timer:// deep-link scheme to AndroidManifest …"
+
+DEEP_LINK_FILTER='            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="posture-timer" />
+            </intent-filter>'
+
+if grep -q 'android:scheme="posture-timer"' "$MANIFEST"; then
+  echo "  ✓ Deep-link scheme already present"
+else
+  # Insert the new intent-filter right after the LAUNCHER intent-filter block
+  # that Capacitor generates inside the main <activity>.
+  _tmpdf=$(mktemp)
+  printf '%s\n' "$DEEP_LINK_FILTER" > "$_tmpdf"
+  awk -v insfile="$_tmpdf" '
+    /category.LAUNCHER/ && !done {
+      print
+      # Print the closing </intent-filter> line that follows
+      getline; print
+      # Then insert the new filter
+      while ((getline line < insfile) > 0) print line
+      done=1; next
+    }
+    { print }
+  ' "$MANIFEST" > "$MANIFEST.tmp" && mv "$MANIFEST.tmp" "$MANIFEST"
+  rm -f "$_tmpdf"
+  echo "  ✓ posture-timer:// scheme added"
+fi
+
+# ── 5. Fix Android window background (prevent opaque-white overlay) ──────────
 # The default Capacitor styles.xml leaves windowBackground white, which sits
 # on top of the WebView as an opaque native layer until explicitly cleared.
 # We set it to the app background colour so no white flash ever occurs, even
@@ -162,7 +197,7 @@ else
   fi
 fi
 
-# ── 5. Patch MainActivity to register the plugin ─────────────────────────────
+# ── 6. Patch MainActivity to register the plugin ─────────────────────────────
 echo ""
 echo "▸ Registering AlarmManagerPlugin in MainActivity …"
 
@@ -190,7 +225,7 @@ else
   fi
 fi
 
-# ── 6. Copy app icons ────────────────────────────────────────────────────────
+# ── 7. Copy app icons ────────────────────────────────────────────────────────
 # Pre-generated from public/favicon.svg (same icon as the PWA).
 # Overwrites Capacitor's default robot launcher icons with the real branding.
 echo ""
@@ -253,7 +288,7 @@ XML
   fi
 fi
 
-# ── 7. Done ──────────────────────────────────────────────────────────────────
+# ── 8. Done ──────────────────────────────────────────────────────────────────
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"
 echo "║  ✅  Native alarm files installed successfully!      ║"

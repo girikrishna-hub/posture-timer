@@ -60,3 +60,14 @@
         <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
     </intent-filter>
 </receiver>
+
+<!-- Deep-link handler for Clerk OAuth callbacks (e.g. Google Sign-In).
+     After the in-app browser completes the OAuth flow, Clerk redirects to
+     posture-timer://oauth-callback?__clerk_ticket=… and Android routes it
+     here so the app can complete sign-in without a page navigation. -->
+<intent-filter android:autoVerify="false">
+    <action android:name="android.intent.action.VIEW" />
+    <category android:name="android.intent.category.DEFAULT" />
+    <category android:name="android.intent.category.BROWSABLE" />
+    <data android:scheme="posture-timer" />
+</intent-filter>
