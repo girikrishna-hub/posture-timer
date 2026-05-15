@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, lazy, Suspense } from "react";
 import { Switch, Route, Router as WouterRouter, Redirect, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { Show, ClerkLoaded, ClerkLoading, useClerk, useAuth } from "@clerk/react";
+import { Show, ClerkLoaded, ClerkLoading, useClerk, useAuth, SignIn } from "@clerk/react";
 import { publishableKeyFromHost, InternalClerkProvider } from "@clerk/react/internal";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -190,22 +190,48 @@ function ClerkQueryClientCacheInvalidator() {
 }
 
 /**
- * Native (Capacitor Android/iOS) app shell — DEBUG MODE.
+ * Native (Capacitor Android/iOS) app shell.
  *
- * Bypasses all Clerk loading/auth-gating so we can see whether the white
- * screen comes from Clerk initialization, route gating, or something else.
- * NativeDebugPanel overlays the real auth state so the exact failure point
- * is visible.
+ * Three states:
+ *  1. Clerk still loading  → blank background (no flash)
+ *  2. Not signed in        → inline SignIn with routing="virtual" (path-based
+ *                            routing doesn't work inside a Capacitor WebView
+ *                            served from capacitor://localhost)
+ *  3. Signed in            → full app with CapacitorAuthBridge wired up
  *
- * TODO: remove this branch once the root cause is confirmed and fixed.
+ * NativeDebugPanel is shown in all states so the init-chain and token state
+ * are always visible during development.
  */
 function NativeAppShell() {
+  const { isLoaded, isSignedIn } = useAuth();
+
+  if (!isLoaded) {
+    return (
+      <>
+        <div className="min-h-screen bg-background" />
+        <NativeDebugPanel />
+      </>
+    );
+  }
+
+  if (!isSignedIn) {
+    return (
+      <>
+        <div className="min-h-screen bg-background flex items-center justify-center p-4">
+          <SignIn
+            routing="hash"
+            fallbackRedirectUrl="/"
+          />
+        </div>
+        <NativeDebugPanel />
+      </>
+    );
+  }
+
   return (
     <>
       <ClerkQueryClientCacheInvalidator />
       <CapacitorAuthBridge />
-
-      {/* Render the full app immediately — no auth gate, no loading wait */}
       <TimerProvider>
         <PushSubscriptionRegistrar />
         <BladderProvider>
@@ -222,8 +248,6 @@ function NativeAppShell() {
           <BottomNav />
         </BladderProvider>
       </TimerProvider>
-
-      {/* Diagnostic overlay — shows Clerk state, token result, API base URL */}
       <NativeDebugPanel />
     </>
   );
