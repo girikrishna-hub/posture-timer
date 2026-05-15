@@ -144,6 +144,14 @@ export function clerkProxyMiddleware(): RequestHandler {
         proxyReq.setHeader("Clerk-Proxy-Url", proxyUrl);
         proxyReq.setHeader("Clerk-Secret-Key", secretKey);
 
+        // Clerk's FAPI rejects requests where Origin is not a subdomain of
+        // frontend-api.clerk.dev. The Android WebView sends
+        // Origin: capacitor://localhost which triggers the origin_invalid 400.
+        // This is a server-to-server proxy call authenticated via
+        // Clerk-Proxy-Url + Clerk-Secret-Key, so removing Origin is correct —
+        // browsers set it for CORS; server proxies should not forward it.
+        proxyReq.removeHeader("Origin");
+
         const xff = req.headers["x-forwarded-for"];
         const clientIp =
           (Array.isArray(xff) ? xff[0] : xff)?.split(",")[0]?.trim() ||
