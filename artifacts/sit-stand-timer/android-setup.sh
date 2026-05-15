@@ -155,7 +155,48 @@ else
   fi
 fi
 
-# ── 6. Done ──────────────────────────────────────────────────────────────────
+# ── 6. Copy app icons ────────────────────────────────────────────────────────
+# Pre-generated from public/favicon.svg (same icon as the PWA).
+# Overwrites Capacitor's default robot launcher icons with the real branding.
+echo ""
+echo "▸ Installing app icons …"
+
+ICONS_SRC="$SCRIPT_DIR/android-icons"
+RES="$SCRIPT_DIR/android/app/src/main/res"
+
+if [ ! -d "$ICONS_SRC" ]; then
+  echo "  ⚠  android-icons/ not found — skipping icon copy."
+else
+  for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+    DEST="$RES/mipmap-$density"
+    mkdir -p "$DEST"
+    cp "$ICONS_SRC/mipmap-$density/ic_launcher.png"            "$DEST/"
+    cp "$ICONS_SRC/mipmap-$density/ic_launcher_round.png"      "$DEST/"
+    cp "$ICONS_SRC/mipmap-$density/ic_launcher_foreground.png" "$DEST/"
+    echo "  ✓ mipmap-$density"
+  done
+
+  # Adaptive icon XML (Android 8.0+)
+  ANYDPI="$RES/mipmap-anydpi-v26"
+  mkdir -p "$ANYDPI"
+  cp "$ICONS_SRC/mipmap-anydpi-v26/ic_launcher.xml"       "$ANYDPI/"
+  cp "$ICONS_SRC/mipmap-anydpi-v26/ic_launcher_round.xml" "$ANYDPI/"
+  echo "  ✓ mipmap-anydpi-v26 (adaptive XML)"
+
+  # Background color for adaptive icon
+  COLORS="$SCRIPT_DIR/android/app/src/main/res/values/colors.xml"
+  if [ ! -f "$COLORS" ]; then
+    echo '<?xml version="1.0" encoding="utf-8"?><resources></resources>' > "$COLORS"
+  fi
+  if ! grep -q "ic_launcher_background" "$COLORS"; then
+    sed -i 's|</resources>|    <color name="ic_launcher_background">#FF3C00</color>\n</resources>|' "$COLORS"
+    echo "  ✓ ic_launcher_background color added (#FF3C00)"
+  else
+    echo "  ✓ ic_launcher_background already present"
+  fi
+fi
+
+# ── 7. Done ──────────────────────────────────────────────────────────────────
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"
 echo "║  ✅  Native alarm files installed successfully!      ║"
