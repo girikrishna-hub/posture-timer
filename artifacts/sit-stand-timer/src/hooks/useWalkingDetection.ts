@@ -1,7 +1,10 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import type { TimerMode } from "@/contexts/TimerContext";
 
-const WALKING_MIN_SPEED = 0.3;
+// 1.0 m/s ≈ 3.6 km/h — low enough to catch a slow walk, high enough to
+// reject GPS drift (which typically produces apparent speeds of 0.3–0.8 m/s
+// even when the device is completely stationary).
+const WALKING_MIN_SPEED = 1.0;
 const WALKING_MAX_SPEED = 3.5;
 const CONFIRM_DURATION_MS = 15_000;
 const STOP_DURATION_MS = 15_000;
