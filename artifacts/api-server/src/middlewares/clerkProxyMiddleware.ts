@@ -150,6 +150,17 @@ export function clerkNpmBundleMiddleware(): RequestHandler {
   };
 }
 
+// Headers that must not be forwarded to the upstream (hop-by-hop).
+const HOP_BY_HOP = new Set([
+  "host", "connection", "keep-alive", "transfer-encoding",
+  "upgrade", "proxy-authorization", "te", "trailers",
+]);
+
+// Headers that must not be copied from the upstream response to our response.
+const SKIP_RESPONSE = new Set([
+  "transfer-encoding", "connection", "keep-alive",
+]);
+
 export function clerkProxyMiddleware(): RequestHandler {
   // Only run proxy in production — Clerk proxying doesn't work for dev instances
   if (process.env.NODE_ENV !== "production") {
@@ -162,73 +173,145 @@ export function clerkProxyMiddleware(): RequestHandler {
   }
 
   // Derive the correct FAPI target from the publishable key.
+  //
   // CRITICAL: for dev instances (pk_test_*) the FAPI is instance-specific
   // (e.g. tidy-turtle-21.clerk.accounts.dev), NOT frontend-api.clerk.dev.
   // Proxying to the wrong FAPI causes /v1/dev_browser → 400 instance_type_invalid,
   // which prevents Clerk.load() from completing → isLoaded stays false permanently.
+  //
+  // For live instances (pk_live_*) the decoded domain may be an internal Clerk
+  // routing identifier rather than a public endpoint — fall back to the standard
+  // production FAPI in that case.
   const publishableKey =
     process.env.CLERK_PUBLISHABLE_KEY ??
     process.env.VITE_CLERK_PUBLISHABLE_KEY ??
     "";
   const clerkFapi = parseFapiUrl(publishableKey);
 
-  return createProxyMiddleware({
-    target: clerkFapi,
-    changeOrigin: true,
-    pathRewrite: (path: string) =>
-      path.replace(new RegExp(`^${CLERK_PROXY_PATH}`), ""),
-    on: {
-      proxyReq: (proxyReq, req) => {
-        const protocol = req.headers["x-forwarded-proto"] || "https";
-        const host = getClerkProxyHost(req) || "";
-        const proxyUrl = `${protocol}://${host}${CLERK_PROXY_PATH}`;
+  // Use a direct fetch-based proxy instead of http-proxy-middleware.
+  //
+  // Why: http-proxy-middleware opens a persistent TCP connection to the upstream
+  // and can silently fail in Replit's production network with a 504 when the
+  // target domain changes. Node's built-in fetch uses its own connection pool,
+  // follows redirects natively, and gives us structured error objects (code,
+  // message) instead of an opaque "Error occurred while trying to proxy" string.
+  // This also lets us log the exact upstream URL and response body on failure.
+  return async (req: Request, res: Response, _next: NextFunction) => {
+    // Express strips the /api/__clerk mount prefix, so req.url starts with /v1/...
+    const upstreamUrl = `${clerkFapi}${req.url}`;
 
-        proxyReq.setHeader("Clerk-Proxy-Url", proxyUrl);
-        proxyReq.setHeader("Clerk-Secret-Key", secretKey);
+    // Collect raw request body for non-idempotent methods.
+    // clerkProxyMiddleware is mounted BEFORE express.json(), so the stream
+    // has not been consumed by any body parser yet.
+    let bodyBuf: Buffer | undefined;
+    if (req.method !== "GET" && req.method !== "HEAD") {
+      bodyBuf = await new Promise<Buffer>((resolve, reject) => {
+        const chunks: Buffer[] = [];
+        req.on("data", (c: Buffer) => chunks.push(c));
+        req.on("end", () => resolve(Buffer.concat(chunks)));
+        req.on("error", reject);
+      });
+    }
 
-        // Clerk's FAPI has per-route Origin requirements (confirmed by 400 logs):
-        //
-        //  GET  /v1/client|environment  — strip Origin (origin_invalid if kept)
-        //  POST /v1/client/sign_ups     — keep https:// Origin (bot-protection
-        //                                 rejects request without it → 400)
-        //  POST /v1/client/sign_ins     — strip Origin (works without it; Google
-        //                                 OAuth returns 400 if Origin is present)
-        //  everything else              — strip Origin (safe default)
-        //
-        // Non-HTTP origins (capacitor://, file://) are always stripped.
-        const requestOrigin = proxyReq.getHeader("Origin") as string | undefined;
-        const isHttpOrigin =
-          typeof requestOrigin === "string" &&
-          (requestOrigin.startsWith("https://") || requestOrigin.startsWith("http://"));
-        const isSignUp = req.method === "POST" && req.path.includes("/sign_ups");
+    // Build forwarding headers: copy everything except hop-by-hop headers.
+    const fwd: Record<string, string> = {};
+    for (const [k, v] of Object.entries(req.headers)) {
+      if (HOP_BY_HOP.has(k.toLowerCase())) continue;
+      fwd[k] = Array.isArray(v) ? v.join(", ") : (v ?? "");
+    }
 
-        if (!isHttpOrigin || !isSignUp) {
-          proxyReq.removeHeader("Origin");
-        }
-        // else: keep https:// Origin only for POST .../sign_ups (bot protection).
+    // Override Host to match the upstream target (required for TLS SNI).
+    fwd["host"] = new URL(clerkFapi).host;
 
-        const xff = req.headers["x-forwarded-for"];
-        const clientIp =
-          (Array.isArray(xff) ? xff[0] : xff)?.split(",")[0]?.trim() ||
-          req.socket?.remoteAddress ||
-          "";
-        if (clientIp) {
-          proxyReq.setHeader("X-Forwarded-For", clientIp);
-        }
-      },
-      // Inject CORS headers into every proxied response so that Capacitor
-      // Android WebViews (origin: capacitor://localhost) are not blocked.
-      // The target (frontend-api.clerk.dev) may return its own ACAO header
-      // that doesn't cover capacitor:// origins, so we override it here.
-      proxyRes: (proxyRes, req) => {
-        const origin = (req as { headers: Record<string, string | string[] | undefined> }).headers["origin"] as string | undefined;
-        proxyRes.headers["access-control-allow-origin"] = origin || "*";
-        proxyRes.headers["access-control-allow-credentials"] = "true";
-        proxyRes.headers["access-control-allow-headers"] =
-          "Content-Type, Authorization, Clerk-Backend-API-Version";
-        proxyRes.headers["access-control-allow-methods"] =
-          "GET, POST, PUT, PATCH, DELETE, OPTIONS";
-      },
-    },
-  }) as RequestHandler;
+    // Apply Origin stripping rules (same logic as before).
+    // Non-HTTP origins (capacitor://, https://localhost) are always stripped.
+    // POST /sign_ups keeps an https:// Origin for bot-protection.
+    // Everything else strips Origin.
+    const requestOrigin = req.headers["origin"] as string | undefined;
+    const isHttpOrigin =
+      typeof requestOrigin === "string" &&
+      (requestOrigin.startsWith("https://") || requestOrigin.startsWith("http://"));
+    const isSignUp = req.method === "POST" && (req.path ?? "").includes("/sign_ups");
+    if (!isHttpOrigin || !isSignUp) {
+      delete fwd["origin"];
+    }
+
+    // Required Clerk proxy identification headers.
+    const protocol = (req.headers["x-forwarded-proto"] as string | undefined) || "https";
+    const host = getClerkProxyHost(req) || "";
+    fwd["clerk-proxy-url"] = `${protocol}://${host}${CLERK_PROXY_PATH}`;
+    fwd["clerk-secret-key"] = secretKey;
+
+    // Forward client IP.
+    const xff = req.headers["x-forwarded-for"];
+    const clientIp =
+      (Array.isArray(xff) ? xff[0] : xff)?.split(",")[0]?.trim() ||
+      req.socket?.remoteAddress ||
+      "";
+    if (clientIp) fwd["x-forwarded-for"] = clientIp;
+
+    // Fix Content-Length now that we've read the body into a Buffer.
+    if (bodyBuf !== undefined) {
+      if (bodyBuf.length > 0) {
+        fwd["content-length"] = String(bodyBuf.length);
+      } else {
+        delete fwd["content-length"];
+        bodyBuf = undefined;
+      }
+    }
+
+    req.log.info({ upstreamUrl, method: req.method, fapi: clerkFapi },
+      "[clerk-proxy] forwarding to upstream");
+
+    try {
+      const upstream = await fetch(upstreamUrl, {
+        method: req.method,
+        headers: fwd,
+        body: bodyBuf ?? null,
+      });
+
+      // Log non-OK responses including the body so they appear in deployment logs.
+      if (!upstream.ok) {
+        let errBody = "(unreadable)";
+        try { errBody = await upstream.clone().text(); } catch { /* ignore */ }
+        req.log.warn(
+          { upstreamUrl, status: upstream.status, body: errBody.slice(0, 500) },
+          "[clerk-proxy] upstream returned non-OK",
+        );
+      }
+
+      // Forward status and response headers.
+      res.status(upstream.status);
+      for (const [k, v] of upstream.headers.entries()) {
+        if (!SKIP_RESPONSE.has(k.toLowerCase())) res.setHeader(k, v);
+      }
+
+      // Override CORS so Capacitor WebViews (origin: https://localhost or
+      // capacitor://localhost) are not blocked by Clerk's own ACAO header.
+      const origin = req.headers["origin"] as string | undefined;
+      res.setHeader("access-control-allow-origin", origin || "*");
+      res.setHeader("access-control-allow-credentials", "true");
+      res.setHeader("access-control-allow-headers",
+        "Content-Type, Authorization, Clerk-Backend-API-Version");
+      res.setHeader("access-control-allow-methods",
+        "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+
+      const responseBody = await upstream.arrayBuffer();
+      res.send(Buffer.from(responseBody));
+    } catch (err) {
+      const msg   = err instanceof Error ? err.message : String(err);
+      const code  = (err as NodeJS.ErrnoException).code ?? "unknown";
+      req.log.error(
+        { err, upstreamUrl, clerkFapi, code },
+        `[clerk-proxy] upstream fetch failed: ${code} — ${msg}`,
+      );
+      // Return a structured error body so the debug panel can show details.
+      res.status(502).json({
+        error: "clerk_proxy_failed",
+        code,
+        message: msg,
+        upstream: upstreamUrl,
+      });
+    }
+  };
 }

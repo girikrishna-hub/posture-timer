@@ -1,0 +1,184 @@
+The latest logs show important progress.
+
+The previous error:
+
+400 instance_type_invalid
+
+has disappeared.
+
+This means:
+the proxy is no longer routing to the obviously wrong Clerk instance backend.
+
+HOWEVER:
+
+We now have a NEW failure class:
+
+504 Error occurred while trying to proxy
+
+This means:
+the failure is now inside the proxy forwarding layer itself.
+
+========================================================
+IMPORTANT
+=========
+
+This is NO LONGER:
+a Clerk auth logic issue.
+
+This is now:
+a proxy infrastructure issue.
+
+STOP debugging:
+
+* OAuth
+* appUrlOpen
+* Clerk initialization semantics
+* Google auth
+
+The ONLY priority now is:
+why the proxy forwarding operation fails.
+
+========================================================
+STEP 1 — LOG EXACT UPSTREAM TARGET
+==================================
+
+Before forwarding the request,
+log the EXACT final upstream URL.
+
+Display:
+
+* protocol
+* hostname
+* path
+* query string
+
+Example:
+
+[PROXY] forwarding to:
+https://????/v1/dev_browser?...
+
+This is now critical.
+
+========================================================
+STEP 2 — LOG FULL PROXY ERROR OBJECT
+====================================
+
+Current:
+“Error occurred while trying to proxy”
+
+is insufficient.
+
+Capture FULL error details.
+
+Need:
+
+* error.code
+* error.message
+* stack
+* socket errors
+* TLS errors
+* DNS errors
+* timeout errors
+
+Examples:
+
+* ENOTFOUND
+* ECONNRESET
+* CERT errors
+* socket hang up
+
+========================================================
+STEP 3 — VERIFY WHETHER DECODED DOMAIN IS ACTUALLY THE FAPI HOST
+================================================================
+
+Very important.
+
+Determine whether:
+
+tidy-turtle-21.clerk.accounts.dev
+
+is:
+
+* the actual FAPI API host
+  OR
+* merely the tenant identifier
+
+We may still be constructing the wrong upstream URL.
+
+========================================================
+STEP 4 — MANUAL CONNECTIVITY TEST
+=================================
+
+From the Replit server runtime:
+test direct connectivity to the upstream target.
+
+Verify:
+
+* DNS resolution
+* TLS handshake
+* endpoint accessibility
+* expected response
+
+========================================================
+STEP 5 — VERIFY PATH REWRITE LOGIC
+==================================
+
+Confirm whether the proxy forwards:
+
+/api/__clerk/v1/dev_browser
+
+incorrectly as:
+same path upstream
+
+instead of:
+proper upstream path:
+/v1/dev_browser
+
+Log:
+
+* incoming path
+* rewritten path
+* final forwarded path
+
+========================================================
+STEP 6 — VERIFY HTTPS/TLS COMPATIBILITY
+=======================================
+
+If using:
+*.clerk.accounts.dev
+
+verify:
+
+* TLS handshake succeeds
+* certificates validate
+* proxy middleware supports the host
+
+========================================================
+STEP 7 — DISPLAY RAW FAILURE IN DEBUG PANEL
+===========================================
+
+Replace:
+“Error occurred while trying to proxy”
+
+with:
+FULL RAW ERROR DETAILS.
+
+Need:
+
+* upstream host
+* rewritten path
+* HTTP status
+* proxy exception
+* low-level network error
+
+========================================================
+IMPORTANT
+=========
+
+The previous fix was directionally correct.
+
+The problem has moved forward.
+
+We are now debugging:
+proxy forwarding mechanics,
+NOT Clerk auth semantics.
