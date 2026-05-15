@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --config vite.config.ts --host 0.0.0.0",
+    "dev": "node ../../scripts/kill-port.mjs && vite --config vite.config.ts --host 0.0.0.0",
     "build": "vite build --config vite.config.ts",
     "build:android": "BASE_PATH=/ VITE_API_BASE_URL=https://posture-timer.replit.app vite build --config vite.config.ts",
     "cap:sync": "npx cap sync android",
