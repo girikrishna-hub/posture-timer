@@ -141,6 +141,7 @@ export function NativeDebugPanel() {
             <Row label="IS_NATIVE"  value={String(IS_NATIVE)}            ok={IS_NATIVE} />
             <Row label="API base"   value={apiBase}                      ok={apiBase !== "(not set — will use relative URLs)"} />
             <Row label="Clerk key"  value={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY ? import.meta.env.VITE_CLERK_PUBLISHABLE_KEY.slice(0, 20) + "…" : "(none)"} />
+            <Row label="Proxy URL"  value={(import.meta.env.VITE_CLERK_PROXY_URL as string | undefined) ?? "(none — direct)"} ok={!!(import.meta.env.VITE_CLERK_PROXY_URL as string | undefined)} />
           </div>
 
           {/* Auth state */}

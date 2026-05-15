@@ -91,10 +91,17 @@ const queryClient = new QueryClient({
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-const clerkPubKey = publishableKeyFromHost(
-  window.location.hostname,
-  import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
-);
+// publishableKeyFromHost only uses its fallback for pk_test_ (dev) keys.
+// For pk_live_ keys it always calls buildPublishableKey(`clerk.${hostname}`).
+// On Android the WebView hostname is "localhost", which produces a bogus key
+// for "clerk.localhost" → Clerk can never reach its FAPI → isLoaded stays false.
+// Fix: on native skip the helper entirely and use the env var key directly.
+const clerkPubKey = IS_NATIVE
+  ? (import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined)
+  : publishableKeyFromHost(
+      window.location.hostname,
+      import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
+    );
 
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL as string | undefined;
 
