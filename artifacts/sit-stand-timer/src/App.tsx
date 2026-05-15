@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, lazy, Suspense } from "react";
 import { Switch, Route, Router as WouterRouter, Redirect, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { ClerkProvider, Show, ClerkLoaded, ClerkLoading, useClerk, useAuth } from "@clerk/react";
-import { publishableKeyFromHost } from "@clerk/react/internal";
+import { Show, ClerkLoaded, ClerkLoading, useClerk, useAuth } from "@clerk/react";
+import { publishableKeyFromHost, InternalClerkProvider } from "@clerk/react/internal";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { TimerProvider, useTimer } from "@/contexts/TimerContext";
@@ -103,16 +103,25 @@ const clerkPubKey = IS_NATIVE
       import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
     );
 
-// On web: VITE_CLERK_PROXY_URL routes Clerk FAPI through /api/__clerk (same origin).
-// On native: do NOT use the proxy — when proxyUrl is an absolute URL Clerk
-// constructs the clerk.browser.js URL as proxy/npm/... which then gets forwarded
-// to frontend-api.clerk.dev (the FAPI endpoint, NOT a CDN). The bundle fails to
-// load and isLoaded stays false forever. Without proxyUrl, Clerk loads its bundle
-// from clerk.posture-timer.replit.app directly — the same CDN the web app uses —
-// and FAPI calls go there too. Bearer tokens (nativeAuth.ts) handle API auth.
+// On web: VITE_CLERK_PROXY_URL is a relative path (/api/__clerk) — Clerk's
+// buildScriptHost treats relative proxyUrls as relative bundle paths (good).
+//
+// On native: clerk.posture-timer.replit.app is a Replit-internal hostname
+// that is NOT reachable from an Android device (HTTP 000). We need:
+//   - proxyUrl (absolute) so FAPI calls route through posture-timer.replit.app
+//   - __internal_clerkJSUrl to load the bundle from jsDelivr directly,
+//     bypassing the Clerk URL-construction logic entirely. Without this override,
+//     Clerk builds the bundle URL from the absolute proxyUrl →
+//     frontend-api.clerk.dev/npm/... → 307 redirect, which can fail in WebView.
 const clerkProxyUrl = IS_NATIVE
-  ? undefined
+  ? "https://posture-timer.replit.app/api/__clerk"
   : (import.meta.env.VITE_CLERK_PROXY_URL as string | undefined);
+
+// Clerk-js 6.10.1 — matches the version embedded in @clerk/shared@4.10.2.
+// Using an exact version on jsDelivr avoids any redirect and is always reachable.
+const clerkJsUrl = IS_NATIVE
+  ? "https://cdn.jsdelivr.net/npm/@clerk/clerk-js@6.10.1/dist/clerk.browser.js"
+  : undefined;
 
 function stripBase(path: string): string {
   return basePath && path.startsWith(basePath)
@@ -287,9 +296,10 @@ function ClerkProviderWithRoutes({ children }: { children: React.ReactNode }) {
   const [, setLocation] = useLocation();
 
   return (
-    <ClerkProvider
+    <InternalClerkProvider
       publishableKey={clerkPubKey ?? ""}
       proxyUrl={clerkProxyUrl}
+      __internal_clerkJSUrl={clerkJsUrl}
       appearance={clerkAppearance}
       signInUrl={`${basePath}/sign-in`}
       signUpUrl={`${basePath}/sign-up`}
@@ -297,7 +307,7 @@ function ClerkProviderWithRoutes({ children }: { children: React.ReactNode }) {
       routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
     >
       {children}
-    </ClerkProvider>
+    </InternalClerkProvider>
   );
 }
 
