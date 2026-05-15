@@ -26,8 +26,37 @@ import { createProxyMiddleware } from "http-proxy-middleware";
 import type { RequestHandler, Request, Response, NextFunction } from "express";
 import type { IncomingHttpHeaders } from "http";
 
-const CLERK_FAPI = "https://frontend-api.clerk.dev";
+// The npm bundle CDN is always on the production Clerk FAPI.
+const CLERK_CDN_FAPI = "https://frontend-api.clerk.dev";
 export const CLERK_PROXY_PATH = "/api/__clerk";
+
+/**
+ * Extracts the instance-specific Clerk FAPI base URL from a publishable key.
+ *
+ * Clerk encodes the FAPI domain as base64 inside the key:
+ *   pk_test_BASE64  →  decoded = "tidy-turtle-21.clerk.accounts.dev$"
+ *   pk_live_BASE64  →  decoded = "instance.clerk.accounts.prod$"
+ *
+ * Dev instances MUST be proxied to their own FAPI subdomain
+ * (tidy-turtle-21.clerk.accounts.dev) rather than frontend-api.clerk.dev.
+ * The production FAPI does NOT host /v1/dev_browser and returns
+ * instance_type_invalid for dev-only endpoints, which prevents Clerk.load()
+ * from completing and keeps isLoaded=false permanently.
+ */
+function parseFapiUrl(publishableKey: string): string {
+  const fallback = CLERK_CDN_FAPI;
+  if (!publishableKey) return fallback;
+  const b64 = publishableKey.replace(/^pk_(test|live)_/, "");
+  if (!b64) return fallback;
+  try {
+    const decoded = Buffer.from(b64, "base64").toString("utf8");
+    const domain = decoded.replace(/\$$/, "").trim();
+    if (!domain || !domain.includes(".")) return fallback;
+    return `https://${domain}`;
+  } catch {
+    return fallback;
+  }
+}
 
 /**
  * Returns the first effective public hostname for the given request,
@@ -89,7 +118,9 @@ export function clerkNpmBundleMiddleware(): RequestHandler {
   }
 
   return async (req: Request, res: Response, next: NextFunction) => {
-    const upstreamUrl = `${CLERK_FAPI}/npm${req.path}`;
+    // npm bundles are always fetched from the production CDN FAPI —
+    // they are static JS files, not instance-specific API calls.
+    const upstreamUrl = `${CLERK_CDN_FAPI}/npm${req.path}`;
 
     try {
       const upstream = await fetch(upstreamUrl, {
@@ -130,8 +161,19 @@ export function clerkProxyMiddleware(): RequestHandler {
     return (_req, _res, next) => next();
   }
 
+  // Derive the correct FAPI target from the publishable key.
+  // CRITICAL: for dev instances (pk_test_*) the FAPI is instance-specific
+  // (e.g. tidy-turtle-21.clerk.accounts.dev), NOT frontend-api.clerk.dev.
+  // Proxying to the wrong FAPI causes /v1/dev_browser → 400 instance_type_invalid,
+  // which prevents Clerk.load() from completing → isLoaded stays false permanently.
+  const publishableKey =
+    process.env.CLERK_PUBLISHABLE_KEY ??
+    process.env.VITE_CLERK_PUBLISHABLE_KEY ??
+    "";
+  const clerkFapi = parseFapiUrl(publishableKey);
+
   return createProxyMiddleware({
-    target: CLERK_FAPI,
+    target: clerkFapi,
     changeOrigin: true,
     pathRewrite: (path: string) =>
       path.replace(new RegExp(`^${CLERK_PROXY_PATH}`), ""),

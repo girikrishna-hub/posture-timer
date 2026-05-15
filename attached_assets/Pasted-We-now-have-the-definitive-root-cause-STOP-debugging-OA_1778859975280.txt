@@ -1,0 +1,140 @@
+We now have the definitive root cause.
+
+STOP debugging:
+
+* OAuth redirects
+* appUrlOpen
+* ticket exchange
+* Browser.close timing
+* deep link handling
+
+Those are downstream.
+
+========================================================
+ROOT CAUSE
+==========
+
+The failing request is:
+
+POST /api/__clerk/v1/dev_browser
+
+Response:
+400 instance_type_invalid
+
+"This request isn't valid for this instance type."
+
+This means:
+Clerk initialization is failing BEFORE OAuth begins.
+
+========================================================
+DIAGNOSIS
+=========
+
+We are currently using:
+a Clerk Development Instance (pk_test_*)
+
+But the Capacitor Android WebView is triggering:
+dev_browser initialization behavior.
+
+Clerk rejects this flow for the current instance/runtime combination.
+
+This is NOT:
+
+* a Google auth issue
+* a redirect issue
+* a deep link issue
+
+This is:
+a Clerk environment/runtime incompatibility issue.
+
+========================================================
+PRIMARY OBJECTIVE
+=================
+
+Eliminate Clerk dev_browser initialization inside the Android Capacitor runtime.
+
+========================================================
+STEP 1 — IDENTIFY WHY dev_browser IS BEING TRIGGERED
+====================================================
+
+Determine:
+
+* where Clerk decides to call /v1/dev_browser
+* whether this is triggered by development mode
+* whether this is triggered by the publishable key type
+* whether this is triggered by localhost detection
+* whether Capacitor WebView is being detected as a dev browser
+
+========================================================
+STEP 2 — DISABLE dev_browser FLOW FOR NATIVE RUNTIME
+====================================================
+
+For Android Capacitor builds:
+prevent Clerk from initializing dev_browser flow.
+
+Possible areas to investigate:
+
+* Clerk environment configuration
+* publishable key type
+* ClerkProvider options
+* development mode flags
+* isSatellite
+* proxyUrl behavior
+* clerkJSVariant
+* standardBrowser mode
+* Capacitor runtime detection
+
+========================================================
+STEP 3 — VERIFY Clerk.load() WITHOUT dev_browser
+================================================
+
+Success criteria:
+
+window.Clerk set ✓
+ui.browser.js loaded ✓
+FAPI init ✓
+isLoaded=true ✓
+
+WITHOUT:
+any request to:
+/v1/dev_browser
+
+========================================================
+STEP 4 — VERIFY INSTANCE TYPE COMPATIBILITY
+===========================================
+
+Determine whether:
+the current Clerk Development Instance fundamentally does not support:
+Capacitor/native WebView auth flows.
+
+If true:
+document this clearly.
+
+========================================================
+STEP 5 — RECOMMENDED FIX PATH
+=============================
+
+If required:
+migrate from Clerk Development Instance
+to a Production Instance.
+
+Explain:
+
+* exact migration steps
+* required environment variable changes
+* publishable key updates
+* proxy implications
+
+========================================================
+IMPORTANT
+=========
+
+Do NOT continue patching around this issue.
+
+The problem is no longer:
+OAuth orchestration.
+
+The problem is:
+Clerk environment/runtime incompatibility.
+
+We must solve the root issue cleanly.
