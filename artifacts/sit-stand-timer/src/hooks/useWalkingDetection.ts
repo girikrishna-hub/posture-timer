@@ -13,6 +13,8 @@ interface UseWalkingDetectionOptions {
   currentMode: TimerMode;
   switchMode: (mode: "sitting" | "standing" | "resting" | "walking") => Promise<void>;
   endCurrentSession: () => Promise<void>;
+  /** Returns true if the user recently pressed a mode button manually — auto-detection should back off. */
+  isManuallyLocked: () => boolean;
 }
 
 function deriveSpeed(
@@ -40,6 +42,7 @@ export function useWalkingDetection({
   currentMode,
   switchMode,
   endCurrentSession,
+  isManuallyLocked,
 }: UseWalkingDetectionOptions): GpsStatus {
   const [gpsStatus, setGpsStatus] = useState<GpsStatus>("idle");
 
@@ -50,10 +53,12 @@ export function useWalkingDetection({
   const currentModeRef = useRef(currentMode);
   const switchModeRef = useRef(switchMode);
   const endCurrentSessionRef = useRef(endCurrentSession);
+  const isManuallyLockedRef = useRef(isManuallyLocked);
 
   useEffect(() => { currentModeRef.current = currentMode; }, [currentMode]);
   useEffect(() => { switchModeRef.current = switchMode; }, [switchMode]);
   useEffect(() => { endCurrentSessionRef.current = endCurrentSession; }, [endCurrentSession]);
+  useEffect(() => { isManuallyLockedRef.current = isManuallyLocked; }, [isManuallyLocked]);
 
   const handlePosition = useCallback((position: GeolocationPosition) => {
     let speed = position.coords.speed;
@@ -78,7 +83,11 @@ export function useWalkingDetection({
           walkingStartRef.current = now;
         } else if (now - walkingStartRef.current >= CONFIRM_DURATION_MS) {
           walkingStartRef.current = null;
-          if (mode === "idle" || mode === "sitting" || mode === "standing") {
+          // Don't override a mode the user just set manually.
+          if (
+            (mode === "idle" || mode === "sitting" || mode === "standing") &&
+            !isManuallyLockedRef.current()
+          ) {
             void switchModeRef.current("walking");
           }
         }

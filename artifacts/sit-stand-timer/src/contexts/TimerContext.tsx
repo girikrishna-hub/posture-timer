@@ -505,6 +505,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     currentMode: mode,
     switchMode,
     endCurrentSession,
+    isManuallyLocked: isInLockWindow,
   });
 
   // Main 1-second tick — pure increment only (no side-effects inside updater)
