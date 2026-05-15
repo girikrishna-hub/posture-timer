@@ -144,13 +144,34 @@ export function clerkProxyMiddleware(): RequestHandler {
         proxyReq.setHeader("Clerk-Proxy-Url", proxyUrl);
         proxyReq.setHeader("Clerk-Secret-Key", secretKey);
 
-        // Always strip Origin before forwarding to Clerk's FAPI.
-        // This is a server-to-server proxy authenticated via Clerk-Proxy-Url +
-        // Clerk-Secret-Key, so Origin is irrelevant for Clerk's auth check.
-        // Forwarding a non-Clerk Origin (capacitor://localhost,
-        // https://posture-timer.replit.app, etc.) causes Clerk to return
-        // origin_invalid 400 and the FAPI init fails.
-        proxyReq.removeHeader("Origin");
+        // Clerk's FAPI behaves differently depending on the request method:
+        //
+        // GET /v1/client, GET /v1/environment (FAPI init):
+        //   Clerk validates Origin as a Clerk-owned domain. Any other Origin
+        //   (capacitor://localhost, https://posture-timer.replit.app, etc.)
+        //   causes origin_invalid 400. Strip it so init always succeeds.
+        //
+        // POST /v1/client/sign_ups (sign-up):
+        //   Clerk's bot-protection validates the request source using Origin.
+        //   Without Origin the check fails → "failed security validations" 400.
+        //   We must keep https:// origins so Clerk can recognise our app domain.
+        //
+        // POST /v1/client/sign_ins (sign-in) works either way — 200 with or
+        // without Origin — so we leave it as-is (keep https://).
+        //
+        // Non-HTTP origins (capacitor://, file://) are always stripped because
+        // Clerk would reject them as origin_invalid.
+        const requestOrigin = proxyReq.getHeader("Origin") as string | undefined;
+        const isReadMethod = req.method === "GET" || req.method === "HEAD";
+        const isHttpOrigin =
+          typeof requestOrigin === "string" &&
+          (requestOrigin.startsWith("https://") || requestOrigin.startsWith("http://"));
+
+        if (!isHttpOrigin || isReadMethod) {
+          // Strip: non-HTTP origin (always unsafe) OR read request (FAPI init).
+          proxyReq.removeHeader("Origin");
+        }
+        // else: keep https:// Origin for POST/PUT/PATCH — needed for bot protection.
 
         const xff = req.headers["x-forwarded-for"];
         const clientIp =
