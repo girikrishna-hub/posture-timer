@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, lazy, Suspense } from "react";
 import { Switch, Route, Router as WouterRouter, Redirect, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { Show, ClerkLoaded, ClerkLoading, useClerk, useAuth, SignIn } from "@clerk/react";
+import { Show, ClerkLoaded, ClerkLoading, useClerk, useAuth } from "@clerk/react";
 import { publishableKeyFromHost, InternalClerkProvider } from "@clerk/react/internal";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -26,6 +26,7 @@ const NotFound          = lazy(() => import("@/pages/not-found"));
 import { BottomNav } from "@/components/BottomNav";
 import { UpdateBanner } from "@/components/UpdateBanner";
 import { NativeDebugPanel } from "@/components/NativeDebugPanel";
+import { NativeSignIn } from "@/components/NativeSignIn";
 
 // Side-effect import: registers the Bearer-token getter and API base URL for
 // native Capacitor builds at module load time (before any React renders).
@@ -217,12 +218,7 @@ function NativeAppShell() {
   if (!isSignedIn) {
     return (
       <>
-        <div className="min-h-screen bg-background flex items-center justify-center p-4">
-          <SignIn
-            routing="hash"
-            fallbackRedirectUrl="/"
-          />
-        </div>
+        <NativeSignIn />
         <NativeDebugPanel />
       </>
     );
