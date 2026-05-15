@@ -20,6 +20,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@clerk/react";
 import { IS_NATIVE } from "@/lib/nativeAuth";
+import {
+  NATIVE_CLERK_PUBLISHABLE_KEY,
+  NATIVE_CLERK_PROXY_URL,
+} from "@/lib/nativeConfig";
 import { Capacitor } from "@capacitor/core";
 
 type TokenStatus = "idle" | "testing" | "ok" | "null" | "error";
@@ -236,10 +240,8 @@ export function NativeDebugPanel() {
             <Row label="Platform"   value={platform}    ok={IS_NATIVE} />
             <Row label="IS_NATIVE"  value={String(IS_NATIVE)} ok={IS_NATIVE} />
             <Row label="API base"   value={apiBase}     ok={apiBase !== "(not set)"} />
-            <Row label="Clerk key"  value={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
-              ? import.meta.env.VITE_CLERK_PUBLISHABLE_KEY.slice(0, 20) + "…" : "(none)"} />
-            <Row label="Proxy URL"  value={(import.meta.env.VITE_CLERK_PROXY_URL as string | undefined) ?? "(none — direct)"}
-              ok={!!(import.meta.env.VITE_CLERK_PROXY_URL as string | undefined)} />
+            <Row label="Clerk key"  value={NATIVE_CLERK_PUBLISHABLE_KEY.slice(0, 20) + "…"} ok />
+            <Row label="Proxy URL"  value={NATIVE_CLERK_PROXY_URL} ok />
             <Row label="Bundle URL" value={IS_NATIVE ? "jsdelivr/clerk-js@6.10.1" : "(default)"} ok={IS_NATIVE} />
           </div>
 

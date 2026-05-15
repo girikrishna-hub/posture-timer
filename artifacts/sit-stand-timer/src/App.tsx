@@ -31,6 +31,11 @@ import { NativeSignIn } from "@/components/NativeSignIn";
 // Side-effect import: registers the Bearer-token getter and API base URL for
 // native Capacitor builds at module load time (before any React renders).
 import { IS_NATIVE, bindClerkGetToken } from "@/lib/nativeAuth";
+import {
+  NATIVE_CLERK_PUBLISHABLE_KEY,
+  NATIVE_CLERK_PROXY_URL,
+  NATIVE_CLERK_JS_URL,
+} from "@/lib/nativeConfig";
 
 /**
  * Wires Clerk's getToken into the customFetch auth-token getter for native
@@ -96,33 +101,28 @@ const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 // For pk_live_ keys it always calls buildPublishableKey(`clerk.${hostname}`).
 // On Android the WebView hostname is "localhost", which produces a bogus key
 // for "clerk.localhost" → Clerk can never reach its FAPI → isLoaded stays false.
-// Fix: on native skip the helper entirely and use the env var key directly.
+//
+// On native we use NATIVE_CLERK_PUBLISHABLE_KEY (nativeConfig.ts) which
+// prefers VITE_CLERK_PUBLISHABLE_KEY at build time but falls back to the
+// hardcoded pk_test_ key so local `build:android` runs always produce a
+// working APK even without the env var set on the developer's machine.
 const clerkPubKey = IS_NATIVE
-  ? (import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined)
+  ? NATIVE_CLERK_PUBLISHABLE_KEY
   : publishableKeyFromHost(
       window.location.hostname,
       import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
     );
 
-// On web: VITE_CLERK_PROXY_URL is a relative path (/api/__clerk) — Clerk's
-// buildScriptHost treats relative proxyUrls as relative bundle paths (good).
-//
-// On native: clerk.posture-timer.replit.app is a Replit-internal hostname
-// that is NOT reachable from an Android device (HTTP 000). We need:
-//   - proxyUrl (absolute) so FAPI calls route through posture-timer.replit.app
-//   - __internal_clerkJSUrl to load the bundle from jsDelivr directly,
-//     bypassing the Clerk URL-construction logic entirely. Without this override,
-//     Clerk builds the bundle URL from the absolute proxyUrl →
-//     frontend-api.clerk.dev/npm/... → 307 redirect, which can fail in WebView.
+// On web: VITE_CLERK_PROXY_URL is a relative path (/api/__clerk).
+// On native: hardcoded absolute URL from nativeConfig — clerk.*.replit.app
+// is a Replit-internal hostname unreachable from Android devices.
 const clerkProxyUrl = IS_NATIVE
-  ? "https://posture-timer.replit.app/api/__clerk"
+  ? NATIVE_CLERK_PROXY_URL
   : (import.meta.env.VITE_CLERK_PROXY_URL as string | undefined);
 
-// Clerk-js 6.10.1 — matches the version embedded in @clerk/shared@4.10.2.
-// Using an exact version on jsDelivr avoids any redirect and is always reachable.
-const clerkJsUrl = IS_NATIVE
-  ? "https://cdn.jsdelivr.net/npm/@clerk/clerk-js@6.10.1/dist/clerk.browser.js"
-  : undefined;
+// On native: load clerk-js from jsDelivr (exact version) — avoids the 307
+// redirect chains from Clerk's own CDN that WebView can't follow.
+const clerkJsUrl = IS_NATIVE ? NATIVE_CLERK_JS_URL : undefined;
 
 function stripBase(path: string): string {
   return basePath && path.startsWith(basePath)
