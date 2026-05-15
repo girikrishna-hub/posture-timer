@@ -1,0 +1,29 @@
+giri@Giridhars-MacBook-Air sit-stand-timer % bash build-android.sh     
+
+╔══════════════════════════════════════════════════════╗
+║         Sit+Stand Timer — Android web build          ║
+╚══════════════════════════════════════════════════════╝
+
+vite v7.3.3 building client environment for production...
+src/components/ui/tooltip.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+✓ 31 modules transformed.
+✗ Build failed in 304ms
+error during build:
+[vite-plugin-pwa:build] [plugin vite-plugin-pwa:build] There was an error during the build:
+  [vite]: Rollup failed to resolve import "@capacitor/browser" from "/Users/giri/posture-timer/artifacts/sit-stand-timer/src/components/NativeSignIn.tsx".
+This is most likely unintended because it can break your application at runtime.
+If you do want to externalize this module explicitly add it to
+`build.rollupOptions.external`
+Additionally, handling the error in the 'buildEnd' hook caused the following error:
+  [vite]: Rollup failed to resolve import "@capacitor/browser" from "/Users/giri/posture-timer/artifacts/sit-stand-timer/src/components/NativeSignIn.tsx".
+This is most likely unintended because it can break your application at runtime.
+If you do want to externalize this module explicitly add it to
+`build.rollupOptions.external`
+    at getRollupError (file:///Users/giri/posture-timer/node_modules/.pnpm/rollup@4.60.3/node_modules/rollup/dist/es/shared/parseAst.js:406:41)
+    at file:///Users/giri/posture-timer/node_modules/.pnpm/rollup@4.60.3/node_modules/rollup/dist/es/shared/node-entry.js:23883:39
+    at async catchUnfinishedHookActions (file:///Users/giri/posture-timer/node_modules/.pnpm/rollup@4.60.3/node_modules/rollup/dist/es/shared/node-entry.js:23341:16)
+    at async rollupInternal (file:///Users/giri/posture-timer/node_modules/.pnpm/rollup@4.60.3/node_modules/rollup/dist/es/shared/node-entry.js:23866:5)
+    at async buildEnvironment (file:///Users/giri/posture-timer/node_modules/.pnpm/vite@7.3.3_@types+node@25.7.0_jiti@2.7.0_lightningcss@1.32.0_terser@5.47.1_tsx@4.21.0_yaml@2.9.0/node_modules/vite/dist/node/chunks/config.js:33561:12)
+    at async Object.build (file:///Users/giri/posture-timer/node_modules/.pnpm/vite@7.3.3_@types+node@25.7.0_jiti@2.7.0_lightningcss@1.32.0_terser@5.47.1_tsx@4.21.0_yaml@2.9.0/node_modules/vite/dist/node/chunks/config.js:33920:19)
+    at async Object.buildApp (file:///Users/giri/posture-timer/node_modules/.pnpm/vite@7.3.3_@types+node@25.7.0_jiti@2.7.0_lightningcss@1.32.0_terser@5.47.1_tsx@4.21.0_yaml@2.9.0/node_modules/vite/dist/node/chunks/config.js:33917:153)
+    at async CAC.<anonymous> (file:///Users/giri/posture-timer/node_modules/.pnpm/vite@7.3.3_@types+node@25.7.0_jiti@2.7.0_lightningcss@1.32.0_terser@5.47.1_tsx@4.21.0_yaml@2.9.0/node_modules/vite/dist/node/cli.js:629:3)
