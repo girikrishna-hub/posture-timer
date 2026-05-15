@@ -6,6 +6,16 @@
 
 set -e
 
+# Cross-platform sed -i: BSD sed (macOS) requires an explicit backup extension
+# (even an empty one), while GNU sed (Linux) does not accept one.
+sedi() {
+  if [ "$(uname)" = "Darwin" ]; then
+    sed -i '' "$@"
+  else
+    sed -i "$@"
+  fi
+}
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ANDROID_JAVA="$SCRIPT_DIR/android/app/src/main/java/com/sitstand/timer"
 SRC="$SCRIPT_DIR/android-src"
@@ -97,7 +107,18 @@ insert_after '<manifest' "$PERMISSIONS" "$MANIFEST"
 
 # Insert components before </application>
 if ! grep -q "AlarmFullScreenActivity" "$MANIFEST"; then
-  sed -i "s|</application>|${COMPONENTS}\n    </application>|" "$MANIFEST"
+  # Write insertion text to a temp file — embedding multi-line variables
+  # directly in a sed command breaks on macOS BSD sed and is fragile everywhere.
+  _tmpcmp=$(mktemp)
+  printf '%s\n    </application>\n' "$COMPONENTS" > "$_tmpcmp"
+  awk -v insfile="$_tmpcmp" '
+    /^[[:space:]]*<\/application>/ && !done {
+      while ((getline line < insfile) > 0) print line
+      done=1; next
+    }
+    { print }
+  ' "$MANIFEST" > "$MANIFEST.tmp" && mv "$MANIFEST.tmp" "$MANIFEST"
+  rm -f "$_tmpcmp"
   echo "  ✓ Activity + Receiver entries added"
 else
   echo "  ✓ Activity + Receiver already present"
@@ -126,13 +147,13 @@ else
       echo '<?xml version="1.0" encoding="utf-8"?><resources></resources>' > "$COLORS"
     fi
     if ! grep -q "sitstand_background" "$COLORS"; then
-      sed -i 's|</resources>|    <color name="sitstand_background">#f9f5f0</color>\n</resources>|' "$COLORS"
+      sedi 's|</resources>|    <color name="sitstand_background">#f9f5f0</color>\n</resources>|' "$COLORS"
       echo "  ✓ Added sitstand_background color (#f9f5f0)"
     fi
 
     # Inject windowBackground into AppTheme.NoActionBar
     if grep -q 'AppTheme.NoActionBar' "$STYLES"; then
-      sed -i 's|\(name="AppTheme.NoActionBar"[^>]*>\)|\1\n        <item name="android:windowBackground">@color/sitstand_background</item>|' "$STYLES"
+      sedi 's|\(name="AppTheme.NoActionBar"[^>]*>\)|\1\n        <item name="android:windowBackground">@color/sitstand_background</item>|' "$STYLES"
       echo "  ✓ windowBackground set to #f9f5f0 in AppTheme.NoActionBar"
     else
       echo "  ⚠  AppTheme.NoActionBar not found — add manually:"
@@ -154,11 +175,11 @@ else
     echo "  ✓ Plugin already registered"
   else
     # Replace the class body opening line with registration added
-    sed -i 's/class MainActivity : BridgeActivity() {/class MainActivity : BridgeActivity() {\n    override fun onCreate(savedInstanceState: Bundle?) {\n        registerPlugin(AlarmManagerPlugin::class.java)\n        super.onCreate(savedInstanceState)\n    }/' "$MAIN"
+    sedi 's/class MainActivity : BridgeActivity() {/class MainActivity : BridgeActivity() {\n    override fun onCreate(savedInstanceState: Bundle?) {\n        registerPlugin(AlarmManagerPlugin::class.java)\n        super.onCreate(savedInstanceState)\n    }/' "$MAIN"
 
     # Add import if missing
     if ! grep -q "import android.os.Bundle" "$MAIN"; then
-      sed -i '1s/^/import android.os.Bundle\n/' "$MAIN"
+      sedi '1s/^/import android.os.Bundle\n/' "$MAIN"
     fi
 
     echo "  ✓ Plugin registered"
@@ -199,7 +220,7 @@ else
     echo '<?xml version="1.0" encoding="utf-8"?><resources></resources>' > "$COLORS"
   fi
   if ! grep -q "ic_launcher_background" "$COLORS"; then
-    sed -i 's|</resources>|    <color name="ic_launcher_background">#FF3C00</color>\n</resources>|' "$COLORS"
+    sedi 's|</resources>|    <color name="ic_launcher_background">#FF3C00</color>\n</resources>|' "$COLORS"
     echo "  ✓ ic_launcher_background color added (#FF3C00)"
   else
     echo "  ✓ ic_launcher_background already present"
