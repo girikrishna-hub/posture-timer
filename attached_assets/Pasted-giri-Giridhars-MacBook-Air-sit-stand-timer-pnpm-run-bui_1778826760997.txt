@@ -1,0 +1,25 @@
+giri@Giridhars-MacBook-Air sit-stand-timer % pnpm run build:android
+Scope: all 9 workspace projects
+../..                                    | Progress: resolved 1, reused 0, downl../..                                    | Progress: resolved 19, reused 15, dow../..                                    | Progress: resolved 62, reused 60, dow../..                                    | Progress: resolved 72, reused 71, dow../..                                    | Progress: resolved 92, reused 91, dow../..                                    | Progress: resolved 100, reused 100, d../..                                    | Progress: resolved 104, reused 103, d../..                                    | Progress: resolved 105, reused 105, d../..                                    | Progress: resolved 108, reused 108, d../..                                    | Progress: resolved 110, reused 109, d../..                                    | Progress: resolved 111, reused 111, d../..                                    | Progress: resolved 112, reused 112, d../..                                    | Progress: resolved 204, reused 201, d../..                                    | Progress: resolved 276, reused 270, d../..                                    | Progress: resolved 336, reused 332, d../..                                    | Progress: resolved 454, reused 450, d../..                                    | Progress: resolved 558, reused 554, d../..                                    | Progress: resolved 629, reused 624, d../..                                    | Progress: resolved 704, reused 697, d../..                                    | Progress: resolved 748, reused 741, d../..                                    | Progress: resolved 809, reused 802, d../..                                    | Progress: resolved 896, reused 889, d../..                                    | Progress: resolved 937, reused 930, d../..                                    | Progress: resolved 963, reused 956, d../..                                    | Progress: resolved 964, reused 957, d../..                                    | Progress: resolved 970, reused 963, d[WARN] 4 deprecated subdependencies found: glob@10.5.0, glob@11.1.0, source-map@0.8.0-beta.0, whatwg-encoding@3.1.1
+../..                                    | Progress: resolved 970, reused 963, d../..                                    |   +1 +
+../..                                    | Progress: resolved 970, reused 963, d../..                                    | Progress: resolved 970, reused 963, d../..                                    | Progress: resolved 970, reused 963, downloaded 1, added 1, done
+../.. preinstall$ sh -c 'rm -f package-lock.json yarn.lock; if [ -n "$REPL_ID…
+└─ Done in 39ms
+[WARN] Issues with peer dependencies found. Run "pnpm peers check" to list them.
+[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: @clerk/shared@3.47.5, @clerk/shared@4.10.2, esbuild@0.27.3
+
+Run "pnpm approve-builds" to pick which dependencies should be allowed to run scripts.
+[ERROR] Command failed with exit code 1: /Users/giri/.nvm/versions/node/v22.22.3/bin/node /Users/giri/.cache/node/corepack/v1/pnpm/11.1.2/bin/pnpm.mjs install
+
+pnpm: Command failed with exit code 1: /Users/giri/.nvm/versions/node/v22.22.3/bin/node /Users/giri/.cache/node/corepack/v1/pnpm/11.1.2/bin/pnpm.mjs install
+    at getFinalError (file:///Users/giri/.cache/node/corepack/v1/pnpm/11.1.2/dist/pnpm.mjs:28776:14)
+    at makeError (file:///Users/giri/.cache/node/corepack/v1/pnpm/11.1.2/dist/pnpm.mjs:31083:21)
+    at getSyncResult (file:///Users/giri/.cache/node/corepack/v1/pnpm/11.1.2/dist/pnpm.mjs:32927:10)
+    at spawnSubprocessSync (file:///Users/giri/.cache/node/corepack/v1/pnpm/11.1.2/dist/pnpm.mjs:32887:14)
+    at execaCoreSync (file:///Users/giri/.cache/node/corepack/v1/pnpm/11.1.2/dist/pnpm.mjs:32817:23)
+    at callBoundExeca (file:///Users/giri/.cache/node/corepack/v1/pnpm/11.1.2/dist/pnpm.mjs:35345:23)
+    at boundExeca (file:///Users/giri/.cache/node/corepack/v1/pnpm/11.1.2/dist/pnpm.mjs:35322:49)
+    at sync (file:///Users/giri/.cache/node/corepack/v1/pnpm/11.1.2/dist/pnpm.mjs:35481:10)
+    at runPnpmCli (file:///Users/giri/.cache/node/corepack/v1/pnpm/11.1.2/dist/pnpm.mjs:211258:5)
+    at runDepsStatusCheck (file:///Users/giri/.cache/node/corepack/v1/pnpm/11.1.2/dist/pnpm.mjs:212964:7)
+giri@Giridhars-MacBook-Air sit-stand-timer %
