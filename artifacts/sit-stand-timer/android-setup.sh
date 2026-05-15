@@ -43,15 +43,25 @@ insert_after() {
   local text="$2"
   local file="$3"
   # Only insert if the marker text isn't already there
-  if grep -qF "$(echo "$text" | head -1)" "$file"; then
+  if grep -qF "$(printf '%s' "$text" | head -1)" "$file"; then
     echo "  (already present — skipping)"
     return
   fi
-  # Use awk to insert after the first matching line
-  awk -v pat="$pattern" -v ins="$text" '
-    !done && $0 ~ pat { print; print ins; done=1; next }
+  # Write insertion text to a temp file so awk can read it line-by-line.
+  # Passing multi-line strings via -v breaks BSD awk (macOS); getline works everywhere.
+  local tmpins
+  tmpins=$(mktemp)
+  printf '%s\n' "$text" > "$tmpins"
+  awk -v pat="$pattern" -v insfile="$tmpins" '
+    !done && $0 ~ pat {
+      print
+      while ((getline line < insfile) > 0) print line
+      done=1
+      next
+    }
     { print }
   ' "$file" > "$file.tmp" && mv "$file.tmp" "$file"
+  rm -f "$tmpins"
 }
 
 PERMISSIONS='    <uses-permission android:name="android.permission.WAKE_LOCK" />
