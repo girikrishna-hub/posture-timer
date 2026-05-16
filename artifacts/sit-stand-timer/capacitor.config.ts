@@ -5,7 +5,11 @@ const config: CapacitorConfig = {
   appName: "Sit+Stand Timer",
   webDir: "dist/public",
   server: {
-    androidScheme: "https",
+    // Load the app from the production URL so Clerk sees the correct origin
+    // (https://localhost is not an allowed Clerk origin in development mode).
+    // The app requires internet regardless, so there is no offline regression.
+    url: "https://posture-timer.replit.app",
+    cleartext: false,
   },
   plugins: {
     // Google Sign-In (native account picker).
