@@ -1,0 +1,184 @@
+                                                                                          	at android.app.ApplicationPackageManager.getApplicationIcon(ApplicationPackageManager.java:2052)
+                                                                                                    	at pbz.a(PG:19)
+                                                                                                    	at pcg.l(PG:30)
+                                                                                                    	at rv.kV(PG:794)
+                                                                                                    	at pbj.k(PG:36)
+                                                                                                    	at pba.f(PG:17)
+                                                                                                    	at pba.i(PG:31)
+                                                                                                    	at pce.i(PG:1)
+                                                                                                    	at pch.d(PG:11)
+                                                                                                    	at pch.e(PG:13)
+                                                                                                    	at ooq.apply(PG:1769)
+                                                                                                    	at bmsn.d(PG:3)
+                                                                                                    	at bmso.run(PG:47)
+                                                                                                    	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1154)
+                                                                                                    	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:652)
+                                                                                                    	at vpo.run(PG:638)
+                                                                                                    	at java.lang.Thread.run(Thread.java:1564)
+2026-05-16 21:20:32.887 18153-18153 nativeloader            com.sitstand.timer                   D  Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
+2026-05-16 21:20:32.891 18153-18153 ActivityThread          com.sitstand.timer                   D  setConscryptValidator
+2026-05-16 21:20:32.891 18153-18153 ActivityThread          com.sitstand.timer                   D  setConscryptValidator - put
+---------------------------- PROCESS STARTED (18153) for package com.sitstand.timer ----------------------------
+2026-05-16 21:20:33.054 18153-18153 nativeloader            com.sitstand.timer                   D  Configuring clns-9 for other apk /data/app/~~SazEB1IoOVKa4MMKrjC2cw==/com.sitstand.timer-IpPPefxsWo8qsHEba4dEGw==/base.apk. target_sdk_version=36, uses_libraries=, library_path=/data/app/~~SazEB1IoOVKa4MMKrjC2cw==/com.sitstand.timer-IpPPefxsWo8qsHEba4dEGw==/lib/arm64, permitted_path=/data:/mnt/expand:/data/user/0/com.sitstand.timer
+2026-05-16 21:20:33.059 18153-18153 GraphicsEnvironment     com.sitstand.timer                   V  Currently set values for:
+2026-05-16 21:20:33.059 18153-18153 GraphicsEnvironment     com.sitstand.timer                   V    angle_gl_driver_selection_pkgs=[]
+2026-05-16 21:20:33.059 18153-18153 GraphicsEnvironment     com.sitstand.timer                   V    angle_gl_driver_selection_values=[]
+2026-05-16 21:20:33.059 18153-18153 GraphicsEnvironment     com.sitstand.timer                   V  com.sitstand.timer is not listed in per-application setting
+2026-05-16 21:20:33.059 18153-18153 GraphicsEnvironment     com.sitstand.timer                   V  ANGLE allowlist from config: 
+2026-05-16 21:20:33.059 18153-18153 GraphicsEnvironment     com.sitstand.timer                   V  com.sitstand.timer is not listed in ANGLE allowlist or settings, returning default
+2026-05-16 21:20:33.059 18153-18153 GraphicsEnvironment     com.sitstand.timer                   V  App is not on the allowlist for updatable production driver.
+2026-05-16 21:20:33.082 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.083 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.084 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.085 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.085 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.086 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.087 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.087 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.088 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.088 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.089 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.089 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.090 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.090 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.091 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.092 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.092 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.093 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.093 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.094 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.094 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.095 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.095 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.096 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.097 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.097 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.098 18153-18197 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.098 18153-18197 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.099 18153-18197 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.099 18153-18197 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.100 18153-18197 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.101 18153-18197 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.101 18153-18197 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.102 18153-18197 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.102 18153-18197 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.103 18153-18197 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.103 18153-18197 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.104 18153-18197 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.105 18153-18197 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.105 18153-18197 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.106 18153-18197 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.107 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.107 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.108 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.108 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.109 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.110 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.110 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.111 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.111 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.112 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.113 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.113 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.114 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.115 18153-18195 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-16 21:20:33.117 18153-18153 Process                 com.sitstand.timer                   I  Sending signal. PID: 18153 SIG: 9
+---------------------------- PROCESS ENDED (18153) for package com.sitstand.timer ----------------------------
+---------------------------- PROCESS STARTED (18298) for package com.sitstand.timer ----------------------------
+2026-05-16 21:20:33.439 18298-18298 .sitstand.timer         com.sitstand.timer                   I  Using CollectorTypeCMC GC.
+2026-05-16 21:20:33.443 18298-18298 nativeloader            com.sitstand.timer                   D  Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
+2026-05-16 21:20:33.446 18298-18298 ActivityThread          com.sitstand.timer                   D  setConscryptValidator
+2026-05-16 21:20:33.446 18298-18298 ActivityThread          com.sitstand.timer                   D  setConscryptValidator - put
+---------------------------- PROCESS ENDED (18298) for package com.sitstand.timer ----------------------------
+2026-05-16 21:20:33.517 18298-18298 nativeloader            com.sitstand.timer                   D  Configuring clns-9 for other apk /data/app/~~SazEB1IoOVKa4MMKrjC2cw==/com.sitstand.timer-IpPPefxsWo8qsHEba4dEGw==/base.apk. target_sdk_version=36, uses_libraries=, library_path=/data/app/~~SazEB1IoOVKa4MMKrjC2cw==/com.sitstand.timer-IpPPefxsWo8qsHEba4dEGw==/lib/arm64, permitted_path=/data:/mnt/expand:/data/user/0/com.sitstand.timer
+2026-05-16 21:20:33.521 18298-18298 GraphicsEnvironment     com.sitstand.timer                   V  Currently set values for:
+2026-05-16 21:20:33.521 18298-18298 GraphicsEnvironment     com.sitstand.timer                   V    angle_gl_driver_selection_pkgs=[]
+2026-05-16 21:20:33.521 18298-18298 GraphicsEnvironment     com.sitstand.timer                   V    angle_gl_driver_selection_values=[]
+2026-05-16 21:20:33.521 18298-18298 GraphicsEnvironment     com.sitstand.timer                   V  com.sitstand.timer is not listed in per-application setting
+2026-05-16 21:20:33.521 18298-18298 GraphicsEnvironment     com.sitstand.timer                   V  ANGLE allowlist from config: 
+2026-05-16 21:20:33.521 18298-18298 GraphicsEnvironment     com.sitstand.timer                   V  com.sitstand.timer is not listed in ANGLE allowlist or settings, returning default
+2026-05-16 21:20:33.521 18298-18298 GraphicsEnvironment     com.sitstand.timer                   V  App is not on the allowlist for updatable production driver.
+---------------------------- PROCESS STARTED (18329) for package com.sitstand.timer ----------------------------
+2026-05-16 21:20:33.536 18298-18298 AndroidRuntime          com.sitstand.timer                   D  Shutting down VM
+2026-05-16 21:20:33.536 18298-18298 AndroidRuntime          com.sitstand.timer                   E  FATAL EXCEPTION: main
+                                                                                                    Process: com.sitstand.timer, PID: 18298
+                                                                                                    java.lang.RuntimeException: Unable to instantiate receiver com.sitstand.timer.AlarmReceiver: java.lang.ClassNotFoundException: Didn't find class "com.sitstand.timer.AlarmReceiver" on path: DexPathList[[zip file "/data/app/~~SazEB1IoOVKa4MMKrjC2cw==/com.sitstand.timer-IpPPefxsWo8qsHEba4dEGw==/base.apk"],nativeLibraryDirectories=[/data/app/~~SazEB1IoOVKa4MMKrjC2cw==/com.sitstand.timer-IpPPefxsWo8qsHEba4dEGw==/lib/arm64, /system/lib64, /system_ext/lib64]]
+                                                                                                    	at android.app.ActivityThread.handleReceiver(ActivityThread.java:5552)
+                                                                                                    	at android.app.ActivityThread.-$$Nest$mhandleReceiver(Unknown Source:0)
+                                                                                                    	at android.app.ActivityThread$H.handleMessage(ActivityThread.java:2857)
+                                                                                                    	at android.os.Handler.dispatchMessage(Handler.java:110)
+                                                                                                    	at android.os.Looper.loopOnce(Looper.java:273)
+                                                                                                    	at android.os.Looper.loop(Looper.java:363)
+                                                                                                    	at android.app.ActivityThread.main(ActivityThread.java:9939)
+                                                                                                    	at java.lang.reflect.Method.invoke(Native Method)
+                                                                                                    	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:632)
+                                                                                                    	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:975)
+                                                                                                    Caused by: java.lang.ClassNotFoundException: Didn't find class "com.sitstand.timer.AlarmReceiver" on path: DexPathList[[zip file "/data/app/~~SazEB1IoOVKa4MMKrjC2cw==/com.sitstand.timer-IpPPefxsWo8qsHEba4dEGw==/base.apk"],nativeLibraryDirectories=[/data/app/~~SazEB1IoOVKa4MMKrjC2cw==/com.sitstand.timer-IpPPefxsWo8qsHEba4dEGw==/lib/arm64, /system/lib64, /system_ext/lib64]]
+                                                                                                    	at dalvik.system.BaseDexClassLoader.findClass(BaseDexClassLoader.java:259)
+                                                                                                    	at java.lang.ClassLoader.loadClass(ClassLoader.java:642)
+                                                                                                    	at java.lang.ClassLoader.loadClass(ClassLoader.java:578)
+                                                                                                    	at android.app.AppComponentFactory.instantiateReceiver(AppComponentFactory.java:110)
+                                                                                                    	at androidx.core.app.CoreComponentFactory.instantiateReceiver(CoreComponentFactory.java:59)
+                                                                                                    	at android.app.ActivityThread.handleReceiver(ActivityThread.java:5545)
+                                                                                                    	... 9 more
+2026-05-16 21:20:33.543 18298-18298 Process                 com.sitstand.timer                   I  Sending signal. PID: 18298 SIG: 9
+2026-05-16 21:20:33.598 18329-18329 .sitstand.timer         com.sitstand.timer                   I  Late-enabling -Xcheck:jni
+2026-05-16 21:20:33.616 18329-18329 .sitstand.timer         com.sitstand.timer                   I  Using CollectorTypeCMC GC.
+2026-05-16 21:20:33.621 18329-18329 nativeloader            com.sitstand.timer                   D  Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
+2026-05-16 21:20:33.623 18329-18329 ActivityThread          com.sitstand.timer                   D  setConscryptValidator
+2026-05-16 21:20:33.623 18329-18329 ActivityThread          com.sitstand.timer                   D  setConscryptValidator - put
+2026-05-16 21:20:33.696 18329-18329 nativeloader            com.sitstand.timer                   D  Configuring clns-9 for other apk /data/app/~~SazEB1IoOVKa4MMKrjC2cw==/com.sitstand.timer-IpPPefxsWo8qsHEba4dEGw==/base.apk. target_sdk_version=36, uses_libraries=, library_path=/data/app/~~SazEB1IoOVKa4MMKrjC2cw==/com.sitstand.timer-IpPPefxsWo8qsHEba4dEGw==/lib/arm64, permitted_path=/data:/mnt/expand:/data/user/0/com.sitstand.timer
+2026-05-16 21:20:33.701 18329-18329 GraphicsEnvironment     com.sitstand.timer                   V  Currently set values for:
+2026-05-16 21:20:33.701 18329-18329 GraphicsEnvironment     com.sitstand.timer                   V    angle_gl_driver_selection_pkgs=[]
+2026-05-16 21:20:33.701 18329-18329 GraphicsEnvironment     com.sitstand.timer                   V    angle_gl_driver_selection_values=[]
+2026-05-16 21:20:33.701 18329-18329 GraphicsEnvironment     com.sitstand.timer                   V  com.sitstand.timer is not listed in per-application setting
+2026-05-16 21:20:33.701 18329-18329 GraphicsEnvironment     com.sitstand.timer                   V  ANGLE allowlist from config: 
+2026-05-16 21:20:33.701 18329-18329 GraphicsEnvironment     com.sitstand.timer                   V  com.sitstand.timer is not listed in ANGLE allowlist or settings, returning default
+2026-05-16 21:20:33.701 18329-18329 GraphicsEnvironment     com.sitstand.timer                   V  App is not on the allowlist for updatable production driver.
+2026-05-16 21:20:38.197 18329-18329 ActivityThread          com.sitstand.timer                   D  com.sitstand.timer will use render engine as VK
+2026-05-16 21:20:38.197 18329-18329 HWUI                    com.sitstand.timer                   D  HWUI - treat SMPTE_170M as sRGB
+2026-05-16 21:20:38.200 18329-18396 DisplayManager          com.sitstand.timer                   I  Choreographer implicitly registered for the refresh rate.
+2026-05-16 21:20:38.203 18329-18396 HWUI                    com.sitstand.timer                   D  CacheManager constructor. deviceInfo=(1080, 1920)
+2026-05-16 21:20:38.208 18329-18329 AppCompatDelegate       com.sitstand.timer                   D  Checking for metadata for AppLocalesMetadataHolderService : Service not found
+2026-05-16 21:20:38.217 18329-18329 ashmem                  com.sitstand.timer                   E  Pinning is deprecated since Android Q. Please use trim or other methods.
+2026-05-16 21:20:38.237 18329-18329 CompatChangeReporter    com.sitstand.timer                   D  Compat change id reported: 377864165; UID 10680; state: ENABLED
+2026-05-16 21:20:38.237 18329-18329 DesktopModeFlags        com.sitstand.timer                   D  Toggle override initialized to: OVERRIDE_UNSET
+2026-05-16 21:20:38.240 18329-18329 DecorView               com.sitstand.timer                   I  setWindowBackground: isPopOver=false color=fff9f5f0 d=android.graphics.drawable.ColorDrawable@462fd7a
+2026-05-16 21:20:38.247 18329-18329 .sitstand.timer         com.sitstand.timer                   I  hiddenapi: Accessing hidden method Landroid/view/ViewGroup;->makeOptionalFitsSystemWindows()V (runtime_flags=0, domain=platform, api=unsupported) from Landroidx/appcompat/widget/ViewUtils; (domain=app, TargetSdkVersion=36) using reflection: allowed
+2026-05-16 21:20:38.252 18329-18329 WebViewFactory          com.sitstand.timer                   I  Loading com.google.android.webview version 147.0.7727.137 (code 772713703)
+2026-05-16 21:20:38.253 18329-18329 ResourcesManager        com.sitstand.timer                   V  The following library key has been added: ResourcesKey{ mHash=b28a19d mResDir=null mSplitDirs=[] mOverlayDirs=[] mLibDirs=[/data/app/~~oPcOdnVsAmumwFUGAF0bqQ==/com.google.android.webview-SZV1mTUUbyc4qGYgcJHyiA==/base.apk,/system/framework/android.test.base.jar,/system_ext/framework/androidx.window.extensions.jar] mDisplayId=0 mOverrideConfig=v36 mCompatInfo={420dpi always-compat} mLoaders=[]}
+2026-05-16 21:20:38.253 18329-18329 ApplicationLoaders      com.sitstand.timer                   D  Returning zygote-cached class loader: /system/framework/android.test.base.jar
+2026-05-16 21:20:38.253 18329-18329 ApplicationLoaders      com.sitstand.timer                   D  Returning zygote-cached class loader: /system_ext/framework/androidx.window.extensions.jar
+2026-05-16 21:20:38.254 18329-18396 Adreno-AppProfiles      com.sitstand.timer                   E  QSPM AIDL service doesn't exist
+2026-05-16 21:20:38.309 18329-18396 AdrenoVK-0              com.sitstand.timer                   I  ===== BEGIN DUMP OF OVERRIDDEN SETTINGS =====
+2026-05-16 21:20:38.309 18329-18396 AdrenoVK-0              com.sitstand.timer                   I  ===== END DUMP OF OVERRIDDEN SETTINGS =====
+2026-05-16 21:20:38.310 18329-18329 nativeloader            com.sitstand.timer                   D  Configuring clns-10 for other apk /data/app/~~oPcOdnVsAmumwFUGAF0bqQ==/com.google.android.webview-SZV1mTUUbyc4qGYgcJHyiA==/base.apk. target_sdk_version=36, uses_libraries=, library_path=/data/app/~~oPcOdnVsAmumwFUGAF0bqQ==/com.google.android.webview-SZV1mTUUbyc4qGYgcJHyiA==/lib/arm64:/data/app/~~oPcOdnVsAmumwFUGAF0bqQ==/com.google.android.webview-SZV1mTUUbyc4qGYgcJHyiA==/base.apk!/lib/arm64-v8a, permitted_path=/data:/mnt/expand
+2026-05-16 21:20:38.321 18329-18396 qdgralloc               com.sitstand.timer                   D  Fetching IMapper5 from QtiMapper5
+2026-05-16 21:20:38.326 18329-18329 cr_WVCFactoryProvider   com.sitstand.timer                   I  version=147.0.7727.137 (772713703) minSdkVersion=29 multiprocess=true packageId=2 splits=<none>
+2026-05-16 21:20:38.334 18329-18329 nativeloader            com.sitstand.timer                   D  Load /data/app/~~oPcOdnVsAmumwFUGAF0bqQ==/com.google.android.webview-SZV1mTUUbyc4qGYgcJHyiA==/base.apk!/lib/arm64-v8a/libwebviewchromium.so using class loader ns clns-10 (caller=/data/app/~~oPcOdnVsAmumwFUGAF0bqQ==/com.google.android.webview-SZV1mTUUbyc4qGYgcJHyiA==/base.apk): ok
+2026-05-16 21:20:38.335 18329-18329 nativeloader            com.sitstand.timer                   D  Load /system/lib64/libwebviewchromium_plat_support.so using class loader ns clns-10 (caller=/data/app/~~oPcOdnVsAmumwFUGAF0bqQ==/com.google.android.webview-SZV1mTUUbyc4qGYgcJHyiA==/base.apk): ok
+2026-05-16 21:20:38.335 18329-18396 SnapAlloc               com.sitstand.timer                   I  Graphics lib is available
+2026-05-16 21:20:38.337 18329-18421 chromium                com.sitstand.timer                   I  [0516/212038.336255:INFO:android_webview/browser/variations/variations_seed_loader.cc:67] Failed to open file for reading.: No such file or directory (2)
+2026-05-16 21:20:38.345 18329-18396 Adreno-UNKNOWN          com.sitstand.timer                   I  Using previously loaded IMapper library.
+2026-05-16 21:20:38.346 18329-18329 cr_LibraryLoader        com.sitstand.timer                   I  Successfully loaded native library
+2026-05-16 21:20:38.347 18329-18396 AdrenoVK-0              com.sitstand.timer                   I  QUALCOMM build          : 4316f069ec, I2417731fa9
+                                                                                                    Build Date              : 04/25/25
+                                                                                                    Shader Compiler Version : E031.47.18.30
+                                                                                                    Local Branch            : 
+                                                                                                    Remote Branch           : refs/tags/AU_LINUX_ANDROID_LA.VENDOR.15.4.0.11.00.00.1088.677
+                                                                                                    Remote Branch           : NONE
+                                                                                                    Reconstruct Branch      : NOTHING
+2026-05-16 21:20:38.347 18329-18396 AdrenoVK-0              com.sitstand.timer                   I  Build Config            : S P 18.0.0 AArch64
+2026-05-16 21:20:38.347 18329-18396 AdrenoVK-0              com.sitstand.timer                   I  Driver Path             : /vendor/lib64/hw/vulkan.adreno.so
+2026-05-16 21:20:38.347 18329-18329 cr_CachingUmaRecorder   com.sitstand.timer                   I  Flushed 22 samples from 21 histograms, 0 samples were dropped.
+2026-05-16 21:20:38.347 18329-18396 AdrenoVK-0              com.sitstand.timer                   I  Driver Version          : 0800.39
+2026-05-16 21:20:38.347 18329-18396 AdrenoVK-0              com.sitstand.timer                   I  PFP                     : 0x01500077
+2026-05-16 21:20:38.347 18329-18396 AdrenoVK-0              com.sitstand.timer                   I  ME                      : 0x01500014
+2026-05-16 21:20:38.347 18329-18396 AdrenoVK-0              com.sitstand.timer                   I  Application Name    : android framework
+                                                                                                    Application Version : 0x00000000
+                                                                                                    Engine Name         : android framework
+                                                                                                    Engine Version      : 0x00000000
+                                                                                                    Api Version         : 0x00401000
+2026-05-16 21:20:38.348 18329-18329 cr_ChildProcLH          com.sitstand.timer                   I  ScopedServiceBindingBatch.tryActivate: false
+2026-05-16 21:20:38.349 18329-18329 cr_CombinedPProvider    com.sitstand.timer                   I  #registerProvider() provider:WV.yk@d5ddae7 isPolicyCacheEnabled:false policyProvidersSize:0
+2026-05-16 21:20:38.350 18329-18329 cr_PolicyProvider       com.sitstand.timer                
