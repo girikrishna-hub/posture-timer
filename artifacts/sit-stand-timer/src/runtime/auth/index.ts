@@ -30,3 +30,18 @@ export type { TraceTimeline, TimelineEntry } from "./AuthTraceVisualizer";
 export { capabilityFor, capabilitySummary } from "./OfflineCapabilityMatrix";
 export { buildTimeline, renderEntry } from "./AuthTraceVisualizer";
 export { isFullyOperational, isPartiallyOperational, requiresReauth } from "./AuthConfidenceLevel";
+
+// Phase 5 — pre-deployment hardening
+export { AuthProviderError, classifyClerkError, classifyGoogleError } from "./AuthProviderError";
+export type { AuthProviderErrorCode } from "./AuthProviderError";
+export {
+  generateRuntimeCertificationReport,
+  printRuntimeCertificationReport,
+} from "./testing/RuntimeCertificationReport";
+export type {
+  CertificationReport,
+  CertificationLevel,
+  CertificationFinding,
+  FindingSeverity,
+  DimensionResult,
+} from "./testing/RuntimeCertificationReport";

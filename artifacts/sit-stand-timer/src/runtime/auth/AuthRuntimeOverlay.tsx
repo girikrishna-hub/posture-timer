@@ -62,6 +62,10 @@ const CLERK_STATUS_COLOR: Record<ClerkRuntimeStatus, string> = {
 };
 
 export function AuthRuntimeOverlay() {
+  // Production lockdown: tree-shaken out by Vite in production builds.
+  // IS_NATIVE alone is insufficient — also require DEV build.
+  if (!import.meta.env.DEV) return null;
+
   const [open, setOpen] = useState(true);
   const [panel, setPanel] = useState<"main" | "timeline" | "offline">("main");
   const diag = useAuthDiagnostics();

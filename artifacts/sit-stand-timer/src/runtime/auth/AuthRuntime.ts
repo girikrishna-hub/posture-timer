@@ -99,6 +99,10 @@ export class AuthRuntime {
     this._sessionMgr = new AuthSessionManager(
       this.store, this.queue, this.clerk, this.vault,
       this.journal, this.trace, this.refreshChains,
+      // Revocation callback: non-retriable provider error → force FSM to SIGNED_OUT
+      (code: string) => {
+        this.fsm.tryTransition("SIGNED_OUT", `revoked-${code}`);
+      },
     );
     this._lifecycle = new AuthLifecycleCoordinator(
       this.fsm, this.store, this.queue, this._sessionMgr,

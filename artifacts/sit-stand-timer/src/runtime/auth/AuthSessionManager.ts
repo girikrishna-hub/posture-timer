@@ -5,13 +5,16 @@
  * offline-aware refresh logic. No other component may call getToken()
  * for refresh purposes — they read from AuthStateStore.
  *
- * HARDENED (Phase 3):
- * - Every refresh belongs to a named chain tracked by RefreshChainCoordinator
- * - Chains survive lifecycle suspension safely (recordSuspend/recordResume)
- * - Chains terminate deterministically (completeChain / failChain)
- * - Stale chains from prior process deaths are expired on construction
- * - All refresh operations tagged with TraceCorrelationManager IDs
- * - Simplified JWT exp parsing (no dynamic import hack)
+ * PHASE 5 ADDITIONS:
+ * - Revoked account detection: non-retriable AuthProviderError skips retry
+ *   and forces immediate chain failure + sign-out signal
+ * - signalRevocation callback injected at construction for clean sign-out
+ *   without circular dependency on AuthRuntime
+ *
+ * PHASE 3 ADDITIONS:
+ * - RefreshChainCoordinator: every refresh belongs to a named chain
+ * - onSuspend()/onResume(): lifecycle interruption recording
+ * - stale chain expiry on resume
  */
 
 import type { AuthStateStore } from "./AuthStateStore";
@@ -21,8 +24,9 @@ import type { AuthDiagnosticsJournal } from "./AuthDiagnosticsJournal";
 import type { SecureSessionVault } from "./SecureSessionVault";
 import type { TraceCorrelationManager } from "./TraceCorrelationManager";
 import type { RefreshChainCoordinator } from "./RefreshChainCoordinator";
+import { classifyClerkError, AuthProviderError } from "./AuthProviderError";
 
-const REFRESH_BEFORE_EXPIRY_MS = 2 * 60 * 1000;  // refresh 2 min before expiry
+const REFRESH_BEFORE_EXPIRY_MS = 2 * 60 * 1000;
 const MAX_RETRY_ATTEMPTS = 3;
 const BASE_BACKOFF_MS = 5_000;
 
@@ -50,9 +54,10 @@ export class AuthSessionManager {
     private readonly _journal: AuthDiagnosticsJournal,
     private readonly _trace: TraceCorrelationManager,
     private readonly _chains: RefreshChainCoordinator,
+    /** Called when a non-retriable provider error (revocation) is detected */
+    private readonly _onRevocation?: (code: string) => void,
   ) {}
 
-  /** Start the refresh scheduler. Called after a session is established. */
   scheduleRefresh(): void {
     this._cancelScheduled();
     const session = this._store.session;
@@ -67,13 +72,11 @@ export class AuthSessionManager {
 
     this._journal.record("AUTH_REFRESH_STARTED",
       `Refresh scheduled in ${Math.round(delay / 1000)}s ` +
-      `(chain=${chain.chainId} op=${ctx.operationId})`,
-      { expiresAt: session.expiresAt, delay });
+      `(chain=${chain.chainId} op=${ctx.operationId})`);
 
     this._timerId = setTimeout(() => this._doRefresh(ctx.refreshChainId), delay);
   }
 
-  /** Cancel any pending refresh timer. */
   cancelRefresh(): void {
     if (this._currentChainId) {
       this._chains.cancelChain(this._currentChainId, "CANCELLED");
@@ -83,7 +86,6 @@ export class AuthSessionManager {
     this._retryAttempt = 0;
   }
 
-  /** Notify that the app was suspended — records lifecycle interruption on active chain. */
   onSuspend(): void {
     this._suspendedAt = Date.now();
     if (this._currentChainId) {
@@ -91,7 +93,6 @@ export class AuthSessionManager {
     }
   }
 
-  /** Notify that the app resumed — records suspension duration on active chain. */
   onResume(): void {
     if (this._suspendedAt !== null && this._currentChainId) {
       const suspendDurationMs = Date.now() - this._suspendedAt;
@@ -99,7 +100,6 @@ export class AuthSessionManager {
     }
     this._suspendedAt = null;
 
-    // Expire any stale chains from a prior process
     const expired = this._chains.expireStaleChains();
     if (expired.length > 0) {
       this._journal.record("AUTH_RECOVERY_STARTED",
@@ -119,7 +119,7 @@ export class AuthSessionManager {
     if (this._destroyed) return;
     if (!navigator.onLine) {
       this._journal.record("AUTH_REFRESH_FAILED",
-        `chain=${chainId}: Device offline — will retry on reconnect`);
+        `chain=${chainId}: offline — will retry on reconnect`);
       this._chains.recordFailure(chainId, "OFFLINE");
       this._scheduleRetry(chainId);
       return;
@@ -132,7 +132,7 @@ export class AuthSessionManager {
 
       try {
         this._journal.record("AUTH_REFRESH_STARTED",
-          `Refreshing JWT… (chain=${chainId} op=${ctx.operationId})`);
+          `Refreshing JWT (chain=${chainId} op=${ctx.operationId})`);
 
         const jwt = await this._clerk.refreshToken();
         const session = this._store.session;
@@ -161,6 +161,20 @@ export class AuthSessionManager {
 
         this.scheduleRefresh();
       } catch (e) {
+        // ── Revocation detection (Phase 5) ──────────────────────────────────
+        const providerErr = classifyClerkError(e);
+        if (providerErr?.isNonRetriable) {
+          this._journal.record("AUTH_SIGN_OUT_COMPLETED",
+            `Non-retriable provider error [${providerErr.code}] — forcing sign-out`);
+          this._chains.failChain(chainId, providerErr.code);
+          this._currentChainId = null;
+          this._retryAttempt = 0;
+          this._store.setSession(null, "INVALID");
+          this._store.patch({ isRestored: true });
+          this._onRevocation?.(providerErr.code);
+          return; // no retry
+        }
+
         const msg = e instanceof Error ? e.message : String(e);
         this._store.recordRefreshFailure();
         this._chains.recordFailure(chainId, msg);
@@ -176,7 +190,7 @@ export class AuthSessionManager {
       this._chains.failChain(chainId, `max-retries-${MAX_RETRY_ATTEMPTS}`);
       this._currentChainId = null;
       this._journal.record("AUTH_DEGRADED",
-        `Max refresh retries (${MAX_RETRY_ATTEMPTS}) reached on chain=${chainId}`);
+        `Max refresh retries (${MAX_RETRY_ATTEMPTS}) reached on chain=${chainId} — staying degraded`);
       return;
     }
     const backoff = BASE_BACKOFF_MS * Math.pow(2, this._retryAttempt);

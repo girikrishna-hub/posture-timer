@@ -1,0 +1,428 @@
+# Final Pre-Deployment Authentication Hardening Prompt
+
+IMPORTANT:
+
+This is the final pre-deployment hardening phase.
+
+The authentication runtime architecture is now considered complete.
+
+Do NOT:
+- redesign the architecture
+- add major new subsystems
+- add new coordinators
+- introduce new FSM states
+- increase orchestration complexity
+- add speculative abstractions
+
+This phase focuses ONLY on:
+
+- fixing the final known operational gaps
+- securing production boundaries
+- validating deployment correctness
+- ensuring deterministic recovery behavior
+- preventing production-only failures
+- preparing for real-device rollout
+
+The goal is:
+
+A production-safe authentication runtime ready for deployment and real-world testing.
+
+NOT:
+continued infrastructure expansion.
+
+---
+
+# PRIMARY OBJECTIVES
+
+Complete the following before deployment:
+
+1. fix degraded→available recovery gap
+2. verify secure persistence boundaries
+3. eliminate auth data leakage risk
+4. validate release signing correctness
+5. validate Google OAuth production configuration
+6. harden retry termination guarantees
+7. lock down production debug surfaces
+8. validate deterministic process recovery
+9. validate revoked-account handling
+10. simplify remaining operational complexity where possible
+
+---
+
+# FIX DEGRADED → AVAILABLE RECOVERY GAP
+
+IMPORTANT:
+
+Current known issue:
+
+- runtime can enter DEGRADED
+- Clerk transport later becomes AVAILABLE
+- no automatic recovery path executes
+
+Implement recovery triggering inside:
+
+AuthLifecycleCoordinator
+
+Requirements:
+
+Subscribe to capability changes:
+
+- CLERK_RUNTIME_DELAYED → AVAILABLE
+- CLERK_RUNTIME_TIMEOUT → AVAILABLE
+- CLERK_RUNTIME_UNAVAILABLE → AVAILABLE
+
+When triggered:
+
+enqueue a guarded recovery operation ONLY if:
+
+- confidence < VERIFIED
+- no active recovery operation exists
+- no active refresh chain exists
+- runtime state is DEGRADED or OFFLINE_RECOVERY
+
+Requirements:
+
+- debounced execution
+- operation-queue-controlled
+- idempotent
+- deterministic termination
+- no recovery storms
+- no duplicate refresh chains
+
+IMPORTANT:
+
+Transport availability does NOT imply authentication success.
+
+Recovery must still validate:
+
+- session continuity
+- refresh viability
+- token validity
+- restoration integrity
+
+before transitioning confidence/state.
+
+---
+
+# VERIFY SECURE STORAGE BOUNDARIES
+
+Audit entire codebase for ANY remaining use of:
+
+- raw SharedPreferences
+- unencrypted persistence
+- insecure token caching
+- unsafe runtime snapshot persistence
+
+Requirements:
+
+All sensitive auth continuity material must use:
+
+- encrypted persistence
+- integrity validation
+- authenticated encryption
+
+Explicitly verify:
+
+- refresh metadata
+- recovery checkpoints
+- restoration snapshots
+- auth confidence persistence
+- runtime recovery state
+
+Never persist sensitive auth material insecurely.
+
+---
+
+# CRASH REPORTING & LOGGING SANITIZATION
+
+IMPORTANT:
+
+Verify that NO auth-sensitive data can leak through:
+
+- crash reporting
+- stack traces
+- unhandled promise logging
+- overlay snapshots
+- runtime traces
+- rejected async payloads
+- serialized Error objects
+
+Explicitly sanitize:
+
+- JWTs
+- email addresses
+- provider IDs
+- auth claims
+- refresh metadata
+- session payloads
+
+Requirements:
+
+Production builds must never expose:
+sensitive auth data externally.
+
+---
+
+# RELEASE SIGNING VALIDATION
+
+IMPORTANT:
+
+Validate production signing configuration.
+
+Verify:
+
+- release signing certificate
+- Play App Signing certificate
+- SHA-1 fingerprints
+- SHA-256 fingerprints
+- Firebase project configuration
+- Google OAuth Android client
+- Google OAuth Web client
+- package name consistency
+- google-services.json correctness
+
+Generate:
+
+ReleaseSigningChecklist.md
+
+Include:
+
+- all active fingerprints
+- OAuth client mapping
+- Firebase linkage
+- Play signing notes
+- deployment verification steps
+
+IMPORTANT:
+
+Most production-only auth failures originate here.
+
+---
+
+# GOOGLE ACCOUNT REVOCATION HANDLING
+
+Implement explicit handling for:
+
+- revoked Google account access
+- expired provider grants
+- invalid Google ID token exchange
+- removed Google account
+- provider-side session invalidation
+
+Requirements:
+
+The runtime must transition deterministically into:
+
+- RECOVERY_REQUIRED
+OR
+- INVALID
+
+Never:
+
+- infinite retry
+- silent degradation
+- fake authenticated state
+- stuck refresh loops
+
+Recovery UX must remain deterministic.
+
+---
+
+# RETRY TERMINATION GUARANTEES
+
+Audit ALL retry systems.
+
+Verify deterministic upper bounds for:
+
+- refresh retries
+- recovery retries
+- transport retries
+- delayed Clerk readiness
+- restoration retries
+- capability rechecks
+
+Requirements:
+
+Every retry system must define:
+
+- max retries
+- max total duration
+- terminal failure behavior
+- degradation semantics
+
+Infinite resilience loops are forbidden.
+
+---
+
+# PROCESS DEATH VALIDATION
+
+Run deterministic real-device tests.
+
+Required scenario:
+
+1. authenticate successfully
+2. background app
+3. Android kills process
+4. disable network
+5. relaunch app
+6. restore runtime
+7. reconnect network
+8. validate recovery
+
+Requirements:
+
+No:
+
+- auth flicker
+- forced logout loops
+- hanging splash screen
+- stale refresh replay
+- duplicate recoveries
+- hidden degraded state
+
+Recovery must remain:
+deterministic and explainable.
+
+---
+
+# OEM DEVICE VALIDATION
+
+Test minimum:
+
+- Samsung
+- Xiaomi
+- Motorola
+- OnePlus
+- Pixel
+
+Specifically validate:
+
+- aggressive battery optimization
+- background process killing
+- delayed WebView startup
+- renderer recreation
+- suspend/resume storms
+- network flapping
+
+Update:
+
+DeviceBehaviorMatrix.md
+
+with:
+real-device observations.
+
+---
+
+# OVERLAY & DEBUG LOCKDOWN
+
+IMPORTANT:
+
+Ensure production builds cannot expose:
+
+- AuthRuntimeOverlay
+- trace visualizer
+- capability diagnostics
+- refresh chain state
+- recovery internals
+- lifecycle traces
+
+Requirements:
+
+- impossible to enable accidentally
+- excluded from release bundles if possible
+- no production gesture activation
+- no runtime debug entrypoints
+
+Production auth internals must not be externally observable.
+
+---
+
+# OPERATIONAL SIMPLIFICATION PASS
+
+Before deployment:
+
+audit remaining complexity.
+
+Simplify any logic that is:
+
+- difficult to reason about
+- difficult to debug quickly
+- operationally ambiguous
+- excessively layered
+- weakly justified
+
+Prefer:
+
+- explicit policies
+- deterministic flows
+- readable recovery semantics
+
+over:
+- architectural cleverness.
+
+Maintainability under production pressure matters.
+
+---
+
+# FINAL CERTIFICATION AGGREGATION
+
+Create:
+
+RuntimeCertificationReport.ts
+
+Aggregate:
+
+- FSM validation
+- refresh correctness
+- security audit
+- stability report
+- chaos testing
+- performance report
+- process recovery validation
+- OEM behavior validation
+
+Output:
+
+- CERTIFIED
+- CONDITIONALLY_CERTIFIED
+- NOT_CERTIFIED
+
+Include:
+
+- blocking findings
+- warnings
+- unresolved risks
+- deployment recommendations
+
+Deployment should proceed ONLY when:
+blocking findings = zero.
+
+---
+
+# SUCCESS CRITERIA
+
+The runtime is deployment-ready ONLY when:
+
+- degraded→available recovery is automatic
+- recovery storms are impossible
+- secure persistence is verified
+- auth data leakage risk is eliminated
+- release signing is validated
+- OAuth configuration is validated
+- revoked-account handling is deterministic
+- retry systems terminate deterministically
+- process death recovery works on real devices
+- OEM lifecycle behavior is documented
+- production debug surfaces are locked down
+- operational complexity remains understandable
+- certification report passes without blockers
+
+The final system should behave like:
+
+- a production mobile authentication runtime
+- a deterministic lifecycle-safe subsystem
+- a resilient native-first identity kernel
+
+NOT:
+
+- a browser authentication flow running inside a mobile shell.
