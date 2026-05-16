@@ -164,6 +164,9 @@ export class AuthSessionManager {
         // ── Revocation detection (Phase 5) ──────────────────────────────────
         const providerErr = classifyClerkError(e);
         if (providerErr?.isNonRetriable) {
+          console.error(
+            `[NativeAuth] AuthSessionManager — REVOCATION [${providerErr.code}] isNonRetriable=true → forcing sign-out`,
+          );
           this._journal.record("AUTH_SIGN_OUT_COMPLETED",
             `Non-retriable provider error [${providerErr.code}] — forcing sign-out`);
           this._chains.failChain(chainId, providerErr.code);

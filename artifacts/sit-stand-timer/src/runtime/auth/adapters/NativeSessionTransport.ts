@@ -51,20 +51,31 @@ export class NativeSessionTransport {
 
   async exchangeGoogleIdToken(idToken: string): Promise<NativeTransportResult> {
     const deviceId = await this._getOrCreateDeviceId();
+    const url = `${this._apiRoot}/auth/native/google`;
+    console.log(`[NativeAuth] NativeTransport.exchange() START — url=${url} hasIdToken=${!!idToken}`);
 
-    const resp = await fetch(`${this._apiRoot}/auth/native/google`, {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        idToken,
-        deviceId,
-        platform:   "android",
-        appVersion: (import.meta.env.VITE_APP_VERSION as string | undefined) ?? "unknown",
-      }),
-    });
+    let resp: Response;
+    try {
+      resp = await fetch(url, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          idToken,
+          deviceId,
+          platform:   "android",
+          appVersion: (import.meta.env.VITE_APP_VERSION as string | undefined) ?? "unknown",
+        }),
+      });
+    } catch (networkErr) {
+      console.error(`[NativeAuth] NativeTransport.exchange() NETWORK ERROR — ${networkErr instanceof Error ? networkErr.message : String(networkErr)}`);
+      throw networkErr;
+    }
+
+    console.log(`[NativeAuth] NativeTransport.exchange() response — status=${resp.status} ok=${resp.ok}`);
 
     if (!resp.ok) {
       const body = await resp.json().catch(() => ({ error: "exchange failed" })) as { error?: string };
+      console.error(`[NativeAuth] NativeTransport.exchange() FAILED — status=${resp.status} error=${body.error ?? "unknown"}`);
       throw new Error(
         `[NativeTransport] google exchange ${resp.status}: ${body.error ?? "unknown"}`,
       );
@@ -77,6 +88,10 @@ export class NativeSessionTransport {
       userId:       string;
       expiresAt:    number;
     };
+
+    console.log(
+      `[NativeAuth] NativeTransport.exchange() SUCCESS — userId=${data.userId} hasAccessToken=${!!data.accessToken} hasRefreshToken=${!!data.refreshToken}`,
+    );
 
     // Persist refresh credentials immediately after successful exchange
     await Promise.all([
@@ -114,6 +129,8 @@ export class NativeSessionTransport {
 
     if (!refreshToken || !sessionId) return null;
 
+    console.log(`[NativeAuth] NativeTransport.refresh() START — hasToken=${!!refreshToken} hasSid=${!!sessionId}`);
+
     let resp: Response;
     try {
       resp = await fetch(`${this._apiRoot}/auth/native/refresh`, {
@@ -121,19 +138,26 @@ export class NativeSessionTransport {
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ refreshToken, sessionId }),
       });
-    } catch {
+    } catch (networkErr) {
+      console.warn(`[NativeAuth] NativeTransport.refresh() NETWORK ERROR — ${networkErr instanceof Error ? networkErr.message : String(networkErr)}`);
       return null; // transient network error — eligible for retry
     }
 
+    console.log(`[NativeAuth] NativeTransport.refresh() response — status=${resp.status}`);
+
     if (resp.status === 401) {
       const body = await resp.json().catch(() => ({})) as { error?: string };
+      console.error(`[NativeAuth] NativeTransport.refresh() REVOKED — ${body.error ?? "unauthorized"} → throwing SESSION_INVALIDATED`);
       throw new AuthProviderError(
         "SESSION_INVALIDATED",
         `[NativeTransport] refresh rejected: ${body.error ?? "unauthorized"}`,
       );
     }
 
-    if (!resp.ok) return null; // other server error — retry eligible
+    if (!resp.ok) {
+      console.warn(`[NativeAuth] NativeTransport.refresh() server error status=${resp.status} — retry eligible`);
+      return null;
+    }
 
     const data = await resp.json() as {
       accessToken?:  string;

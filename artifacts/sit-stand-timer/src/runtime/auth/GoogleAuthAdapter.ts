@@ -32,14 +32,16 @@ export class GoogleAuthAdapter {
 
   /** Must be called during runtime boot before any sign-in attempt. */
   async initialize(): Promise<void> {
+    console.log(`[NativeAuth] GoogleAuthAdapter.initialize() — isNative=${this._isNative}`);
     if (!this._isNative) return;
     try {
       const mod = await import("@codetrix-studio/capacitor-google-auth");
       this._plugin = mod.GoogleAuth;
       // initialize() is synchronous in v3 of this plugin (returns void, not Promise)
       (mod.GoogleAuth as unknown as { initialize: () => void }).initialize();
+      console.log("[NativeAuth] GoogleAuthAdapter.initialize() SUCCESS — plugin ready");
     } catch (e) {
-      console.warn("[GoogleAuthAdapter] Plugin not available:", e);
+      console.warn("[NativeAuth] GoogleAuthAdapter.initialize() FAILED — plugin not available:", e);
       this._plugin = null;
     }
   }
@@ -53,7 +55,12 @@ export class GoogleAuthAdapter {
    * Throws a GoogleAuthError on any failure.
    */
   async signIn(): Promise<GoogleIdentity> {
+    console.log(
+      `[NativeAuth] GoogleAuthAdapter.signIn() START — isNative=${this._isNative} pluginLoaded=${!!this._plugin}`,
+    );
+
     if (!this._isNative || !this._plugin) {
+      console.error("[NativeAuth] GoogleAuthAdapter.signIn() ABORT — not native or plugin null");
       throw this._makeError("play_services_unavailable",
         "Native Google Sign-In is only available on Android/iOS");
     }
@@ -70,11 +77,17 @@ export class GoogleAuthAdapter {
           id: string;
         }>;
       };
+      console.log("[NativeAuth] GoogleAuthAdapter — launching account picker");
       const result = await plugin.signIn();
       const idToken = result.idToken ?? result.authentication?.idToken;
+      console.log(
+        `[NativeAuth] GoogleAuthAdapter — picker returned hasIdToken=${!!idToken} hasEmail=${!!result.email}`,
+      );
       if (!idToken) {
+        console.error("[NativeAuth] GoogleAuthAdapter — picker returned NO id token");
         throw this._makeError("unknown", "Google Sign-In returned no ID token");
       }
+      console.log("[NativeAuth] GoogleAuthAdapter.signIn() SUCCESS");
       return {
         idToken,
         email: result.email,
@@ -84,9 +97,14 @@ export class GoogleAuthAdapter {
       };
     } catch (e) {
       if (e && typeof e === "object" && "code" in e) {
+        const coded = e as { code: string; message?: string };
+        console.error(
+          `[NativeAuth] GoogleAuthAdapter.signIn() ERROR (typed) — code=${coded.code} msg=${coded.message ?? ""}`,
+        );
         throw e as GoogleAuthError;
       }
       const msg = e instanceof Error ? e.message : String(e);
+      console.error(`[NativeAuth] GoogleAuthAdapter.signIn() ERROR (raw) — ${msg}`);
       if (msg.includes("cancel") || msg.includes("12501")) {
         throw this._makeError("cancelled", "User cancelled Google Sign-In");
       }

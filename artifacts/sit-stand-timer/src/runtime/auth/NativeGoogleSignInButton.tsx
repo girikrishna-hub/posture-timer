@@ -23,9 +23,13 @@ export function NativeGoogleSignInButton({ onWebFallback, className }: Props) {
   const isSigningIn = fsmState === "SIGNING_IN" || loading;
 
   const handlePress = async () => {
+    console.log(
+      `[NativeAuth] Button.tap — nativeGoogleAvailable=${nativeGoogleAvailable} fsmState=${fsmState}`,
+    );
     setError(null);
 
     if (!nativeGoogleAvailable) {
+      console.warn("[NativeAuth] Button.tap — nativeGoogleAvailable=false → web fallback");
       onWebFallback?.();
       return;
     }
@@ -35,6 +39,9 @@ export function NativeGoogleSignInButton({ onWebFallback, className }: Props) {
       await signInWithGoogle();
     } catch (e) {
       const err = e as { code?: string; message?: string };
+      console.error(
+        `[NativeAuth] Button.tap ERROR — code=${err.code ?? "none"} msg=${err.message ?? String(e)}`,
+      );
       if (err.code === "cancelled") {
         // User cancelled — no error shown
       } else if (err.code === "play_services_unavailable") {

@@ -77,7 +77,12 @@ export function classifyClerkError(err: unknown): AuthProviderError | null {
   // Pass-through: AuthProviderError thrown directly by NativeSessionTransport
   // (e.g. on revoked/compromised/replay session) is returned as-is so that
   // AuthSessionManager's revocation path fires without any string matching.
-  if (err instanceof AuthProviderError) return err;
+  if (err instanceof AuthProviderError) {
+    console.log(
+      `[NativeAuth] classifyClerkError — AuthProviderError pass-through code=${err.code} isNonRetriable=${err.isNonRetriable}`,
+    );
+    return err;
+  }
 
   if (!err || typeof err !== "object") return null;
 

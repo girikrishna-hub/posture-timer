@@ -64,8 +64,14 @@ export class ClerkBridgeAdapter {
     idToken: string,
     userId: string,
   ): Promise<RuntimeSession> {
+    const transport = this._native ? "NATIVE" : "CLERK_WEB";
+    console.log(`[NativeAuth] ClerkBridge.exchangeGoogleIdToken() — transport=${transport}`);
+
     if (this._native) {
       const result = await this._native.exchangeGoogleIdToken(idToken);
+      console.log(
+        `[NativeAuth] ClerkBridge exchange SUCCESS — userId=${result.userId} sessionId=${result.sessionId}`,
+      );
       return {
         sessionId:       result.sessionId,
         userId:          result.userId,
@@ -75,6 +81,8 @@ export class ClerkBridgeAdapter {
         provider:        "google_native",
       };
     }
+
+    console.log("[NativeAuth] ClerkBridge — falling through to Clerk web transport");
     const { session } = await this._exchange.fromGoogleIdToken(idToken, userId);
     return session;
   }

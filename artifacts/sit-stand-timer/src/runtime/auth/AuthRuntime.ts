@@ -113,8 +113,9 @@ export class AuthRuntime {
       this.vault, this.journal,
     );
 
-    // Wire FSM transitions → journal + store
+    // Wire FSM transitions → journal + store + logcat
     this.fsm.subscribe((snap) => {
+      console.log(`[NativeAuth] FSM ${snap.previousState ?? "INIT"} → ${snap.state}`);
       this.journal.updateState(snap.state, snap.startupMode);
       this.journal.record("AUTH_STATE_TRANSITION",
         `${snap.previousState ?? "—"} → ${snap.state}` +
@@ -186,6 +187,7 @@ export class AuthRuntime {
 
       // 5. Initialize native Google Sign-In plugin
       await this.google.initialize();
+      console.log(`[NativeAuth] Boot — googleIsAvailable=${this.google.isAvailable} isNative=${Capacitor.isNativePlatform()}`);
 
       // 6. Probe capabilities
       await this.capabilities.probe(this.google.isAvailable);
@@ -244,17 +246,20 @@ export class AuthRuntime {
         this.journal.record("AUTH_SIGN_IN_STARTED",
           `Google identity acquired for ${identity.email} (op=${ctx.operationId})`);
 
+        console.log(`[NativeAuth] AuthRuntime.signInWithGoogle() — identity acquired, starting exchange`);
         const session = await this.clerk.exchangeGoogleIdToken(
           identity.idToken,
           identity.providerId,
         );
 
         await this._establishSession(session, "VERIFIED");
+        console.log(`[NativeAuth] AuthRuntime.signInWithGoogle() COMPLETE — FSM should be SIGNED_IN`);
         this.journal.record("AUTH_SIGN_IN_SUCCEEDED",
           `Signed in as ${identity.email} (op=${ctx.operationId})`);
         return session;
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
+        console.error(`[NativeAuth] AuthRuntime.signInWithGoogle() FAILED — ${msg}`);
         this.journal.record("AUTH_SIGN_IN_FAILED",
           `op=${ctx.operationId}: ${msg}`);
         this.fsm.tryTransition("SIGNED_OUT", "sign-in-failed");
