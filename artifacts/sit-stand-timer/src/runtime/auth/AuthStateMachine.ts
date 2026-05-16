@@ -14,13 +14,20 @@ export type AuthState =
   | "SIGNED_OUT"
   | "SIGNING_IN"
   | "SIGNED_IN"
-  | "REFRESHING"
   | "DEGRADED"
   | "OFFLINE_RECOVERY"
-  | "PROCESS_RECOVERY"
   | "EXPIRED"
   | "RECOVERING"
   | "FAILED";
+
+// REMOVED: REFRESHING — was in VALID_TRANSITIONS but AuthSessionManager never
+//   triggered it. Refresh happens silently via AuthOperationQueue without
+//   surfacing as a distinct FSM state. Removing prevents future dead-branch bugs.
+//
+// REMOVED: PROCESS_RECOVERY — was in VALID_TRANSITIONS but AuthRuntime never
+//   transitioned to it. Process recovery is handled by ProcessRecoveryCoordinator
+//   at startup and mapped to RESTORING_SESSION → SIGNED_IN/DEGRADED directly.
+//   The StartupMode enum still retains "PROCESS_RECOVERY" for classification.
 
 export type StartupMode =
   | "COLD_START"
@@ -41,17 +48,17 @@ export interface AuthStateSnapshot {
 export type AuthStateListener = (snapshot: AuthStateSnapshot) => void;
 
 // Valid transitions: from → Set<to>
+// Every entry here must be exercised by production code.
+// Run AuthStateTransitionReport to verify no dead states exist.
 const VALID_TRANSITIONS: Record<AuthState, ReadonlySet<AuthState>> = {
   UNINITIALIZED:     new Set(["INITIALIZING"]),
   INITIALIZING:      new Set(["RESTORING_SESSION", "SIGNED_OUT", "FAILED"]),
-  RESTORING_SESSION: new Set(["SIGNED_IN", "SIGNED_OUT", "EXPIRED", "DEGRADED", "OFFLINE_RECOVERY", "PROCESS_RECOVERY", "FAILED"]),
+  RESTORING_SESSION: new Set(["SIGNED_IN", "SIGNED_OUT", "EXPIRED", "DEGRADED", "OFFLINE_RECOVERY", "FAILED"]),
   SIGNED_OUT:        new Set(["SIGNING_IN"]),
   SIGNING_IN:        new Set(["SIGNED_IN", "SIGNED_OUT", "FAILED"]),
-  SIGNED_IN:         new Set(["REFRESHING", "EXPIRED", "SIGNED_OUT", "DEGRADED", "FAILED"]),
-  REFRESHING:        new Set(["SIGNED_IN", "EXPIRED", "DEGRADED", "FAILED", "SIGNED_OUT"]),
+  SIGNED_IN:         new Set(["EXPIRED", "SIGNED_OUT", "DEGRADED", "FAILED"]),
   DEGRADED:          new Set(["RECOVERING", "SIGNED_OUT", "FAILED", "SIGNED_IN"]),
   OFFLINE_RECOVERY:  new Set(["SIGNED_IN", "SIGNED_OUT", "DEGRADED", "FAILED"]),
-  PROCESS_RECOVERY:  new Set(["SIGNED_IN", "SIGNED_OUT", "DEGRADED", "RESTORING_SESSION", "FAILED"]),
   EXPIRED:           new Set(["RECOVERING", "SIGNED_OUT", "OFFLINE_RECOVERY", "FAILED"]),
   RECOVERING:        new Set(["SIGNED_IN", "SIGNED_OUT", "DEGRADED", "FAILED"]),
   FAILED:            new Set(["INITIALIZING", "SIGNED_OUT"]),

@@ -1,0 +1,396 @@
+# Authentication Runtime Production Validation & Simplification Prompt
+
+IMPORTANT:
+
+The authentication runtime architecture is now considered feature-complete.
+
+Do NOT:
+- introduce new major subsystems
+- redesign runtime architecture
+- add speculative abstractions
+- increase orchestration complexity unnecessarily
+- add new lifecycle coordinators unless strictly required
+
+The priority has changed.
+
+This phase is now about:
+
+- production validation
+- correctness proof
+- operational simplification
+- security hardening
+- real-device reliability
+- reducing hidden complexity
+- eliminating unnecessary moving parts
+- proving deterministic behavior under real conditions
+
+The goal is:
+
+A production-stable authentication runtime that remains understandable, maintainable, and diagnosable.
+
+NOT:
+an endlessly expanding auth infrastructure framework.
+
+---
+
+# PRIMARY OBJECTIVES
+
+This phase focuses on:
+
+1. validating correctness on physical Android devices
+2. eliminating unnecessary runtime complexity
+3. hardening cryptographic/session guarantees
+4. proving deterministic lifecycle behavior
+5. validating transport resilience under OEM conditions
+6. reducing hidden state coupling
+7. ensuring long-term maintainability
+8. measuring operational reliability
+
+---
+
+# COMPLEXITY REDUCTION AUDIT
+
+Perform a full architecture audit.
+
+Identify:
+
+- duplicate abstractions
+- overlapping coordinators
+- unnecessary indirection
+- unused state transitions
+- dead recovery paths
+- redundant tracing layers
+- duplicate capability semantics
+- stale lifecycle hooks
+- legacy compatibility logic
+
+Requirements:
+
+Every subsystem must justify its operational value.
+
+If a component:
+- does not materially improve correctness
+- does not materially improve diagnosability
+- does not materially improve resilience
+
+then simplify or remove it.
+
+The runtime must remain:
+comprehensible under production debugging pressure.
+
+---
+
+# STATE MACHINE VALIDATION
+
+Audit the FSM.
+
+Requirements:
+
+- every transition must be reachable
+- every transition must be test-covered
+- invalid transitions must be impossible
+- terminal states must be explicit
+- recovery loops must terminate deterministically
+- no hidden implicit transitions
+- no “temporary” fallback states
+
+Generate:
+
+AuthStateTransitionReport.ts
+
+Include:
+
+- transition graph
+- unreachable states
+- transition frequencies
+- invalid transition attempts
+- loop detection
+- recovery termination guarantees
+
+---
+
+# REFRESH SYSTEM VERIFICATION
+
+Audit RefreshChainCoordinator.
+
+Requirements:
+
+Prove:
+
+- duplicate refresh execution is impossible
+- stale chain replay is impossible
+- suspend/resume cannot orphan chains
+- retry lineage terminates deterministically
+- failed refreshes cannot deadlock restoration
+- refresh storms are impossible
+
+Generate:
+
+RefreshCorrectnessReport.ts
+
+Include:
+
+- chain lineage graphs
+- retry termination analysis
+- stale replay proofs
+- interruption handling analysis
+
+---
+
+# REAL DEVICE VALIDATION
+
+IMPORTANT:
+
+Testing must move to physical devices.
+
+Emulators are insufficient.
+
+Test minimum:
+
+- Samsung OneUI
+- Xiaomi MIUI/HyperOS
+- Motorola
+- OnePlus OxygenOS
+- Pixel stock Android
+
+Specifically validate:
+
+- aggressive battery optimization
+- background process killing
+- WebView renderer recreation
+- network flapping
+- suspend/resume timing
+- low-memory process death
+- delayed JS runtime startup
+- Google Play Services instability
+
+Requirements:
+
+Produce:
+
+DeviceBehaviorMatrix.md
+
+Document:
+
+- OEM differences
+- lifecycle anomalies
+- timing behavior
+- recovery correctness
+- runtime discontinuities
+
+---
+
+# SECURITY HARDENING
+
+Audit SecureSessionVault.
+
+Requirements:
+
+Verify:
+
+- encryption implementation correctness
+- authenticated encryption usage
+- replay resistance
+- tamper detection
+- partial-write recovery
+- session invalidation correctness
+- key rotation safety
+- downgrade attack resistance
+
+Ensure:
+
+- no sensitive auth material appears in logs
+- no token leakage in trace events
+- no persistence of unsafe runtime snapshots
+
+Generate:
+
+SecurityBoundaryAudit.md
+
+---
+
+# TRANSPORT FAILURE VALIDATION
+
+Strengthen Clerk transport resilience.
+
+Test:
+
+- Clerk runtime delayed 30+ seconds
+- Clerk runtime recreation during refresh
+- Clerk runtime partial initialization
+- WebView renderer crash during restore
+- transport unavailable while auth remains recoverable
+- network reconnect during token exchange
+
+Requirements:
+
+The runtime must:
+- degrade explicitly
+- recover deterministically
+- never silently desync auth state
+
+---
+
+# TIME AUTHORITY VALIDATION
+
+Audit TimeAuthority.
+
+Test:
+
+- manual clock rollback
+- manual clock fast-forward
+- timezone changes
+- long suspend intervals
+- server-time mismatch
+- offline drift accumulation
+
+Requirements:
+
+Auth validity must remain:
+deterministic and explainable.
+
+Generate:
+
+TimeConsistencyReport.md
+
+---
+
+# OBSERVABILITY SIMPLIFICATION
+
+Audit overlay and tracing systems.
+
+Requirements:
+
+Prioritize:
+
+- signal clarity
+- operational usefulness
+- debugging speed
+
+Reduce:
+
+- noisy events
+- redundant traces
+- duplicate identifiers
+- unnecessary visual complexity
+
+The overlay must optimize for:
+rapid production debugging.
+
+NOT:
+maximum telemetry density.
+
+---
+
+# PERFORMANCE VALIDATION
+
+Measure runtime overhead.
+
+Track:
+
+- boot latency
+- restoration latency
+- refresh latency
+- persistence latency
+- overlay overhead
+- trace generation overhead
+- lifecycle recovery overhead
+
+Requirements:
+
+Auth runtime must remain lightweight enough for:
+mid-range Android devices.
+
+Generate:
+
+AuthPerformanceReport.md
+
+---
+
+# FAILURE INJECTION VALIDATION
+
+Expand deterministic chaos testing.
+
+Requirements:
+
+Inject:
+
+- storage corruption
+- partial writes
+- delayed persistence
+- duplicate lifecycle callbacks
+- transport interruptions
+- JS runtime teardown
+- forced process kill
+- stale recovery checkpoints
+- clock drift
+- memory pressure simulation
+
+Every failure scenario must produce:
+
+- deterministic terminal state
+- diagnosable trace
+- explicit degradation semantics
+
+Never:
+silent undefined behavior.
+
+---
+
+# LONG-RUN STABILITY TESTING
+
+Run endurance scenarios.
+
+Test:
+
+- 24-hour runtime
+- repeated suspend/resume
+- repeated refresh cycles
+- intermittent offline periods
+- delayed transport recovery
+- repeated process recreation
+
+Requirements:
+
+Detect:
+
+- memory leaks
+- stale locks
+- orphaned refresh chains
+- timer drift
+- trace accumulation growth
+- overlay degradation
+
+Generate:
+
+LongRunStabilityReport.md
+
+---
+
+# FINAL PRODUCTION REQUIREMENTS
+
+The runtime is production-ready ONLY when:
+
+- all lifecycle transitions are deterministic
+- refresh correctness is proven
+- process death recovery is proven
+- OEM lifecycle differences are documented
+- cryptographic persistence is validated
+- transport degradation is explicit
+- offline behavior is policy-defined
+- trace output remains understandable
+- runtime overhead remains acceptable
+- chaos scenarios terminate deterministically
+- long-run stability is verified
+- auth failures are diagnosable in minutes
+- architecture remains maintainable by humans
+
+The final system should behave like:
+
+- a production mobile identity runtime
+- a deterministic lifecycle-safe subsystem
+- a resilient operational kernel
+
+NOT:
+
+- an experimental auth framework.
