@@ -1,0 +1,464 @@
+# Authentication Runtime Hardening & Native Session Isolation Prompt
+
+IMPORTANT:
+
+This is NOT a rewrite request.
+
+The RuntimeCore architecture already exists and must be preserved.
+
+The goal now is:
+
+- eliminate remaining hybrid web-auth behavior
+- harden native runtime guarantees
+- remove Clerk frontend operational ownership
+- make auth restoration deterministic
+- make refresh/runtime recovery fully native-safe
+- eliminate lifecycle race conditions
+- eliminate hidden session desynchronization
+- make failures diagnosable
+
+This phase is:
+runtime hardening and auth isolation.
+
+Do NOT regress the architecture back toward:
+- React-owned auth
+- browser session semantics
+- redirect-driven auth
+- WebView session dependence
+
+---
+
+# CURRENT ARCHITECTURE STATUS
+
+The following systems already exist and should be preserved:
+
+- AuthStateMachine
+- AuthStateStore
+- AuthOperationQueue
+- RuntimeBootBarrier
+- GoogleAuthAdapter
+- ClerkBridgeAdapter
+- AuthSessionManager
+- AuthLifecycleCoordinator
+- AuthRecoveryCoordinator
+- AuthCapabilityRegistry
+- AuthDiagnosticsJournal
+- useAuthRuntime
+- useBootBarrier
+- NativeAuthScreen
+- NativeGoogleSignInButton
+- AuthRuntimeOverlay
+
+The runtime already:
+- boots before React renders
+- uses native Google Sign-In
+- serializes auth operations
+- restores persisted sessions
+- gates UI behind boot restoration
+- uses a runtime FSM
+- uses lifecycle coordinators
+
+DO NOT replace these systems.
+
+Instead:
+stabilize and isolate them.
+
+---
+
+# PRIMARY OBJECTIVE
+
+Eliminate ALL remaining operational dependence on:
+
+- Clerk React hooks
+- browser session semantics
+- WebView persistence
+- React lifecycle timing
+- frontend Clerk session ownership
+
+The runtime itself must become:
+the sole operational auth authority.
+
+---
+
+# CRITICAL ISSUE: CLERK FRONTEND OWNERSHIP LEAKAGE
+
+Current architecture still includes:
+
+ClerkRuntimeBridge
+→ useSignIn()
+→ useAuth()
+→ useClerk()
+
+This creates hidden hybrid ownership.
+
+This must be eliminated.
+
+IMPORTANT:
+
+React hooks may observe auth state.
+
+They must NOT:
+- own session continuity
+- own refresh capability
+- own restoration authority
+- own auth validity
+- own session truth
+
+---
+
+# REQUIRED REFACTOR
+
+Refactor ClerkBridgeAdapter into a pure infrastructure adapter.
+
+Create:
+
+runtime/auth/adapters/
+  ClerkSessionTransport.ts
+  ClerkTokenExchange.ts
+  ClerkSessionHydrator.ts
+
+Responsibilities:
+
+ClerkTokenExchange:
+- exchange Google ID token for backend session
+- normalize Clerk responses
+- normalize auth failures
+- return runtime-safe session payloads
+
+ClerkSessionHydrator:
+- hydrate runtime session state from persisted metadata
+- validate refresh capability
+- validate expiry
+- validate backend continuity
+
+ClerkSessionTransport:
+- isolated low-level Clerk communication
+- NO React dependency
+- NO Clerk hook dependency
+- NO UI dependency
+
+IMPORTANT:
+
+Native auth runtime must NOT require:
+- useAuth()
+- useSignIn()
+- useClerk()
+- ClerkProvider lifecycle timing
+
+Operationally.
+
+---
+
+# REMOVE REACT LIFECYCLE DEPENDENCY
+
+Current architecture still partially depends on:
+
+React mounting order.
+
+This is forbidden.
+
+Requirements:
+
+- auth boot must complete independently
+- auth restoration must complete independently
+- refresh scheduling must complete independently
+- lifecycle recovery must complete independently
+
+React becomes:
+a passive observer only.
+
+---
+
+# BOOT BARRIER HARDENING
+
+Current RuntimeBootBarrier uses timeout continuation.
+
+This is unsafe.
+
+Refactor:
+
+Boot must terminate ONLY into explicit states:
+
+- AUTHENTICATED
+- UNAUTHENTICATED
+- DEGRADED
+- OFFLINE_RECOVERY
+- FAILED
+
+Never:
+“continue anyway after timeout.”
+
+If timeout occurs:
+- emit diagnostics
+- transition FSM explicitly
+- expose degraded capability state
+
+Never leave boot ambiguous.
+
+---
+
+# SESSION RESTORATION VALIDATION
+
+Current restoration appears metadata-based.
+
+This is insufficient.
+
+Implement:
+
+SessionRestorationValidator.ts
+
+Responsibilities:
+
+- validate persisted session integrity
+- validate refresh viability
+- validate expiry correctness
+- validate backend continuity
+- validate auth confidence
+
+IMPORTANT:
+
+Restoration success requires:
+- recoverable session continuity
+
+NOT merely:
+- persisted metadata exists
+
+---
+
+# SECURE STORAGE HARDENING
+
+Current implementation uses:
+
+@capacitor/preferences
+
+This is insufficient for production auth guarantees.
+
+Replace with:
+
+- Android Keystore-backed encrypted storage
+- iOS Keychain-backed encrypted storage
+
+Create:
+
+SecureSessionVault.ts
+
+Requirements:
+
+- encrypted persistence
+- integrity validation
+- corruption detection
+- versioned session schemas
+- migration-safe persistence
+
+Never store:
+- raw refresh tokens insecurely
+- sensitive session material unencrypted
+
+---
+
+# REFRESH OWNERSHIP ISOLATION
+
+IMPORTANT:
+
+RuntimeCore must become:
+the ONLY refresh authority.
+
+Audit entire codebase for:
+
+- hidden Clerk auto-refresh
+- duplicate token refresh logic
+- frontend session refresh ownership
+- browser-cookie-based refresh semantics
+
+Remove all duplicate refresh ownership.
+
+Requirements:
+
+- one refresh scheduler
+- one refresh executor
+- one refresh retry policy
+- one refresh state authority
+
+Refresh behavior must become:
+fully deterministic.
+
+---
+
+# LIFECYCLE RECOVERY HARDENING
+
+Strengthen:
+
+AuthLifecycleCoordinator.ts
+
+Requirements:
+
+On:
+- app resume
+- process recreation
+- Android activity recreation
+- network reconnect
+- suspend/resume cycles
+
+The runtime must:
+- reconcile auth validity
+- reconcile token freshness
+- prevent refresh storms
+- prevent duplicate recoveries
+- prevent recursive refresh loops
+
+Implement:
+
+LifecycleRecoveryLock.ts
+
+Requirements:
+
+- single recovery operation at a time
+- lifecycle-safe locking
+- cancellation-safe recovery
+- recovery deduplication
+
+---
+
+# PROCESS DEATH CORRECTNESS
+
+Assume:
+
+Android process death is normal.
+
+Test:
+
+1. authenticate successfully
+2. background app
+3. Android kills process
+4. relaunch app
+5. device offline
+6. runtime restores deterministically
+
+Requirements:
+
+- no forced logout loops
+- no hanging splash screen
+- no Clerk reinitialization races
+- no auth flicker
+- no React timing dependency
+
+---
+
+# EXPLICIT AUTH CONFIDENCE MODEL
+
+Add:
+
+AuthConfidenceLevel.ts
+
+Expose:
+
+- VERIFIED
+- RECOVERED
+- DEGRADED
+- OFFLINE_ONLY
+- RECOVERY_REQUIRED
+- INVALID
+
+The runtime must expose:
+how trustworthy the current session is.
+
+Avoid binary:
+authenticated/not-authenticated thinking.
+
+---
+
+# TRACE CORRELATION SYSTEM
+
+Current diagnostics are insufficiently correlated.
+
+Implement:
+
+TraceCorrelationManager.ts
+
+Every auth operation must receive:
+
+- boot session ID
+- auth operation ID
+- refresh chain ID
+- lifecycle event ID
+- recovery attempt ID
+
+Requirements:
+
+A complete auth flow must be reconstructable from logs.
+
+---
+
+# AUTH CHAOS TESTING
+
+Implement automated chaos scenarios.
+
+Create:
+
+runtime/auth/testing/
+  AuthChaosHarness.ts
+
+Test:
+
+- duplicate sign-in taps
+- process death during refresh
+- suspend during token exchange
+- network loss during refresh
+- offline startup with expired token
+- backend unavailable during restore
+- Google Play Services unavailable
+- corrupted persisted session
+- delayed Clerk response
+- boot timeout conditions
+- repeated resume/suspend loops
+
+Auth correctness must become:
+provable under failure conditions.
+
+---
+
+# FORBIDDEN PATTERNS
+
+Do NOT:
+
+- reintroduce React auth ownership
+- reintroduce redirect auth flows
+- depend on Clerk frontend session persistence
+- depend on WebView cookies
+- allow multiple refresh authorities
+- restore sessions from metadata alone
+- continue boot ambiguously after timeout
+- allow lifecycle-triggered refresh storms
+- allow Clerk hooks to become operational dependencies
+
+---
+
+# SUCCESS CRITERIA
+
+Implementation is complete ONLY when:
+
+- RuntimeCore is sole auth authority
+- Clerk frontend hooks are no longer operational dependencies
+- refresh ownership is fully centralized
+- process death recovery is deterministic
+- auth restoration is verifiable
+- lifecycle recovery is deterministic
+- secure encrypted persistence exists
+- auth confidence becomes explicit
+- boot outcomes become deterministic
+- auth logs become trace-correlated
+- duplicate auth operations become impossible
+- refresh storms become impossible
+- offline recovery becomes deterministic
+- Android lifecycle no longer breaks auth
+- WebView/browser state no longer affects correctness
+
+The resulting system should behave like:
+
+- a resilient mobile identity runtime
+- a deterministic operational state machine
+- a native-first authentication subsystem
+
+NOT:
+
+- a web authentication system adapted for mobile.

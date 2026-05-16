@@ -1,48 +1,27 @@
 /**
- * ClerkRuntimeBridge — wires Clerk React hooks into AuthRuntime.
+ * ClerkRuntimeBridge — native deep-link handler for OAuth fallback.
  *
- * This is the ONLY component that imports Clerk hooks. It binds them into
- * ClerkBridgeAdapter once they are available, then becomes a no-op.
+ * HARDENED: This component no longer binds Clerk React hooks into the runtime.
+ * ClerkBridgeAdapter now accesses window.Clerk directly (via ClerkSessionTransport)
+ * without any React lifecycle dependency.
  *
- * Placement: inside <ClerkProvider> but outside any auth gate, so Clerk
- * hooks are always available regardless of sign-in state.
+ * This component's ONLY remaining responsibility is:
+ * - Listen for appUrlOpen events (Clerk OAuth deep-link callbacks)
+ * - Extract the __clerk_ticket parameter
+ * - Hand it to AuthRuntime.signInWithTicket()
  *
- * Also handles the deep-link ticket callback for the web OAuth fallback path.
+ * It renders null. It is placed inside <ClerkProvider> so InternalClerkProvider
+ * initializes the window.Clerk global, but ClerkRuntimeBridge itself uses no
+ * Clerk hooks.
  */
 
-import { useEffect, useRef } from "react";
-import { useSignIn } from "@clerk/react/legacy";
-import { useAuth, useClerk } from "@clerk/react";
+import { useEffect } from "react";
 import { App as CapacitorApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
 import { AuthRuntime } from "./AuthRuntime";
 import { IS_NATIVE } from "@/lib/nativeAuth";
 
 export function ClerkRuntimeBridge() {
-  const runtime = AuthRuntime.instance;
-  const { signIn, setActive, isLoaded: signInLoaded } = useSignIn();
-  const { getToken, isLoaded: authLoaded } = useAuth();
-  const { signOut } = useClerk();
-  const boundRef = useRef(false);
-
-  // Bind Clerk hooks into the runtime adapter once both hooks are loaded
-  useEffect(() => {
-    if (!signInLoaded || !authLoaded) return;
-    if (!signIn || !setActive) return;
-    if (boundRef.current) return;
-    boundRef.current = true;
-
-    runtime.bindClerk({
-      signIn: (params) =>
-        signIn.create(params as Parameters<typeof signIn.create>[0]) as unknown as ReturnType<import("./ClerkBridgeAdapter").ClerkSignInFn>,
-      setActive: (params) => setActive(params),
-      getToken: () => getToken(),
-      signOut: () => signOut(),
-    });
-  }, [signInLoaded, authLoaded, signIn, setActive, getToken, signOut, runtime]);
-
-  // Deep-link handler for the web OAuth fallback path
-  // (when native Google auth is unavailable)
   useEffect(() => {
     if (!IS_NATIVE) return;
 
@@ -56,16 +35,18 @@ export function ClerkRuntimeBridge() {
         if (!ticket) return;
 
         await Browser.close();
-        await runtime.signInWithTicket(ticket);
+        await AuthRuntime.instance.signInWithTicket(ticket);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        runtime.journal.record("AUTH_SIGN_IN_FAILED",
-          `Deep-link ticket exchange failed: ${msg}`);
+        AuthRuntime.instance.journal.record(
+          "AUTH_SIGN_IN_FAILED",
+          `Deep-link ticket exchange failed: ${msg}`,
+        );
       }
     });
 
     return () => { handle.then((h) => h.remove()).catch(() => {}); };
-  }, [runtime]);
+  }, []);
 
   return null;
 }

@@ -5,149 +5,86 @@
  * (token exchange, session hydration, token refresh, sign-out) go through
  * this adapter.
  *
- * The adapter is wired to Clerk via two setter functions called from App.tsx
- * ONCE after ClerkProvider mounts:
- *   - bindSignIn(signIn, setActive) — the Clerk signIn object + setActive
- *   - bindGetToken(fn) — the live getToken function from useAuth
- *
- * This means the adapter can be instantiated before Clerk loads, and callers
- * queue naturally via AuthOperationQueue.
+ * HARDENED: The adapter now uses ClerkSessionTransport (window.Clerk global)
+ * directly instead of React hook bindings. There is no bind()/unbind() lifecycle.
+ * The adapter becomes operational as soon as window.Clerk.loaded is true,
+ * which happens when InternalClerkProvider initializes — independently of
+ * React component mounting order.
  */
 
 import type { RuntimeSession } from "./AuthStateStore";
-
-export type ClerkSignInFn = (params: Record<string, unknown>) => Promise<{
-  status: string | null;
-  createdSessionId?: string | null;
-  identifier?: string;
-  firstFactorVerification?: { externalVerificationRedirectURL?: { href?: string } | null };
-}>;
-export type ClerkSetActiveFn = (params: { session: string }) => Promise<void>;
-export type ClerkGetTokenFn = () => Promise<string | null>;
-export type ClerkSignOutFn = () => Promise<void>;
-
-export interface ClerkBindings {
-  signIn: ClerkSignInFn;
-  setActive: ClerkSetActiveFn;
-  getToken: ClerkGetTokenFn;
-  signOut: ClerkSignOutFn;
-}
+import { ClerkSessionTransport } from "./adapters/ClerkSessionTransport";
+import { ClerkTokenExchange } from "./adapters/ClerkTokenExchange";
+import { ClerkSessionHydrator } from "./adapters/ClerkSessionHydrator";
 
 export class ClerkBridgeAdapter {
-  private _bindings: ClerkBindings | null = null;
+  readonly transport: ClerkSessionTransport;
+  private readonly _exchange: ClerkTokenExchange;
+  readonly hydrator: ClerkSessionHydrator;
 
-  /** Called once from App.tsx after ClerkProvider + useSignIn/useAuth are ready */
-  bind(bindings: ClerkBindings): void {
-    this._bindings = bindings;
-  }
-
-  unbind(): void {
-    this._bindings = null;
-  }
-
-  get isReady(): boolean {
-    return this._bindings !== null;
+  constructor(readyTimeoutMs = 10_000) {
+    this.transport = new ClerkSessionTransport(readyTimeoutMs);
+    this._exchange = new ClerkTokenExchange(this.transport);
+    this.hydrator = new ClerkSessionHydrator(this.transport);
   }
 
   /**
-   * Exchange a Google ID token for a Clerk session.
-   * Uses the OAuth ticket flow: creates a sign-in with strategy "oauth_token",
-   * sets it active, then retrieves the JWT.
+   * True when window.Clerk is loaded. No React dependency.
+   * This replaces the old bind()/isReady pattern.
+   */
+  get isReady(): boolean {
+    return this.transport.isReady;
+  }
+
+  /**
+   * Wait for window.Clerk to load. Safe to call any number of times.
+   * Returns true on success, false on timeout.
+   */
+  async waitForReady(timeoutMs?: number): Promise<boolean> {
+    return this.transport.waitForReady(timeoutMs);
+  }
+
+  /**
+   * Exchange a native Google ID token for a Clerk session.
    */
   async exchangeGoogleIdToken(
     idToken: string,
     userId: string,
   ): Promise<RuntimeSession> {
-    this._assertReady();
-    const b = this._bindings!;
-
-    const result = await b.signIn({
-      strategy: "oauth_token",
-      provider: "oauth_google",
-      token: idToken,
-    });
-
-    if (result.status !== "complete" || !result.createdSessionId) {
-      throw new Error(
-        `[ClerkBridge] Google token exchange incomplete: status=${String(result.status)}`,
-      );
-    }
-
-    await b.setActive({ session: result.createdSessionId });
-
-    const jwt = await b.getToken();
-    if (!jwt) throw new Error("[ClerkBridge] getToken() returned null after setActive");
-
-    const expiresAt = this._parseJwtExp(jwt);
-    return {
-      sessionId: result.createdSessionId,
-      userId,
-      jwt,
-      expiresAt,
-      lastRefreshedAt: Date.now(),
-      provider: "google_native",
-    };
+    const { session } = await this._exchange.fromGoogleIdToken(idToken, userId);
+    return session;
   }
 
   /**
    * Exchange a Clerk OAuth ticket (from deep-link callback) for a session.
-   * Used as fallback when native Google auth is unavailable.
    */
   async exchangeTicket(ticket: string): Promise<RuntimeSession> {
-    this._assertReady();
-    const b = this._bindings!;
-
-    const result = await b.signIn({ strategy: "ticket", ticket });
-    if (result.status !== "complete" || !result.createdSessionId) {
-      throw new Error(
-        `[ClerkBridge] Ticket exchange incomplete: status=${String(result.status)}`,
-      );
-    }
-
-    await b.setActive({ session: result.createdSessionId });
-
-    const jwt = await b.getToken();
-    if (!jwt) throw new Error("[ClerkBridge] getToken() returned null after ticket exchange");
-
-    const expiresAt = this._parseJwtExp(jwt);
-    return {
-      sessionId: result.createdSessionId,
-      userId: result.identifier ?? "unknown",
-      jwt,
-      expiresAt,
-      lastRefreshedAt: Date.now(),
-      provider: "google_web",
-    };
+    const { session } = await this._exchange.fromTicket(ticket);
+    return session;
   }
 
-  /** Refresh the current session JWT */
+  /**
+   * Get a fresh JWT from the current session. Returns null if no session.
+   */
   async refreshToken(): Promise<string> {
-    this._assertReady();
-    const jwt = await this._bindings!.getToken();
+    const jwt = await this.transport.getToken();
     if (!jwt) throw new Error("[ClerkBridge] refreshToken: getToken() returned null");
     return jwt;
   }
 
+  /**
+   * Sign out the current Clerk session. No-op if not signed in.
+   */
   async signOut(): Promise<void> {
-    if (!this._bindings) return;
-    await this._bindings.signOut();
+    await this.transport.signOut();
   }
 
-  private _assertReady(): void {
-    if (!this._bindings) {
-      throw new Error(
-        "[ClerkBridge] Not ready — bind() has not been called yet. " +
-        "Ensure ClerkProvider has mounted and ClerkRuntimeBridge has run.",
-      );
-    }
-  }
-
-  private _parseJwtExp(jwt: string): number {
-    try {
-      const payload = JSON.parse(atob(jwt.split(".")[1])) as { exp?: number };
-      return (payload.exp ?? 0) * 1000;
-    } catch {
-      return Date.now() + 55 * 60 * 1000;
-    }
+  /**
+   * Subscribe to Clerk session changes. Returns unsubscribe fn.
+   */
+  onSessionChange(
+    fn: (meta: import("./adapters/ClerkSessionTransport").ClerkSessionMeta | null) => void,
+  ): () => void {
+    return this.transport.onSessionChange(fn);
   }
 }

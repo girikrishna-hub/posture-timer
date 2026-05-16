@@ -6,6 +6,8 @@
  * perspective.
  */
 
+import type { AuthConfidenceLevel } from "./AuthConfidenceLevel";
+
 export type AuthCapability = "FULL" | "DEGRADED" | "OFFLINE_ONLY" | "UNAVAILABLE";
 
 export interface RuntimeSession {
@@ -26,6 +28,8 @@ export interface RuntimeSession {
 export interface AuthStoreState {
   session: RuntimeSession | null;
   capability: AuthCapability;
+  /** Explicit confidence in the current session's trustworthiness */
+  confidence: AuthConfidenceLevel;
   /** True once the initial restore attempt has completed (success or failure) */
   isRestored: boolean;
   /** Human-readable description of current degradation, if any */
@@ -43,6 +47,7 @@ export type StoreListener = (state: AuthStoreState) => void;
 const INITIAL: AuthStoreState = {
   session: null,
   capability: "UNAVAILABLE",
+  confidence: "INVALID",
   isRestored: false,
   degradationReason: null,
   refreshFailures: 0,
@@ -59,26 +64,30 @@ export class AuthStateStore {
   get isAuthenticated(): boolean { return this._state.session !== null; }
   get isRestored(): boolean { return this._state.isRestored; }
   get capability(): AuthCapability { return this._state.capability; }
+  get confidence(): AuthConfidenceLevel { return this._state.confidence; }
 
   patch(partial: Partial<AuthStoreState>): void {
     this._state = { ...this._state, ...partial };
     this._notify();
   }
 
-  setSession(session: RuntimeSession | null): void {
+  setSession(session: RuntimeSession | null, confidence: AuthConfidenceLevel = "RECOVERED"): void {
     this.patch({
       session,
       capability: session ? "FULL" : "UNAVAILABLE",
+      confidence: session ? confidence : "INVALID",
       refreshFailures: 0,
       degradationReason: null,
     });
   }
 
   recordRefreshFailure(): void {
+    const newFailures = this._state.refreshFailures + 1;
     this.patch({
-      refreshFailures: this._state.refreshFailures + 1,
+      refreshFailures: newFailures,
       lastRefreshFailedAt: Date.now(),
-      capability: this._state.refreshFailures >= 2 ? "DEGRADED" : this._state.capability,
+      capability: newFailures >= 2 ? "DEGRADED" : this._state.capability,
+      confidence: newFailures >= 2 ? "DEGRADED" : "RECOVERY_REQUIRED",
     });
   }
 

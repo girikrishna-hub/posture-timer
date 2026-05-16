@@ -1,8 +1,8 @@
 /**
- * useAuthRuntime — React observation hook for AuthRuntime state.
+ * useAuthRuntime — React observation hooks for AuthRuntime state.
  *
  * React OBSERVES; it does not own. All mutations go through AuthRuntime methods.
- * This hook re-renders only when the relevant slice of state changes.
+ * These hooks re-render only when the relevant slice of state changes.
  */
 
 import { useState, useEffect, useCallback } from "react";
@@ -11,6 +11,8 @@ import type { AuthStoreState } from "./AuthStateStore";
 import type { AuthStateSnapshot } from "./AuthStateMachine";
 import type { DiagnosticsSnapshot } from "./AuthDiagnosticsJournal";
 import type { CapabilitySnapshot } from "./AuthCapabilityRegistry";
+import type { AuthConfidenceLevel } from "./AuthConfidenceLevel";
+import type { BootBarrierSnapshot } from "./RuntimeBootBarrier";
 
 export interface AuthRuntimeState {
   /** True once session restoration has completed (success or failure) */
@@ -23,6 +25,8 @@ export interface AuthRuntimeState {
   jwt: string | null;
   /** FSM state name */
   fsmState: AuthStateSnapshot["state"];
+  /** How trustworthy the current session is */
+  confidence: AuthConfidenceLevel;
   /** Human-readable degradation reason, if any */
   degradationReason: string | null;
   /** Capability level */
@@ -51,6 +55,7 @@ export function useAuthRuntime(): AuthRuntimeState {
     userId: store.session?.userId ?? null,
     jwt: store.session?.jwt ?? null,
     fsmState: fsmSnap.state,
+    confidence: store.confidence,
     degradationReason: store.degradationReason,
     capability: store.capability,
     nativeGoogleAvailable: caps.nativeSignInAvailable,
@@ -67,12 +72,12 @@ export function useAuthActions() {
   return { signInWithGoogle, signInWithTicket, signOut };
 }
 
-/** Boot barrier state — true once auth restoration is complete */
-export function useBootBarrier(): { isCleared: boolean; timedOut: boolean } {
+/** Boot barrier state */
+export function useBootBarrier(): { isCleared: boolean; timedOut: boolean; phase: BootBarrierSnapshot["phase"] } {
   const runtime = AuthRuntime.instance;
   const [snap, setSnap] = useState(() => runtime.bootBarrier.snapshot);
   useEffect(() => runtime.bootBarrier.subscribe(setSnap), [runtime]);
-  return { isCleared: snap.phase !== "WAITING", timedOut: snap.phase === "TIMEOUT" };
+  return { isCleared: snap.phase !== "WAITING", timedOut: snap.timedOut, phase: snap.phase };
 }
 
 /** Diagnostics journal — for the debug overlay */

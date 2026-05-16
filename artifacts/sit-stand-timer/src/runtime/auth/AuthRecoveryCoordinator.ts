@@ -10,7 +10,7 @@ import type { AuthStateMachine } from "./AuthStateMachine";
 import type { AuthStateStore } from "./AuthStateStore";
 import type { AuthOperationQueue } from "./AuthOperationQueue";
 import type { AuthSessionManager } from "./AuthSessionManager";
-import type { SecureSessionStore } from "./SecureSessionStore";
+import type { SecureSessionVault } from "./SecureSessionVault";
 import type { AuthDiagnosticsJournal } from "./AuthDiagnosticsJournal";
 
 const MAX_RECOVERY_ATTEMPTS = 3;
@@ -24,7 +24,7 @@ export class AuthRecoveryCoordinator {
     private readonly _store: AuthStateStore,
     private readonly _queue: AuthOperationQueue,
     private readonly _sessionMgr: AuthSessionManager,
-    private readonly _secure: SecureSessionStore,
+    private readonly _vault: SecureSessionVault,
     private readonly _journal: AuthDiagnosticsJournal,
   ) {}
 
@@ -56,8 +56,7 @@ export class AuthRecoveryCoordinator {
           "Recovery triggered — waiting for refresh");
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        this._journal.record("AUTH_RECOVERY_COMPLETED",
-          `Recovery failed: ${msg}`);
+        this._journal.record("AUTH_RECOVERY_COMPLETED", `Recovery failed: ${msg}`);
         this._fsm.tryTransition("DEGRADED", "recovery-failed");
       } finally {
         this._recovering = false;
@@ -76,15 +75,22 @@ export class AuthRecoveryCoordinator {
       return;
     }
 
-    // If offline and session not yet expired, stay degraded (offline-only)
     if (!navigator.onLine && session.expiresAt > Date.now()) {
-      this._store.patch({ degradationReason: reason, capability: "OFFLINE_ONLY" });
+      this._store.patch({
+        degradationReason: reason,
+        capability: "OFFLINE_ONLY",
+        confidence: "OFFLINE_ONLY",
+      });
       this._journal.record("AUTH_DEGRADED",
         "Offline with valid session — degraded to OFFLINE_ONLY");
       return;
     }
 
-    this._store.patch({ degradationReason: reason, capability: "DEGRADED" });
+    this._store.patch({
+      degradationReason: reason,
+      capability: "DEGRADED",
+      confidence: "DEGRADED",
+    });
   }
 
   resetAttempts(): void {
@@ -92,10 +98,9 @@ export class AuthRecoveryCoordinator {
   }
 
   private async _forceSignOut(reason: string): Promise<void> {
-    this._journal.record("AUTH_SIGN_OUT_COMPLETED",
-      `Forced sign-out: ${reason}`);
-    await this._secure.clear();
-    this._store.setSession(null);
+    this._journal.record("AUTH_SIGN_OUT_COMPLETED", `Forced sign-out: ${reason}`);
+    await this._vault.clear();
+    this._store.setSession(null, "INVALID");
     this._store.patch({ isRestored: true });
     this._fsm.tryTransition("SIGNED_OUT", reason);
   }

@@ -2,22 +2,40 @@
  * RuntimeBootBarrier — prevents the app from rendering feature UI until
  * auth restoration has resolved deterministically.
  *
- * React renders a blank/loading screen until the barrier clears.
- * The barrier self-clears on timeout to avoid hanging the app indefinitely
- * in degraded conditions (offline startup, backend unreachable).
+ * HARDENED: Boot now terminates ONLY into explicit, semantically meaningful
+ * states. "Continue anyway after timeout" is forbidden — every timeout is
+ * classified and logged as an explicit FSM state transition.
+ *
+ * Terminal states:
+ *   AUTHENTICATED    — session established and verified
+ *   UNAUTHENTICATED  — no session; user must sign in
+ *   DEGRADED         — session known but refresh failed; partial operation
+ *   OFFLINE_RECOVERY — session restored from cache; device offline
+ *   FAILED           — unrecoverable boot error
+ *
+ * On timeout the barrier does NOT just "continue" — it records diagnostics
+ * and terminates into FAILED (the runtime then decides whether to attempt
+ * UNAUTHENTICATED or stay in an error state).
  */
 
 export type BootPhase =
-  | "WAITING"        // barrier not yet cleared
-  | "CLEARED"        // auth restored normally
-  | "TIMEOUT"        // cleared by timeout (degraded mode)
-  | "ERROR";         // cleared by unrecoverable error
+  | "WAITING"           // barrier not yet cleared (initial state only)
+  | "AUTHENTICATED"     // boot complete — session verified
+  | "UNAUTHENTICATED"   // boot complete — no session, sign-in required
+  | "DEGRADED"          // boot complete — session degraded (stale/partial)
+  | "OFFLINE_RECOVERY"  // boot complete — session from cache, device offline
+  | "FAILED";           // boot failed — unrecoverable error
+
+export type BootTerminalPhase = Exclude<BootPhase, "WAITING">;
 
 export interface BootBarrierSnapshot {
   phase: BootPhase;
   clearedAt: number | null;
   elapsed: number;
+  /** True if boot terminated due to timeout rather than explicit resolution */
   timedOut: boolean;
+  /** True once barrier has cleared (any terminal phase) */
+  isCleared: boolean;
 }
 
 export type BootBarrierListener = (snap: BootBarrierSnapshot) => void;
@@ -25,11 +43,12 @@ export type BootBarrierListener = (snap: BootBarrierSnapshot) => void;
 export class RuntimeBootBarrier {
   private _phase: BootPhase = "WAITING";
   private _clearedAt: number | null = null;
-  private _startedAt: number = Date.now();
+  private _timedOut = false;
+  private readonly _startedAt: number = Date.now();
   private _timeoutId: ReturnType<typeof setTimeout> | null = null;
   private _listeners: Set<BootBarrierListener> = new Set();
   private _resolveWait: (() => void) | null = null;
-  private _waitPromise: Promise<void>;
+  private readonly _waitPromise: Promise<void>;
 
   constructor(timeoutMs = 8000) {
     this._waitPromise = new Promise<void>((resolve) => {
@@ -37,13 +56,14 @@ export class RuntimeBootBarrier {
     });
 
     this._timeoutId = setTimeout(() => {
-      if (this._phase === "WAITING") {
-        this._clear("TIMEOUT");
-        console.warn(
-          `[RuntimeBootBarrier] Auth restoration timed out after ${timeoutMs}ms — ` +
-          "clearing in degraded mode",
-        );
-      }
+      if (this._phase !== "WAITING") return;
+      this._timedOut = true;
+      // Emit diagnostics but still terminate explicitly
+      console.error(
+        `[RuntimeBootBarrier] Auth restoration timed out after ${timeoutMs}ms. ` +
+        "Terminating boot as FAILED. Check network connectivity and Clerk configuration."
+      );
+      this._terminate("FAILED");
     }, timeoutMs);
   }
 
@@ -55,16 +75,22 @@ export class RuntimeBootBarrier {
       phase: this._phase,
       clearedAt: this._clearedAt,
       elapsed: Date.now() - this._startedAt,
-      timedOut: this._phase === "TIMEOUT",
+      timedOut: this._timedOut,
+      isCleared: this._phase !== "WAITING",
     };
   }
 
-  /** Called when auth restoration completes (success or failure) */
-  clear(reason: "success" | "error" = "success"): void {
-    this._clear(reason === "error" ? "ERROR" : "CLEARED");
+  /**
+   * Terminate the barrier with an explicit semantic outcome.
+   * Each call is idempotent — subsequent calls for an already-cleared barrier are no-ops.
+   */
+  clear(phase: BootTerminalPhase): void {
+    this._terminate(phase);
   }
 
-  /** Wait until the barrier clears (or times out). */
+  /**
+   * Wait until the barrier clears (any terminal phase).
+   */
   wait(): Promise<void> {
     return this._waitPromise;
   }
@@ -75,7 +101,7 @@ export class RuntimeBootBarrier {
     return () => this._listeners.delete(fn);
   }
 
-  private _clear(phase: BootPhase): void {
+  private _terminate(phase: BootPhase): void {
     if (this._phase !== "WAITING") return;
     if (this._timeoutId !== null) {
       clearTimeout(this._timeoutId);
