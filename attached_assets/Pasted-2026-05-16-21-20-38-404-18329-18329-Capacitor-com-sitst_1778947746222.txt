@@ -1,0 +1,155 @@
+2026-05-16 21:20:38.404 18329-18329 Capacitor               com.sitstand.timer                   D  Registering plugin instance: SplashScreen
+2026-05-16 21:20:38.405 18329-18329 Capacitor               com.sitstand.timer                   D  Registering plugin instance: GoogleAuth
+2026-05-16 21:20:38.412 18329-18329 Capacitor               com.sitstand.timer                   W  Unable to read file at path public/plugins
+2026-05-16 21:20:38.414 18329-18329 Capacitor               com.sitstand.timer                   D  Loading app at https://localhost
+2026-05-16 21:20:38.418 18329-18462 Adreno-UNKNOWN          com.sitstand.timer                   I  Using previously loaded IMapper library.
+2026-05-16 21:20:38.419 18329-18445 cr_media                com.sitstand.timer                   W  BLUETOOTH_CONNECT permission is missing.
+2026-05-16 21:20:38.420 18329-18445 cr_media                com.sitstand.timer                   W  getBluetoothAdapter() requires BLUETOOTH permission
+2026-05-16 21:20:38.420 18329-18445 cr_media                com.sitstand.timer                   W  registerBluetoothIntentsIfNeeded: Requires BLUETOOTH permission
+2026-05-16 21:20:38.421 18329-18329 Capacitor/LN            com.sitstand.timer                   D  LocalNotification received: null
+2026-05-16 21:20:38.421 18329-18329 Capacitor/LN            com.sitstand.timer                   D  Activity started without notification attached
+2026-05-16 21:20:38.421 18329-18462 Adreno-UNKNOWN          com.sitstand.timer                   I  Using previously loaded IMapper library.
+2026-05-16 21:20:38.422 18329-18431 Capacitor               com.sitstand.timer                   D  Handling local request: https://localhost/
+2026-05-16 21:20:38.423 18329-18445 AudioSystem             com.sitstand.timer                   D  onNewService: media.audio_policy service obtained 0xb4000072326b75b0
+2026-05-16 21:20:38.423 18329-18445 AudioSystem             com.sitstand.timer                   D  getService: checking for service media.audio_policy: 0xb4000072326b75b0
+2026-05-16 21:20:38.424 18329-18329 Capacitor               com.sitstand.timer                   D  App started
+2026-05-16 21:20:38.424 18329-18462 AdrenoVK-0              com.sitstand.timer                   I  QUALCOMM build          : 4316f069ec, I2417731fa9
+                                                                                                    Build Date              : 04/25/25
+                                                                                                    Shader Compiler Version : E031.47.18.30
+                                                                                                    Local Branch            : 
+                                                                                                    Remote Branch           : refs/tags/AU_LINUX_ANDROID_LA.VENDOR.15.4.0.11.00.00.1088.677
+                                                                                                    Remote Branch           : NONE
+                                                                                                    Reconstruct Branch      : NOTHING
+2026-05-16 21:20:38.424 18329-18462 AdrenoVK-0              com.sitstand.timer                   I  Build Config            : S P 18.0.0 AArch64
+2026-05-16 21:20:38.424 18329-18462 AdrenoVK-0              com.sitstand.timer                   I  Driver Path             : /vendor/lib64/hw/vulkan.adreno.so
+2026-05-16 21:20:38.424 18329-18462 AdrenoVK-0              com.sitstand.timer                   I  Driver Version          : 0800.39
+2026-05-16 21:20:38.424 18329-18462 AdrenoVK-0              com.sitstand.timer                   I  PFP                     : 0x01500077
+2026-05-16 21:20:38.424 18329-18462 AdrenoVK-0              com.sitstand.timer                   I  ME                      : 0x01500014
+2026-05-16 21:20:38.424 18329-18462 AdrenoVK-0              com.sitstand.timer                   I  Application Name    : 
+                                                                                                    Application Version : 0x00000001
+                                                                                                    Engine Name         : 
+                                                                                                    Engine Version      : 0x00000001
+                                                                                                    Api Version         : 0x00403000
+2026-05-16 21:20:38.425 18329-18329 Capacitor/AppPlugin     com.sitstand.timer                   D  Firing change: true
+2026-05-16 21:20:38.425 18329-18329 Capacitor/AppPlugin     com.sitstand.timer                   V  Notifying listeners for event appStateChange
+2026-05-16 21:20:38.425 18329-18329 Capacitor/AppPlugin     com.sitstand.timer                   D  No listeners found for event appStateChange
+2026-05-16 21:20:38.426 18329-18329 Capacitor/BrowserPlugin com.sitstand.timer                   V  Notifying listeners for event browserFinished
+2026-05-16 21:20:38.426 18329-18329 Capacitor/BrowserPlugin com.sitstand.timer                   D  No listeners found for event browserFinished
+2026-05-16 21:20:38.426 18329-18329 Capacitor               com.sitstand.timer                   D  App resumed
+2026-05-16 21:20:38.434 18329-18329 ViewRootImpl            com.sitstand.timer                   D  desktopMode is false
+2026-05-16 21:20:38.436 18329-18329 ViewRootImpl            com.sitstand.timer                   I  dVRR is disabled
+2026-05-16 21:20:38.436 18329-18329 HardwareRenderer        com.sitstand.timer                   D  onDisplayChanged. displayId=0 current wxh=1080x2520 mLargest wxh=0x0
+2026-05-16 21:20:38.436 18329-18396 HWUI                    com.sitstand.timer                   D  setMaxSurfaceArea requested wxh=(1080,2520) requestedSurfaceArea(2721600) mMaxSurfaceArea(2073600)
+2026-05-16 21:20:38.436 18329-18329 HardwareRenderer        com.sitstand.timer                   D  Set largestWidth and largestHeight as logical resolution. (1080x2520)
+2026-05-16 21:20:38.437 18329-18396 NativeCust...ncyManager com.sitstand.timer                   D  [NativeCFMS] BpCustomFrequencyManager::BpCustomFrequencyManager()
+2026-05-16 21:20:38.442 18329-18329 InputTransport          com.sitstand.timer                   D  Input channel constructed: '9e96ec6', fd=193
+2026-05-16 21:20:38.442 18329-18329 InsetsController        com.sitstand.timer                   I  onStateChanged: host=com.sitstand.timer/com.sitstand.timer.MainActivity, from=android.view.ViewRootImpl.onInsetsStateChanged:3011, state=InsetsState: {mDisplayFrame=Rect(0, 0 - 1080, 2520), mDisplayCutout=DisplayCutout{insets=Rect(0, 110 - 0, 0) waterfall=Insets{left=0, top=0, right=0, bottom=0} boundingRect={Bounds=[Rect(0, 0 - 0, 0), Rect(510, 0 - 570, 110), Rect(0, 0 - 0, 0), Rect(0, 0 - 0, 0)]} cutoutPathParserInfo={CutoutPathParserInfo{displayWidth=1080 displayHeight=2520 physicalDisplayWidth=1080 physicalDisplayHeight=2520 density={2.625} cutoutSpec={M 0,0 H -11.42857142857143 V 41.9047619047619 H 11.42857142857143 V 0 H 0 Z @dp} rotation={0} scale={1.0} physicalPixelDisplaySizeRatio={1.0}}} sideOverrides={}}, mRoundedCorners=RoundedCorners{[RoundedCorner{position=TopLeft, radius=13, center=Point(13, 13)}, RoundedCorner{position=TopRight, radius=13, center=Point(1067, 13)}, RoundedCorner{position=BottomRight, radius=13, center=Point(1067, 2507)}, RoundedCorner{position=BottomLeft, radius=13, center=Point(13, 2507)}]}  mRoundedCornerFrame=Rect(0, 0 - 1080, 2520), mPrivacyIndicatorBounds=PrivacyIndicatorBounds {static bounds=Rect(964, 0 - 1080, 110) rotation=0}, mDisplayShape=DisplayShape{ spec=-311912193 displayWidth=1080 displayHeight=2520 physicalPixelDisplaySizeRatio=1.0 rotation=0 offsetX=0 offsetY=0 scale=1.0}, mSources= { InsetsSource: {b49d0001 mType=navigationBars mFrame=[0,2481][1080,2520] mVisible=true mFlags=SUPPRESS_SCRIM mSideHint=BOTTOM mBoundingRects=null}, InsetsSource: {b49d0004 mType=systemGestures mFrame=[0,0][78,2520] mVisible=true mFlags= mSideHint=LEFT mBoundingRects=null}, InsetsSource: {b49d0005 mType=mandatorySystemGestures mFrame=[0,2436][1080,2520] mVisible=true mFlags= mSideHint=BOTTOM mBoundingRects=null}, InsetsSource: {b49d0006 mType=tappableElement mFrame=[0,0][0,0] mVisible=true mFlags= mSideHint=NONE mBoundingRects=null}, InsetsSource: {b49d0024 mType=systemGestures mFrame=[1002,0][1080,2520] mVisible=true mFlags= mSideHint=RIGHT mBoundingRects=null}, InsetsSource: {ecfb0000 mType=statusBars mFrame=[0,0][1080,110] mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {ecfb0005 mType=mandatorySystemGestures mFrame=[0,0][1080,142] mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {ecfb0006 mType=tappableElement mFrame=[0,0][1080,110] mVisible=true mFlags= mSideHint=TOP mBoundingRects=null}, InsetsSource: {3 mType=ime mFrame=[0,0][0,0] mVisible=false mFlags= mSideHint=NONE mBoundingRects=null}, InsetsSource: {27 mType=displayCutout mFrame=[0,0][1080,110] mVisible=true mFlags= mSideHint=TOP mBoundingRects=null} }
+2026-05-16 21:20:38.443 18329-18329 VRI[MainAc...y]@215435c com.sitstand.timer                   I  synced displayState. AttachInfo displayState=2
+2026-05-16 21:20:38.444 18329-18329 VRI[MainAc...y]@215435c com.sitstand.timer                   I  setView = com.android.internal.policy.DecorView@2ecbaea IsHRR=false mFlingFrameRateChange=0 TM=true
+2026-05-16 21:20:38.449 18329-18493 CameraManagerGlobal     com.sitstand.timer                   I  Connecting to camera service
+2026-05-16 21:20:38.457 18329-18493 VendorTagDescriptor     com.sitstand.timer                   D  addVendorDescriptor: vendor tag id 15622750491770684145 added
+2026-05-16 21:20:38.457 18329-18329 .sitstand.timer         com.sitstand.timer                   E  Unable to open libpenguin.so: dlopen failed: library "libpenguin.so" not found.
+2026-05-16 21:20:38.458 18329-18329 libc                    com.sitstand.timer                   W  Access denied finding property "vendor.gpp.create_frc_extension"
+2026-05-16 21:20:38.458 18329-18329 BufferQueueProducer     com.sitstand.timer                   I  [](id:479900000000,api:0,p:-1302029808,c:18329) setDequeueTimeout:2077252342
+2026-05-16 21:20:38.458 18329-18329 BLASTBufferQueue_Java   com.sitstand.timer                   I  new BLASTBufferQueue, mName= VRI[MainActivity]@215435c mNativeObject= 0xb4000071026403c0 caller= android.view.ViewRootImpl.updateBlastSurfaceIfNeeded:3570 android.view.ViewRootImpl.relayoutWindow:11614 android.view.ViewRootImpl.performTraversals:4755 android.view.ViewRootImpl.doTraversal:3904 android.view.ViewRootImpl$TraversalRunnable.run:12819 android.view.Choreographer$CallbackRecord.run:1901 android.view.Choreographer$CallbackRecord.run:1910 android.view.Choreographer.doCallbacks:1367 android.view.Choreographer.doFrame:1292 android.view.Choreographer$FrameDisplayEventReceiver.run:1870 
+2026-05-16 21:20:38.458 18329-18329 BLASTBufferQueue_Java   com.sitstand.timer                   I  update, w= 1080 h= 2520 mName = VRI[MainActivity]@215435c mNativeObject= 0xb4000071026403c0 sc.mNativeObject= 0xb40000718260b390 format= -1 caller= android.view.ViewRootImpl.updateBlastSurfaceIfNeeded:3575 android.view.ViewRootImpl.relayoutWindow:11614 android.view.ViewRootImpl.performTraversals:4755 android.view.ViewRootImpl.doTraversal:3904 android.view.ViewRootImpl$TraversalRunnable.run:12819 android.view.Choreographer$CallbackRecord.run:1901 
+2026-05-16 21:20:38.458 18329-18493 VendorTagDescriptor     com.sitstand.timer                   D  addVendorDescriptor: vendor tag id 8932615658386372252 added
+2026-05-16 21:20:38.459 18329-18329 libc                    com.sitstand.timer                   W  Access denied finding property "vendor.gpp.create_frc_extension"
+2026-05-16 21:20:38.459 18329-18329 VRI[MainAc...y]@215435c com.sitstand.timer                   I  Relayout returned: old=(0,0,1080,2520) new=(0,0,1080,2520) relayoutAsync=false req=(1080,2520)0 dur=2 res=0x3 s={true 0xb400007272629370} ch=true seqId=0
+2026-05-16 21:20:38.459 18329-18329 VRI[MainAc...y]@215435c com.sitstand.timer                   I  performConfigurationChange setNightDimText nightDimLevel=0
+2026-05-16 21:20:38.460 18329-18329 VRI[MainAc...y]@215435c com.sitstand.timer                   D  mThreadedRenderer.initialize() mSurface={isValid=true 0xb400007272629370} hwInitialized=true
+2026-05-16 21:20:38.460 18329-18329 VRI[MainAc...y]@215435c com.sitstand.timer                   D  reportNextDraw android.view.ViewRootImpl.performTraversals:5394 android.view.ViewRootImpl.doTraversal:3904 android.view.ViewRootImpl$TraversalRunnable.run:12819 android.view.Choreographer$CallbackRecord.run:1901 android.view.Choreographer$CallbackRecord.run:1910 
+2026-05-16 21:20:38.461 18329-18329 VRI[MainAc...y]@215435c com.sitstand.timer                   D  Setup new sync=wmsSync-VRI[MainActivity]@215435c#0
+2026-05-16 21:20:38.461 18329-18329 VRI[MainAc...y]@215435c com.sitstand.timer                   I  Creating new active sync group VRI[MainActivity]@215435c#1
+2026-05-16 21:20:38.462 18329-18329 VRI[MainAc...y]@215435c com.sitstand.timer                   D  registerCallbacksForSync syncBuffer=false
+2026-05-16 21:20:38.463 18329-18329 View                    com.sitstand.timer                   I  setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{e5bad6a VFEDHVC.. .F...... 0,110-1080,2481 #7f0800ce app:id/webview}, caller=android.view.ViewGroup.setRequestedFrameRate:9947 WV.zf.p:1 WV.zg.h:117 WV.zg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+2026-05-16 21:20:38.480 18329-18447 Capacitor               com.sitstand.timer                   D  Handling local request: https://localhost/assets/index-BiPrp5Aj.js
+2026-05-16 21:20:38.480 18329-18431 Capacitor               com.sitstand.timer                   D  Handling local request: https://localhost/assets/vendor-query-BmCY4Z4E.js
+2026-05-16 21:20:38.480 18329-18449 Capacitor               com.sitstand.timer                   D  Handling local request: https://localhost/assets/vendor-react-UBDYC0jf.js
+2026-05-16 21:20:38.480 18329-18435 Capacitor               com.sitstand.timer                   D  Handling local request: https://localhost/assets/vendor-capacitor-Cvm4FjJ2.js
+2026-05-16 21:20:38.483 18329-18493 CameraManager           com.sitstand.timer                   I  registerAvailabilityCallback: Is device callback = false
+2026-05-16 21:20:38.486 18329-18341 CameraManagerGlobal     com.sitstand.timer                   I  Camera 0 facing CAMERA_FACING_BACK state now CAMERA_STATE_CLOSED for client com.android.settings API Level 1 User Id 0Device Id 0
+2026-05-16 21:20:38.486 18329-18341 CameraManagerGlobal     com.sitstand.timer                   I  Camera 1 facing CAMERA_FACING_FRONT state now CAMERA_STATE_CLOSED for client android.system API Level 2 User Id 0Device Id 0
+2026-05-16 21:20:38.486 18329-18341 CameraManagerGlobal     com.sitstand.timer                   I  Camera 2 facing CAMERA_FACING_BACK state now CAMERA_STATE_CLOSED for client android.system API Level 2 User Id 0Device Id 0
+2026-05-16 21:20:38.486 18329-18341 CameraManagerGlobal     com.sitstand.timer                   I  Camera 20 facing CAMERA_FACING_BACK state now CAMERA_STATE_CLOSED for client android.system API Level 2 User Id 0Device Id 0
+2026-05-16 21:20:38.486 18329-18341 CameraManagerGlobal     com.sitstand.timer                   I  Camera 21 facing CAMERA_FACING_BACK state now CAMERA_STATE_CLOSED for client android.system API Level 2 User Id 0Device Id 0
+2026-05-16 21:20:38.486 18329-18341 CameraManagerGlobal     com.sitstand.timer                   I  Camera 23 facing CAMERA_FACING_BACK state now CAMERA_STATE_CLOSED for client android.system API Level 2 User Id 0Device Id 0
+2026-05-16 21:20:38.486 18329-18341 CameraManagerGlobal     com.sitstand.timer                   I  Camera 3 facing CAMERA_FACING_FRONT state now CAMERA_STATE_CLOSED for client com.samsung.android.smartface API Level 2 User Id 0Device Id 0
+2026-05-16 21:20:38.487 18329-18341 CameraManagerGlobal     com.sitstand.timer                   I  Camera 4 facing CAMERA_FACING_FRONT state now CAMERA_STATE_CLOSED for client android.system API Level 2 User Id 0Device Id 0
+2026-05-16 21:20:38.487 18329-18505 CameraManagerGlobal     com.sitstand.timer                   I  Camera 52 facing CAMERA_FACING_BACK state now CAMERA_STATE_CLOSED for client android.system API Level 2 User Id 0Device Id 0
+2026-05-16 21:20:38.487 18329-18505 CameraManagerGlobal     com.sitstand.timer                   I  Camera 56 facing CAMERA_FACING_BACK state now CAMERA_STATE_CLOSED for client com.sec.android.app.camera API Level 2 User Id 0Device Id 0
+2026-05-16 21:20:38.487 18329-18505 CameraManagerGlobal     com.sitstand.timer                   I  Camera 58 facing CAMERA_FACING_BACK state now CAMERA_STATE_CLOSED for client android.system API Level 2 User Id 0Device Id 0
+2026-05-16 21:20:38.487 18329-18505 CameraManagerGlobal     com.sitstand.timer                   I  Camera 71 facing CAMERA_FACING_FRONT state now CAMERA_STATE_CLOSED for client android.system API Level 2 User Id 0Device Id 0
+2026-05-16 21:20:38.487 18329-18505 CameraManagerGlobal     com.sitstand.timer                   I  Camera 73 facing CAMERA_FACING_FRONT state now CAMERA_STATE_CLOSED for client android.system API Level 2 User Id 0Device Id 0
+2026-05-16 21:20:38.487 18329-18505 CameraManagerGlobal     com.sitstand.timer                   I  Camera 90 facing CAMERA_FACING_FRONT state now CAMERA_STATE_CLOSED for client android.system API Level 2 User Id 0Device Id 0
+2026-05-16 21:20:38.488 18329-18432 Capacitor               com.sitstand.timer                   D  Handling local request: https://localhost/assets/vendor-clerk-BQdZlU3L.js
+2026-05-16 21:20:38.490 18329-18462 AdrenoGLES-0            com.sitstand.timer                   I  QUALCOMM build                   : 4316f069ec, I2417731fa9
+                                                                                                    Build Date                       : 04/25/25
+                                                                                                    OpenGL ES Shader Compiler Version: E031.47.18.30
+                                                                                                    Local Branch                     : 
+                                                                                                    Remote Branch                    : refs/tags/AU_LINUX_ANDROID_LA.VENDOR.15.4.0.11.00.00.1088.677
+                                                                                                    Remote Branch                    : NONE
+                                                                                                    Reconstruct Branch               : NOTHING
+2026-05-16 21:20:38.490 18329-18462 AdrenoGLES-0            com.sitstand.timer                   I  Build Config                     : S P 18.0.0 AArch64
+2026-05-16 21:20:38.490 18329-18462 AdrenoGLES-0            com.sitstand.timer                   I  Driver Path                      : /vendor/lib64/egl/libGLESv2_adreno.so
+2026-05-16 21:20:38.490 18329-18462 AdrenoGLES-0            com.sitstand.timer                   I  Driver Version                   : 0800.39
+2026-05-16 21:20:38.490 18329-18462 AdrenoGLES-0            com.sitstand.timer                   I  Process Name                     : com.sitstand.timer
+2026-05-16 21:20:38.490 18329-18493 CameraManagerGlobal     com.sitstand.timer                   I  postSingleUpdate device: camera id 0 status STATUS_PRESENT
+2026-05-16 21:20:38.490 18329-18493 CameraManagerGlobal     com.sitstand.timer                   I  postSingleUpdate device: camera id 1 status STATUS_PRESENT
+2026-05-16 21:20:38.490 18329-18493 CameraManagerGlobal     com.sitstand.timer                   I  postSingleUpdate device: camera id 2 status STATUS_PRESENT
+2026-05-16 21:20:38.490 18329-18493 CameraManagerGlobal     com.sitstand.timer                   I  postSingleUpdate device: camera id 3 status STATUS_PRESENT
+2026-05-16 21:20:38.493 18329-18462 AdrenoGLES-0            com.sitstand.timer                   I  PFP: 0x01500077, ME: 0x01500014
+2026-05-16 21:20:38.493 18329-18447 Capacitor               com.sitstand.timer                   D  Handling local request: https://localhost/assets/vendor-radix-BhL_FeHZ.js
+2026-05-16 21:20:38.493 18329-18435 Capacitor               com.sitstand.timer                   D  Handling local request: https://localhost/assets/index-CBNmjRoY.css
+2026-05-16 21:20:38.493 18329-18431 Capacitor               com.sitstand.timer                   D  Handling local request: https://localhost/assets/vendor-charts-CS8cbwD1.js
+2026-05-16 21:20:38.494 18329-18462 Adreno-AppProfiles      com.sitstand.timer                   E  QSPM AIDL service doesn't exist
+2026-05-16 21:20:38.498 18329-18462 AdrenoUtils             com.sitstand.timer                   I  <ReadGpuID:366>: Reading chip ID through GSL
+2026-05-16 21:20:38.535 18329-18462 Adreno-UNKNOWN          com.sitstand.timer                   I  Using previously loaded IMapper library.
+2026-05-16 21:20:38.536 18329-18486 VRI[MainAc...y]@215435c com.sitstand.timer                   D  Received frameDrawingCallback syncResult=0 frameNum=1.
+2026-05-16 21:20:38.536 18329-18486 VRI[MainAc...y]@215435c com.sitstand.timer                   I  mWNT: t=0xb40000717260e450 mBlastBufferQueue=0xb4000071026403c0 fn= 1 HdrRenderState mRenderHdrSdrRatio=1.0 caller= android.view.ViewRootImpl$12.onFrameDraw:15352 android.view.ThreadedRenderer$1.onFrameDraw:718 <bottom of call stack> 
+2026-05-16 21:20:38.536 18329-18486 VRI[MainAc...y]@215435c com.sitstand.timer                   I  Setting up sync and frameCommitCallback
+2026-05-16 21:20:38.538 18329-18462 Adreno-UNKNOWN          com.sitstand.timer                   I  Using previously loaded IMapper library.
+2026-05-16 21:20:38.541 18329-18462 AdrenoVK-0              com.sitstand.timer                   I  QUALCOMM build          : 4316f069ec, I2417731fa9
+                                                                                                    Build Date              : 04/25/25
+                                                                                                    Shader Compiler Version : E031.47.18.30
+                                                                                                    Local Branch            : 
+                                                                                                    Remote Branch           : refs/tags/AU_LINUX_ANDROID_LA.VENDOR.15.4.0.11.00.00.1088.677
+                                                                                                    Remote Branch           : NONE
+                                                                                                    Reconstruct Branch      : NOTHING
+2026-05-16 21:20:38.541 18329-18462 AdrenoVK-0              com.sitstand.timer                   I  Build Config            : S P 18.0.0 AArch64
+2026-05-16 21:20:38.544 18329-18335 .sitstand.timer         com.sitstand.timer                   I  Compiler allocated 5066KB to compile void android.view.ViewRootImpl.performTraversals()
+2026-05-16 21:20:38.558 18329-18462 AdrenoVK-0              com.sitstand.timer                   I  Driver Path             : /vendor/lib64/hw/vulkan.adreno.so
+2026-05-16 21:20:38.558 18329-18462 AdrenoVK-0              com.sitstand.timer                   I  Driver Version          : 0800.39
+2026-05-16 21:20:38.558 18329-18462 AdrenoVK-0              com.sitstand.timer                   I  PFP                     : 0x01500077
+2026-05-16 21:20:38.558 18329-18462 AdrenoVK-0              com.sitstand.timer                   I  ME                      : 0x01500014
+2026-05-16 21:20:38.558 18329-18462 AdrenoVK-0              com.sitstand.timer                   I  Application Name    : Chromium
+                                                                                                    Application Version : 0x00000000
+                                                                                                    Engine Name         : (null)
+                                                                                                    Engine Version      : 0x00000000
+                                                                                                    Api Version         : 0x00401000
+2026-05-16 21:20:38.564 18329-18396 BLASTBufferQueue        com.sitstand.timer                   I  [VRI[MainActivity]@215435c#0](f:0,a:0,s:0) onFrameAvailable the first frame is available
+2026-05-16 21:20:38.565 18329-18396 SurfaceComposerClient   com.sitstand.timer                   I  apply transaction with the first frame. layerId: 2388, bufferData(ID: 78722455568387, frameNumber: 1)
+2026-05-16 21:20:38.565 18329-18396 VRI[MainAc...y]@215435c com.sitstand.timer                   I  Received frameCommittedCallback lastAttemptedDrawFrameNum=1 didProduceBuffer=true
+2026-05-16 21:20:38.565 18329-18396 HWUI                    com.sitstand.timer                   D  CFMS:: SetUp Pid : 18329    Tid : 18396
+2026-05-16 21:20:38.565 18329-18329 VRI[MainAc...y]@215435c com.sitstand.timer                   D  reportDrawFinished seqId=0
+2026-05-16 21:20:38.571 18329-18329 .sitstand.timer         com.sitstand.timer                   I  hiddenapi: Accessing hidden field Landroid/content/pm/ApplicationInfo;->primaryCpuAbi:Ljava/lang/String; (runtime_flags=0, domain=platform, api=unsupported) from Lorg/chromium/android_webview/SystemStateUtil; (domain=app, TargetSdkVersion=36) using reflection: allowed
+2026-05-16 21:20:38.573 18329-18454 AudioCapabilities       com.sitstand.timer                   W  Unsupported mediaType audio/x-ape
+2026-05-16 21:20:38.573 18329-18454 AudioCapabilities       com.sitstand.timer                   W  Unsupported mediaType audio/x-ima
+2026-05-16 21:20:38.573 18329-18454 AudioCapabilities       com.sitstand.timer                   W  Unsupported mediaType audio/mpeg-L1
+2026-05-16 21:20:38.573 18329-18454 AudioCapabilities       com.sitstand.timer                   W  Unsupported mediaType audio/mpeg-L2
+2026-05-16 21:20:38.574 18329-18396 HWUI                    com.sitstand.timer                   D  HWUI - treat SMPTE_170M as sRGB
+2026-05-16 21:20:38.574 18329-18454 VideoCapabilities       com.sitstand.timer                   W  Unsupported mime video/wvc1
+2026-05-16 21:20:38.574 18329-18454 VideoCapabilities       com.sitstand.timer                   W  Unsupported mime video/x-ms-wmv
+2026-05-16 21:20:38.574 18329-18329 View                    com.sitstand.timer                   I  setRequestedFrameRate frameRate=-4.0, this=com.getcapacitor.CapacitorWebView{e5bad6a VFEDHVC.. .F...... 0,110-1080,2481 #7f0800ce app:id/webview}, caller=android.view.ViewGroup.setRequestedFrameRate:9947 WV.zf.p:1 WV.zg.h:117 WV.zg.onDraw:7 com.android.webview.chromium.WebViewChromium.onDraw:19 
+2026-05-16 21:20:38.575 18329-18329 InsetsSourceConsumer    com.sitstand.timer                   I  applyRequestedVisibilityToControl: visible=true, type=statusBars, host=com.sitstand.timer/com.sitstand.timer.MainActivity
+2026-05-16 21:20:38.575 18329-18329 InsetsSourceConsumer    com.sitstand.timer                   I  applyRequestedVisibilityToControl: visible=true, type=navigationBars, host=com.sitstand.timer/com.sitstand.timer.MainActivity
+2026-05-16 21:20:38.580 18329-18454 AudioCapabilities       com.sitstand.timer                   W  Unsupported mediaType audio/iamf
+2026-05-16 21:20:38.587 18329-18454 VideoCapabilities       com.sitstand.timer                   W  Unsupported mime video/x-mvhevc
+2026-05-16 21:20:38.588 18329-18454 VideoCapabilities       com.sitstand.timer                   W  Unsupported mime image/vnd.android.heic
+2026-05-16 21:20:38.588 18329-18329 VRI[MainAc...y]@215435c com.sitstand.timer                   D  mThreadedRenderer.initializeIfNeeded()#2 mSurface={isValid=true 0xb400007272629370}
+2026-05-16 21:20:38.588 18329-18454 VideoCapabilities       com.sitstand.timer                   W  Unrecognized profile/level 32768/256 for video/mp4v-es
+2026-05-16 21:20:38.588 18329-18329 InputMethodManagerUtils com.sitstand.timer                   D  startInputInner - Id : 0
+2026-05-16 21:20:38.588 18329-18329 InputMethodManager      com.sitstand.timer                   I  startInputInner - IInputMethodManagerGlobalInvoker.startInputOrWindowGainedFocus
+2026-05-16 21:20:38.594 18329-18329 cr_A11yState            com.sitstand.timer                   I  Enabled accessibility services list updated. [com.kms.free/com.kaspersky.components.accessibility.KasperskyAccessibility]
+2026-05-16 21:20:38.595 18329-18329 cr_A11yState            com.sitstand.timer                   I  Informing listeners of changes.
+2026-05-16 21:20:38.595 18329-18329 cr_A11yState           
