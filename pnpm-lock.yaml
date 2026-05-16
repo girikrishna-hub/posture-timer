@@ -423,6 +423,9 @@ importers:
       '@capacitor/local-notifications':
         specifier: ^8.1.0
         version: 8.1.0(@capacitor/core@8.3.4)
+      '@capacitor/preferences':
+        specifier: ^8.0.1
+        version: 8.0.1(@capacitor/core@8.3.4)
       '@capacitor/splash-screen':
         specifier: ^8.0.1
         version: 8.0.1(@capacitor/core@8.3.4)
@@ -432,6 +435,9 @@ importers:
       '@clerk/themes':
         specifier: ^2.4.57
         version: 2.4.57(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@codetrix-studio/capacitor-google-auth':
+        specifier: ^3.3.6
+        version: 3.3.6(@capacitor/core@8.3.4)
       html2canvas:
         specifier: ^1.4.1
         version: 1.4.1
@@ -1293,6 +1299,11 @@ packages:
     peerDependencies:
       '@capacitor/core': '>=8.0.0'
 
+  '@capacitor/preferences@8.0.1':
+    resolution: {integrity: sha512-T6no3ebi79XJCk91U3Jp/liJUwgBdvHR+s6vhvPkPxSuch7z3zx5Rv1bdWM6sWruNx+pViuEGqZvbfCdyBvcHQ==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
+
   '@capacitor/splash-screen@8.0.1':
     resolution: {integrity: sha512-c/ew/Z3eA7z8l06WoRAtzVF16VwYYrExmHmfGq1Cg675pVzaC/yuucB8/1xG1vhEfnW4fZ1KhSf/kzR1RiVYgg==}
     peerDependencies:
@@ -1342,6 +1353,11 @@ packages:
   '@clerk/themes@2.4.57':
     resolution: {integrity: sha512-Nb3bO79rMTU/MPVTC/dde6LG27/IgOMKIYi5KSvAmO4ZUHlj0OWufu6CMvz5OYVZ0YdyMnTBU2aPGRUiRzO+2w==}
     engines: {node: '>=18.17.0'}
+
+  '@codetrix-studio/capacitor-google-auth@3.3.6':
+    resolution: {integrity: sha512-SiMjYq5O2rWzEdKrmu3VZQ2nmFdq6LUXPzsNbjs4Ri6WTJVCtzp1HI12t4Dcwi5YoSw8g94Iyi3Can8msj57QA==}
+    peerDependencies:
+      '@capacitor/core': ^5.0.0
 
   '@commander-js/extra-typings@14.0.0':
     resolution: {integrity: sha512-hIn0ncNaJRLkZrxBIp5AsW/eXEHNKYQBh0aPdoUqNgD+Io3NIykQqpKFyKcuasZhicGaEZJX/JBSIkZ4e5x8Dg==}
@@ -6144,6 +6160,10 @@ snapshots:
     dependencies:
       '@capacitor/core': 8.3.4
 
+  '@capacitor/preferences@8.0.1(@capacitor/core@8.3.4)':
+    dependencies:
+      '@capacitor/core': 8.3.4
+
   '@capacitor/splash-screen@8.0.1(@capacitor/core@8.3.4)':
     dependencies:
       '@capacitor/core': 8.3.4
@@ -6204,6 +6224,10 @@ snapshots:
     transitivePeerDependencies:
       - react
       - react-dom
+
+  '@codetrix-studio/capacitor-google-auth@3.3.6(@capacitor/core@8.3.4)':
+    dependencies:
+      '@capacitor/core': 8.3.4
 
   '@commander-js/extra-typings@14.0.0(commander@14.0.3)':
     dependencies:

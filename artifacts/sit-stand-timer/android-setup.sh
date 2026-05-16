@@ -197,9 +197,9 @@ else
   fi
 fi
 
-# ── 6. Patch MainActivity to register the plugin ─────────────────────────────
+# ── 6. Patch MainActivity to register plugins ─────────────────────────────────
 echo ""
-echo "▸ Registering AlarmManagerPlugin in MainActivity …"
+echo "▸ Registering plugins in MainActivity …"
 
 # Search for MainActivity.kt anywhere under android/ — Capacitor may place it
 # at a different subpath depending on the project setup or OS.
@@ -210,18 +210,29 @@ if [ -z "$MAIN" ]; then
   echo "     Run 'npx cap add android' first, then re-run this script."
 else
   echo "  (found: $MAIN)"
+
+  # ── 6a. AlarmManagerPlugin ────────────────────────────────────────────────
   if grep -q "AlarmManagerPlugin" "$MAIN"; then
-    echo "  ✓ Plugin already registered"
+    echo "  ✓ AlarmManagerPlugin already registered"
   else
-    # Replace the class body opening line with registration added
+    # Add onCreate override with AlarmManagerPlugin registration
     sedi 's/class MainActivity : BridgeActivity() {/class MainActivity : BridgeActivity() {\n    override fun onCreate(savedInstanceState: Bundle?) {\n        registerPlugin(AlarmManagerPlugin::class.java)\n        super.onCreate(savedInstanceState)\n    }/' "$MAIN"
 
-    # Add import if missing
     if ! grep -q "import android.os.Bundle" "$MAIN"; then
       sedi '1s/^/import android.os.Bundle\n/' "$MAIN"
     fi
+    echo "  ✓ AlarmManagerPlugin registered"
+  fi
 
-    echo "  ✓ Plugin registered"
+  # ── 6b. GoogleAuth plugin ─────────────────────────────────────────────────
+  # @codetrix-studio/capacitor-google-auth requires explicit registration on
+  # newer versions of Capacitor (v5+). We add it alongside AlarmManagerPlugin.
+  if grep -q "GoogleAuth" "$MAIN"; then
+    echo "  ✓ GoogleAuth plugin already registered"
+  else
+    # Insert registerPlugin(GoogleAuth::class.java) into the existing onCreate
+    sedi 's/registerPlugin(AlarmManagerPlugin::class.java)/registerPlugin(AlarmManagerPlugin::class.java)\n        registerPlugin(com.codetrixstudio.capacitor.GoogleAuth.GoogleAuth::class.java)/' "$MAIN"
+    echo "  ✓ GoogleAuth plugin registered"
   fi
 fi
 
