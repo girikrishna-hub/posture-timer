@@ -1,24 +1,37 @@
 /**
  * NativeSessionTransport — backend-mediated session transport for native Android.
  *
- * Replaces ClerkSessionTransport on Capacitor native builds.
- * No window.Clerk dependency. No frontend SDK initialization required.
+ * Security model (hardened):
+ *   Access tokens  — short-lived HS256 JWT (30 min), stateless
+ *   Refresh tokens — opaque 32-byte hex, server-tracked, rotated on every use
  *
- * Exchange flow:
- *   1. Native GoogleAuth.signIn() → Google ID token (handled by GoogleAuthAdapter)
- *   2. POST /api/auth/native/google — backend verifies token with Google,
- *      finds/creates Clerk user via BAPI, issues a signed native JWT
- *   3. Subsequent refreshes: POST /api/auth/native/refresh with the stored JWT
+ * Local storage:
+ *   Refresh token and session ID are stored in @capacitor/preferences under
+ *   dedicated keys (separate from SecureSessionVault's auth metadata).
+ *   On sign-out, both are cleared before the revoke network call so that
+ *   a network failure does not leave credentials in local storage.
  *
- * The backend is the sole authority for session issuance. No Clerk frontend-
- * origin validation participates in this path.
+ * Error signaling:
+ *   HTTP 401 responses from /auth/native/refresh throw AuthProviderError
+ *   with isNonRetriable=true. AuthSessionManager's classifyClerkError() picks
+ *   this up and immediately transitions to SIGNED_OUT — no retry.
+ *
+ * No window.Clerk dependency. No frontend-origin validation.
  */
 
+import { Preferences } from "@capacitor/preferences";
+import { AuthProviderError } from "../AuthProviderError";
+
+const REFRESH_TOKEN_KEY = "native_rt_v1";
+const SESSION_ID_KEY    = "native_sid_v1";
+const DEVICE_ID_KEY     = "native_device_id";
+
 export interface NativeTransportResult {
-  jwt: string;
-  sessionId: string;
-  userId: string;
-  expiresAt: number;
+  jwt:          string;   // access token (short-lived)
+  refreshToken: string;   // opaque refresh token (stored locally, never in RuntimeSession)
+  sessionId:    string;
+  userId:       string;
+  expiresAt:    number;   // ms since epoch (access token expiry)
 }
 
 export class NativeSessionTransport {
@@ -27,54 +40,162 @@ export class NativeSessionTransport {
 
   constructor(getCurrentJwt: () => string | null) {
     const base = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
-    this._apiRoot = base ? `${base}/api` : "/api";
+    this._apiRoot    = base ? `${base}/api` : "/api";
     this._getCurrentJwt = getCurrentJwt;
   }
 
-  get isReady(): boolean {
-    return true;
-  }
+  get isReady(): boolean { return true; }
+  async waitForReady(_timeoutMs?: number): Promise<boolean> { return true; }
 
-  async waitForReady(_timeoutMs?: number): Promise<boolean> {
-    return true;
-  }
+  // ── Session establishment ──────────────────────────────────────────────────
 
   async exchangeGoogleIdToken(idToken: string): Promise<NativeTransportResult> {
+    const deviceId = await this._getOrCreateDeviceId();
+
     const resp = await fetch(`${this._apiRoot}/auth/native/google`, {
-      method: "POST",
+      method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idToken }),
+      body: JSON.stringify({
+        idToken,
+        deviceId,
+        platform:   "android",
+        appVersion: (import.meta.env.VITE_APP_VERSION as string | undefined) ?? "unknown",
+      }),
     });
+
     if (!resp.ok) {
       const body = await resp.json().catch(() => ({ error: "exchange failed" })) as { error?: string };
       throw new Error(
         `[NativeTransport] google exchange ${resp.status}: ${body.error ?? "unknown"}`,
       );
     }
-    return resp.json() as Promise<NativeTransportResult>;
+
+    const data = await resp.json() as {
+      accessToken:  string;
+      refreshToken: string;
+      sessionId:    string;
+      userId:       string;
+      expiresAt:    number;
+    };
+
+    // Persist refresh credentials immediately after successful exchange
+    await Promise.all([
+      Preferences.set({ key: REFRESH_TOKEN_KEY, value: data.refreshToken }),
+      Preferences.set({ key: SESSION_ID_KEY,    value: data.sessionId }),
+    ]);
+
+    return {
+      jwt:          data.accessToken,
+      refreshToken: data.refreshToken,
+      sessionId:    data.sessionId,
+      userId:       data.userId,
+      expiresAt:    data.expiresAt,
+    };
   }
+
+  // ── Token rotation ─────────────────────────────────────────────────────────
 
   /**
-   * Refresh the current native JWT.
-   * Sends the current JWT as a Bearer token; backend verifies and issues a new one.
-   * Returns the new JWT string, or null if the session cannot be refreshed.
+   * Refresh the access token using the stored opaque refresh token.
+   *
+   * On success: persists the new refresh token (old one is now permanently invalid).
+   * On 401:     throws AuthProviderError(SESSION_INVALIDATED, isNonRetriable=true)
+   *             → AuthSessionManager will skip retry and trigger sign-out.
+   * On network error: returns null → AuthSessionManager will retry with backoff.
    */
   async refreshCurrentToken(): Promise<string | null> {
-    const currentJwt = this._getCurrentJwt();
-    if (!currentJwt) return null;
+    const [rtResult, sidResult] = await Promise.all([
+      Preferences.get({ key: REFRESH_TOKEN_KEY }),
+      Preferences.get({ key: SESSION_ID_KEY }),
+    ]);
 
-    const resp = await fetch(`${this._apiRoot}/auth/native/refresh`, {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${currentJwt}` },
-    });
-    if (!resp.ok) return null;
+    const refreshToken = rtResult.value;
+    const sessionId    = sidResult.value;
 
-    const data = await resp.json() as { token?: string };
-    return data.token ?? null;
+    if (!refreshToken || !sessionId) return null;
+
+    let resp: Response;
+    try {
+      resp = await fetch(`${this._apiRoot}/auth/native/refresh`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ refreshToken, sessionId }),
+      });
+    } catch {
+      return null; // transient network error — eligible for retry
+    }
+
+    if (resp.status === 401) {
+      const body = await resp.json().catch(() => ({})) as { error?: string };
+      throw new AuthProviderError(
+        "SESSION_INVALIDATED",
+        `[NativeTransport] refresh rejected: ${body.error ?? "unauthorized"}`,
+      );
+    }
+
+    if (!resp.ok) return null; // other server error — retry eligible
+
+    const data = await resp.json() as {
+      accessToken?:  string;
+      refreshToken?: string;
+    };
+
+    // Rotate stored refresh token — old one is now permanently invalid
+    if (data.refreshToken) {
+      await Preferences.set({ key: REFRESH_TOKEN_KEY, value: data.refreshToken });
+    }
+
+    return data.accessToken ?? null;
   }
 
+  // ── Session revocation ────────────────────────────────────────────────────
+
+  /**
+   * Explicitly revoke the current session (called on sign-out).
+   *
+   * Clears local credentials BEFORE the network call so that a network
+   * failure does not leave the refresh token accessible on-device.
+   * Server revocation is best-effort (fire-and-forget on error).
+   */
+  async revokeCurrentSession(): Promise<void> {
+    const [rtResult, sidResult] = await Promise.all([
+      Preferences.get({ key: REFRESH_TOKEN_KEY }),
+      Preferences.get({ key: SESSION_ID_KEY }),
+    ]);
+
+    const refreshToken = rtResult.value;
+    const sessionId    = sidResult.value;
+
+    // Clear local tokens first — security-critical order
+    await Promise.allSettled([
+      Preferences.remove({ key: REFRESH_TOKEN_KEY }),
+      Preferences.remove({ key: SESSION_ID_KEY }),
+    ]);
+
+    if (refreshToken && sessionId) {
+      // Best-effort server revocation — sign-out must succeed even offline
+      fetch(`${this._apiRoot}/auth/native/revoke`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ refreshToken, sessionId }),
+      }).catch(() => {});
+    }
+  }
+
+  // ── Convenience passthrough (no-ops in native mode) ───────────────────────
+
   async signOut(): Promise<void> {
-    // Native JWTs are stateless. Session termination is handled by
-    // SecureSessionVault.clear() in AuthRuntime.signOut().
+    await this.revokeCurrentSession();
+  }
+
+  // ── Private helpers ────────────────────────────────────────────────────────
+
+  private async _getOrCreateDeviceId(): Promise<string> {
+    const { value } = await Preferences.get({ key: DEVICE_ID_KEY });
+    if (value) return value;
+    // Generate a stable device identifier for this installation
+    const id = crypto.randomUUID();
+    await Preferences.set({ key: DEVICE_ID_KEY, value: id });
+    return id;
   }
 }

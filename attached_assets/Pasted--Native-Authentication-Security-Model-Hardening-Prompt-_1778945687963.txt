@@ -1,0 +1,490 @@
+# Native Authentication Security Model Hardening Prompt
+
+IMPORTANT:
+
+The authentication runtime architecture is now considered stable.
+
+Do NOT:
+- redesign RuntimeCore
+- replace the auth FSM
+- add new orchestration systems
+- reintroduce Clerk frontend ownership
+- regress toward browser-driven auth
+- add speculative infrastructure
+
+The remaining work is:
+security-model hardening.
+
+The goal is:
+
+Transform the current native JWT implementation from:
+“working mobile auth”
+
+into:
+“production-safe session security.”
+
+This phase focuses ONLY on:
+
+- secure session semantics
+- token lifecycle hardening
+- refresh security
+- revocation correctness
+- replay resistance
+- cryptographic correctness
+- deterministic invalidation
+- production-safe trust boundaries
+
+---
+
+# CURRENT ARCHITECTURE
+
+Current flow:
+
+Native Google Sign-In
+↓
+Backend verifies Google ID token
+↓
+Backend creates/fetches Clerk user
+↓
+Backend issues native JWT
+↓
+RuntimeCore manages lifecycle
+↓
+Backend APIs trust native JWT
+
+This architecture is correct and should be preserved.
+
+The problem is:
+the session security model is currently too weak for production deployment.
+
+---
+
+# PRIMARY OBJECTIVE
+
+Replace the current:
+“long-lived HS256 JWT auth model”
+
+with:
+
+- short-lived access tokens
+- server-tracked refresh sessions
+- deterministic revocation
+- replay-resistant refresh rotation
+- explicit session invalidation semantics
+
+WITHOUT:
+changing the RuntimeCore architecture.
+
+---
+
+# REQUIRED SECURITY MODEL
+
+Implement:
+
+1. short-lived access tokens
+2. opaque refresh tokens
+3. refresh token rotation
+4. server-side session tracking
+5. deterministic session revocation
+6. replay detection
+7. account invalidation propagation
+8. strict token validation
+9. hardened cryptographic boundaries
+
+---
+
+# ACCESS TOKEN HARDENING
+
+Replace current long-lived JWT semantics.
+
+Requirements:
+
+Access tokens must be:
+
+- short-lived
+- stateless
+- non-refreshable directly
+- safe to discard aggressively
+
+Recommended lifetime:
+
+15–60 minutes maximum.
+
+Requirements:
+
+Access token payload must include:
+
+- iss
+- aud
+- sub
+- iat
+- exp
+- session_id
+- token_version
+
+Backend APIs must validate ALL claims.
+
+Never trust:
+signature validation alone.
+
+---
+
+# REFRESH TOKEN ARCHITECTURE
+
+IMPORTANT:
+
+Refresh tokens must become:
+opaque server-tracked session handles.
+
+Do NOT use:
+self-contained refresh JWTs.
+
+Implement:
+
+NativeSessionStore table/model:
+
+- session_id
+- user_id
+- refresh_token_hash
+- device_id
+- issued_at
+- expires_at
+- last_used_at
+- revoked_at
+- token_version
+- rotation_counter
+- compromised_flag
+
+Requirements:
+
+- refresh tokens stored hashed server-side
+- refresh tokens never logged
+- refresh tokens rotated on every refresh
+- old refresh token invalidated immediately
+- replay attempts detectable
+
+---
+
+# REFRESH ROTATION
+
+Implement strict refresh rotation.
+
+Flow:
+
+refresh token A
+↓
+validated server-side
+↓
+issue:
+- new access token
+- new refresh token B
+↓
+invalidate token A immediately
+
+If token A reused later:
+- mark session compromised
+- revoke session chain
+- require reauthentication
+
+This is mandatory replay protection.
+
+---
+
+# SESSION REVOCATION
+
+Implement deterministic revocation.
+
+Required revocation triggers:
+
+- user sign out
+- Google account revocation
+- backend user disable
+- suspicious refresh replay
+- password/account recovery event
+- explicit admin invalidation
+- token_version mismatch
+
+Requirements:
+
+Revocation must invalidate:
+
+- access refreshability
+- future refresh attempts
+- session continuity
+
+Revocation must propagate deterministically to RuntimeCore.
+
+---
+
+# TOKEN VERSIONING
+
+Add:
+
+token_version
+
+to:
+
+- user record
+OR
+- session record
+
+Requirements:
+
+Any sensitive account change may increment:
+token_version.
+
+All access tokens and refresh flows must validate:
+token_version consistency.
+
+This provides:
+mass invalidation capability.
+
+---
+
+# CRYPTOGRAPHIC HARDENING
+
+IMPORTANT:
+
+Current HS256 implementation must be audited.
+
+Preferred:
+
+RS256 or ES256
+
+If remaining on HS256 temporarily:
+
+Requirements:
+
+- 256-bit minimum secret entropy
+- isolated signing secret
+- no secret reuse
+- rotation support
+- environment isolation
+- secure key loading
+- constant-time validation
+
+Never:
+hardcode secrets anywhere.
+
+---
+
+# REFRESH ENDPOINT HARDENING
+
+Audit:
+
+POST /api/auth/native/refresh
+
+Requirements:
+
+Validate:
+
+- signature
+- expiry
+- issuer
+- audience
+- session existence
+- revoked status
+- token_version
+- replay status
+- compromised status
+- rotation consistency
+
+Refresh endpoint must become:
+a hardened trust boundary.
+
+---
+
+# DEVICE BINDING
+
+Add lightweight device association.
+
+Track:
+
+- device_id
+- platform
+- app_version
+- first_seen_at
+- last_seen_at
+
+Requirements:
+
+Refresh sessions should be attributable to:
+a device context.
+
+Do NOT hard-block device changes yet.
+
+Only:
+track and expose anomalies.
+
+---
+
+# GOOGLE TOKEN VALIDATION
+
+Strengthen backend Google token verification.
+
+Validate:
+
+- Google issuer
+- audience/client_id
+- expiry
+- email_verified
+- nonce if applicable
+
+Never trust:
+Google token presence alone.
+
+---
+
+# BACKEND AUTH MIDDLEWARE HARDENING
+
+Strengthen requireAuth.ts
+
+Requirements:
+
+Validate:
+
+- signature
+- issuer
+- audience
+- expiry
+- token_version
+- revoked session state
+- compromised session state
+
+Never trust:
+decoded JWT payload without full validation.
+
+---
+
+# SESSION COMPROMISE MODEL
+
+Implement explicit compromised-session semantics.
+
+If refresh replay detected:
+
+- revoke entire refresh chain
+- mark compromised_flag=true
+- invalidate all descendant tokens
+- require full reauthentication
+
+RuntimeCore must receive:
+explicit recovery-required state.
+
+Never silently continue after replay detection.
+
+---
+
+# RUNTIME INTEGRATION REQUIREMENTS
+
+IMPORTANT:
+
+RuntimeCore architecture must remain unchanged.
+
+Do NOT:
+- move refresh ownership into React
+- move lifecycle handling into backend
+- remove RuntimeCore orchestration
+
+The backend security model must integrate cleanly into:
+existing RuntimeCore semantics.
+
+RuntimeCore should continue owning:
+
+- refresh scheduling
+- lifecycle recovery
+- offline degradation
+- process recovery
+- auth confidence
+- capability coordination
+
+---
+
+# SECURE STORAGE REQUIREMENTS
+
+Ensure:
+
+- access tokens stored securely
+- refresh tokens stored securely
+- refresh tokens never exposed to logs
+- refresh tokens never exposed to overlay
+- secure deletion on sign out
+- corrupted refresh state handled deterministically
+
+---
+
+# AUDIT & VALIDATION
+
+Create:
+
+SessionSecurityAudit.ts
+
+Validate at runtime:
+
+- access token expiry policy
+- refresh rotation correctness
+- replay detection correctness
+- revocation propagation
+- token_version enforcement
+- compromised-session handling
+- refresh chain integrity
+- session invalidation correctness
+
+Generate:
+
+SessionSecurityReport.md
+
+Include:
+
+- threat model
+- replay analysis
+- revocation guarantees
+- token lifetime analysis
+- compromise recovery semantics
+- residual risks
+
+---
+
+# FORBIDDEN PATTERNS
+
+Do NOT:
+
+- issue long-lived access JWTs
+- use self-contained refresh JWTs
+- allow infinite refresh chains
+- trust JWT presence indefinitely
+- skip issuer/audience validation
+- persist unhashed refresh tokens server-side
+- allow refresh replay continuation
+- silently ignore compromise detection
+- depend on frontend auth state for revocation
+- reintroduce Clerk frontend session authority
+
+---
+
+# SUCCESS CRITERIA
+
+Implementation is complete ONLY when:
+
+- access tokens are short-lived
+- refresh tokens are opaque and server-tracked
+- refresh rotation is enforced
+- replay detection is operational
+- deterministic revocation exists
+- compromised sessions are detectable
+- token_version invalidation works
+- backend auth validation is strict
+- RuntimeCore integrates cleanly
+- refresh chains are secure
+- token leakage risks are minimized
+- session compromise handling is deterministic
+- auth recovery remains lifecycle-safe
+
+The final system should behave like:
+
+- a production-grade native session system
+- a replay-resistant mobile auth runtime
+- a deterministic trust-boundary architecture
+
+NOT:
+
+- a lightweight JWT convenience layer.

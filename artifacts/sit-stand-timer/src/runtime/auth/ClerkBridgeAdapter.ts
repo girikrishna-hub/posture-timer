@@ -3,8 +3,8 @@
  *
  * On web: delegates to ClerkSessionTransport (window.Clerk global).
  * On native Android (Capacitor): delegates to NativeSessionTransport — a backend-
- *   mediated path that issues native JWTs via our own API. No window.Clerk
- *   dependency, no frontend-origin validation, no Clerk SDK initialization required.
+ *   mediated path that issues short-lived access tokens via our own API, with
+ *   opaque server-tracked refresh tokens. No window.Clerk dependency.
  *
  * The caller (AuthRuntime) is fully unaware of which transport is active.
  */
@@ -23,10 +23,9 @@ export class ClerkBridgeAdapter {
   private readonly _native: NativeSessionTransport | null;
 
   /**
-   * @param getCurrentJwt - Closure that returns the current JWT from AuthStateStore.
-   *   Used by NativeSessionTransport.refreshCurrentToken() to authenticate the
-   *   refresh request. On web this is never called (ClerkSessionTransport handles
-   *   refresh via window.Clerk.session.getToken()).
+   * @param getCurrentJwt - Returns the current access token from AuthStateStore.
+   *   Used so NativeSessionTransport can authenticate API calls while the
+   *   refresh token is stored separately in Preferences.
    */
   constructor(
     getCurrentJwt: () => string | null = () => null,
@@ -34,8 +33,8 @@ export class ClerkBridgeAdapter {
   ) {
     this.transport = new ClerkSessionTransport(readyTimeoutMs);
     this._exchange = new ClerkTokenExchange(this.transport);
-    this.hydrator = new ClerkSessionHydrator(this.transport);
-    this._native = Capacitor.isNativePlatform()
+    this.hydrator  = new ClerkSessionHydrator(this.transport);
+    this._native   = Capacitor.isNativePlatform()
       ? new NativeSessionTransport(getCurrentJwt)
       : null;
   }
@@ -48,8 +47,8 @@ export class ClerkBridgeAdapter {
 
   /**
    * Wait for the transport to become operational.
-   * On native: resolves immediately (no SDK initialization needed).
-   * On web: waits for window.Clerk.loaded via ClerkRuntimeRegistry.
+   * Native: resolves immediately (no SDK init required).
+   * Web: waits for window.Clerk.loaded via ClerkRuntimeRegistry.
    */
   async waitForReady(timeoutMs?: number): Promise<boolean> {
     if (this._native) return true;
@@ -58,8 +57,8 @@ export class ClerkBridgeAdapter {
 
   /**
    * Exchange a native Google ID token for a RuntimeSession.
-   * On native: POST /api/auth/native/google (backend verifies + issues JWT).
-   * On web: Clerk SDK oauth_token strategy.
+   * Native: POST /api/auth/native/google → short-lived access token + opaque refresh token.
+   * Web: Clerk SDK oauth_token strategy.
    */
   async exchangeGoogleIdToken(
     idToken: string,
@@ -68,12 +67,12 @@ export class ClerkBridgeAdapter {
     if (this._native) {
       const result = await this._native.exchangeGoogleIdToken(idToken);
       return {
-        sessionId: result.sessionId,
-        userId: result.userId,
-        jwt: result.jwt,
-        expiresAt: result.expiresAt,
+        sessionId:       result.sessionId,
+        userId:          result.userId,
+        jwt:             result.jwt,
+        expiresAt:       result.expiresAt,
         lastRefreshedAt: Date.now(),
-        provider: "google_native",
+        provider:        "google_native",
       };
     }
     const { session } = await this._exchange.fromGoogleIdToken(idToken, userId);
@@ -82,22 +81,20 @@ export class ClerkBridgeAdapter {
 
   /**
    * Exchange a Clerk OAuth ticket (deep-link callback) for a session.
-   * Only applies to the web/redirect fallback path — not available in native mode.
+   * Only applicable on web — not supported in native-first mode.
    */
   async exchangeTicket(ticket: string): Promise<RuntimeSession> {
     if (this._native) {
-      throw new Error(
-        "[ClerkBridge] Ticket exchange is not supported in native mode",
-      );
+      throw new Error("[ClerkBridge] Ticket exchange is not supported in native mode");
     }
     const { session } = await this._exchange.fromTicket(ticket);
     return session;
   }
 
   /**
-   * Obtain a fresh JWT for the current session.
-   * On native: POST /api/auth/native/refresh with the stored JWT.
-   * On web: window.Clerk.session.getToken().
+   * Obtain a fresh access token for the current session.
+   * Native: POST /api/auth/native/refresh (rotates the refresh token).
+   * Web: window.Clerk.session.getToken().
    */
   async refreshToken(): Promise<string> {
     if (this._native) {
@@ -112,18 +109,21 @@ export class ClerkBridgeAdapter {
 
   /**
    * Sign out the current session.
-   * On native: no-op — SecureSessionVault.clear() in AuthRuntime.signOut() is sufficient.
-   * On web: Clerk SDK signOut().
+   * Native: revokes the server-side session and clears local refresh credentials.
+   * Web: Clerk SDK signOut().
    */
   async signOut(): Promise<void> {
-    if (this._native) return;
+    if (this._native) {
+      await this._native.revokeCurrentSession();
+      return;
+    }
     await this.transport.signOut();
   }
 
   /**
    * Subscribe to session changes.
-   * On native: returns a no-op unsubscribe (no Clerk session events in native mode).
-   * On web: Clerk SDK addListener().
+   * Native: no-op unsubscribe (no Clerk session events in native mode).
+   * Web: Clerk SDK addListener().
    */
   onSessionChange(
     fn: (meta: import("./adapters/ClerkSessionTransport").ClerkSessionMeta | null) => void,
