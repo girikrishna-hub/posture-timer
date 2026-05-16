@@ -1,0 +1,459 @@
+# Final Authentication Runtime Stabilization & Production Hardening Prompt
+
+IMPORTANT:
+
+The authentication runtime architecture is now fundamentally correct.
+
+Do NOT:
+- redesign the system
+- introduce new auth abstractions unnecessarily
+- regress toward browser-driven auth
+- reintroduce React auth ownership
+- add speculative infrastructure
+
+The remaining work is:
+production stabilization and deterministic runtime hardening.
+
+Focus ONLY on:
+- eliminating hidden nondeterminism
+- lifecycle correctness
+- runtime resilience
+- operational observability
+- process death reliability
+- offline correctness
+- transport hardening
+- capability degradation semantics
+
+The goal is:
+a production-stable mobile authentication runtime.
+
+NOT:
+additional architectural experimentation.
+
+---
+
+# CURRENT ARCHITECTURE STATUS
+
+The runtime already includes:
+
+- native Google Sign-In
+- RuntimeCore-owned orchestration
+- explicit FSM
+- serialized auth operations
+- deterministic boot barrier
+- lifecycle coordination
+- auth confidence model
+- corruption-aware persistence
+- trace correlation
+- chaos testing harness
+- Clerk transport isolation
+- recovery locks
+- semantic boot terminal phases
+
+Preserve this architecture.
+
+Do NOT rewrite it.
+
+---
+
+# PRIMARY HARDENING OBJECTIVES
+
+This phase must focus on:
+
+1. eliminating startup nondeterminism
+2. eliminating hidden browser-runtime dependency ambiguity
+3. making process death recovery deterministic
+4. making lifecycle recovery race-free
+5. making offline auth behavior explicit
+6. strengthening secure persistence guarantees
+7. making failures diagnosable
+8. proving operational correctness under chaos conditions
+
+---
+
+# REMOVE CLERK READINESS POLLING
+
+Current implementation:
+
+polls:
+window.Clerk.loaded
+
+This is fragile and timing-dependent.
+
+Replace polling with:
+
+ClerkRuntimeRegistry.ts
+
+Requirements:
+
+- explicit runtime registration
+- deterministic readiness signaling
+- promise-based readiness resolution
+- timeout classification
+- transport availability semantics
+- late-registration handling
+- teardown/recreation handling
+
+RuntimeCore must never:
+spin-wait for browser globals.
+
+---
+
+# EXPLICIT CLERK RUNTIME CAPABILITY STATES
+
+Extend AuthCapabilityRegistry.
+
+Add:
+
+- CLERK_RUNTIME_AVAILABLE
+- CLERK_RUNTIME_DELAYED
+- CLERK_RUNTIME_TIMEOUT
+- CLERK_RUNTIME_UNAVAILABLE
+- CLERK_RUNTIME_RECREATED
+
+Requirements:
+
+The runtime must distinguish:
+
+- auth unavailable
+vs
+- transport unavailable
+vs
+- browser runtime unavailable
+
+Failures must become diagnosable.
+
+---
+
+# PROCESS DEATH HARDENING
+
+IMPORTANT:
+
+Assume Android process death is normal.
+
+Strengthen restoration correctness.
+
+Create:
+
+ProcessRecoveryCoordinator.ts
+
+Responsibilities:
+
+- detect process recreation
+- distinguish warm resume vs process recovery
+- reconcile persisted runtime snapshots
+- reconcile recovery checkpoints
+- reconcile pending refresh operations
+- invalidate incomplete refresh chains safely
+- prevent stale recovery replay
+
+Requirements:
+
+Recovery must never:
+- replay stale refresh attempts
+- restore partially-written session state
+- enter infinite recovery loops
+- deadlock boot restoration
+
+---
+
+# REFRESH CHAIN HARDENING
+
+Strengthen AuthSessionManager.
+
+Implement:
+
+RefreshChainCoordinator.ts
+
+Requirements:
+
+- every refresh belongs to a refresh chain
+- chains survive lifecycle suspension safely
+- chains terminate deterministically
+- stale chains expire safely
+- duplicate chains are impossible
+- orphaned refreshes are detectable
+
+Track:
+
+- refresh start time
+- lifecycle interruptions
+- suspend duration
+- retry lineage
+- backend failures
+- terminal outcome
+
+Refresh behavior must become:
+fully reconstructable.
+
+---
+
+# OFFLINE AUTH SEMANTICS
+
+Current OFFLINE_ONLY mode is insufficiently explicit.
+
+Create:
+
+OfflineCapabilityMatrix.ts
+
+Define:
+
+What functionality remains valid under:
+
+- VERIFIED
+- RECOVERED
+- DEGRADED
+- OFFLINE_ONLY
+- RECOVERY_REQUIRED
+
+Examples:
+
+- local reminders
+- cached preferences
+- analytics queueing
+- sync operations
+- premium entitlement
+- account editing
+- cloud sync
+
+Requirements:
+
+Offline behavior must become:
+predictable and policy-driven.
+
+Avoid:
+implicit offline assumptions.
+
+---
+
+# CLOCK DRIFT & TIME AUTHORITY
+
+Implement:
+
+TimeAuthority.ts
+
+Responsibilities:
+
+- monotonic runtime timestamps
+- server-time reconciliation
+- clock drift detection
+- suspend-duration-aware expiry handling
+- invalid device clock detection
+
+Requirements:
+
+Auth correctness must tolerate:
+
+- manual device time changes
+- suspend/resume drift
+- timezone changes
+- long offline periods
+
+Never trust:
+device wall-clock time alone.
+
+---
+
+# SECURE SESSION VAULT HARDENING
+
+Current checksum validation is insufficient.
+
+Strengthen SecureSessionVault.
+
+Add:
+
+- authenticated encryption
+- tamper detection
+- schema version signing
+- corruption classification
+- replay detection
+- partial-write detection
+- atomic persistence semantics
+
+Requirements:
+
+Persisted auth state must become:
+cryptographically trustworthy.
+
+---
+
+# WEBVIEW RUNTIME FAILURE HANDLING
+
+Implement explicit handling for:
+
+- WebView recreation
+- JS runtime recreation
+- delayed JS bridge startup
+- partial browser runtime availability
+- renderer process crashes
+
+Create:
+
+BrowserRuntimeMonitor.ts
+
+Responsibilities:
+
+- detect JS runtime recreation
+- detect Clerk runtime invalidation
+- detect transport reattachment
+- notify RuntimeCore of runtime discontinuity
+
+Requirements:
+
+Browser runtime instability must never:
+silently invalidate auth state.
+
+---
+
+# LIFECYCLE CHAOS HARDENING
+
+Strengthen lifecycle correctness.
+
+Create:
+
+LifecycleChaosHarness.ts
+
+Test:
+
+- rapid foreground/background cycles
+- suspend during refresh
+- suspend during sign-in
+- process kill during restoration
+- delayed Clerk transport readiness
+- JS runtime recreation mid-refresh
+- repeated network flapping
+- Android activity recreation loops
+- battery optimization interruptions
+
+Requirements:
+
+Runtime must remain:
+deterministic under lifecycle chaos.
+
+---
+
+# TRACE VISUALIZATION
+
+Current trace IDs exist but operational debugging is still difficult.
+
+Create:
+
+AuthTraceVisualizer.ts
+
+Requirements:
+
+Render complete timelines for:
+
+- boot restoration
+- sign-in flow
+- refresh chains
+- lifecycle recoveries
+- process recovery
+- degraded recovery attempts
+
+Display:
+
+- operation lineage
+- timing
+- retries
+- capability changes
+- confidence transitions
+- lifecycle interruptions
+
+Auth failures must become:
+human-debuggable.
+
+---
+
+# RUNTIME OVERLAY EXPANSION
+
+Extend AuthRuntimeOverlay.
+
+Add:
+
+- process recovery state
+- Clerk runtime state
+- browser runtime continuity
+- refresh chain graph
+- vault integrity state
+- clock drift state
+- suspend duration
+- offline capability matrix
+- lifecycle recovery lock state
+
+The overlay should now function as:
+a runtime observability console.
+
+---
+
+# FINAL CHAOS TEST MATRIX
+
+Expand AuthChaosHarness.
+
+Required scenarios:
+
+- duplicate Google sign-in taps
+- corrupted encrypted vault
+- process death during refresh
+- process death during persistence write
+- JS runtime recreation during restore
+- delayed Clerk runtime registration
+- clock drift > 30 minutes
+- offline startup after token expiry
+- backend unreachable during refresh
+- suspend/resume loops for 30+ cycles
+- WebView renderer restart
+- rapid network state flapping
+- concurrent lifecycle events
+- stale refresh replay attempts
+
+All scenarios must produce:
+deterministic terminal outcomes.
+
+---
+
+# FORBIDDEN PATTERNS
+
+Do NOT:
+
+- reintroduce polling-based readiness
+- reintroduce React operational ownership
+- trust browser cookies for auth correctness
+- allow multiple refresh authorities
+- allow refresh replay ambiguity
+- allow partial session restoration
+- trust wall-clock time alone
+- silently continue after runtime discontinuity
+- allow lifecycle-triggered refresh storms
+- allow browser runtime crashes to silently desync auth
+
+---
+
+# SUCCESS CRITERIA
+
+Implementation is complete ONLY when:
+
+- startup becomes fully deterministic
+- Clerk readiness is event-driven
+- process death recovery is deterministic
+- refresh chains are reconstructable
+- offline behavior is policy-defined
+- clock drift is handled safely
+- vault persistence is cryptographically trustworthy
+- WebView runtime recreation is survivable
+- lifecycle chaos does not break auth
+- all auth failures are traceable
+- degraded states are explicit
+- auth restoration is verifiable
+- runtime discontinuities are detectable
+- auth correctness survives Android lifecycle chaos
+
+The final system should behave like:
+
+- a resilient mobile runtime subsystem
+- a deterministic identity platform
+- a lifecycle-safe authentication kernel
+
+NOT:
+
+- a browser auth flow adapted for mobile.

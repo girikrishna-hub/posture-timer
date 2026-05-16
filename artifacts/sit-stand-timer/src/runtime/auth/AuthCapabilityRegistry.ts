@@ -3,9 +3,17 @@
  *
  * Surfaces explicit capability levels so the UI can make informed decisions
  * about what to offer the user instead of silently failing.
+ *
+ * HARDENED: Now also tracks the Clerk runtime capability state, enabling the
+ * runtime to distinguish:
+ *   - auth unavailable (no session)
+ *   vs transport unavailable (Clerk not loaded)
+ *   vs browser runtime unavailable (WebView crash / CSP block)
  */
 
 import { Capacitor } from "@capacitor/core";
+import { ClerkRuntimeRegistry } from "./ClerkRuntimeRegistry";
+import type { ClerkRuntimeStatus } from "./ClerkRuntimeRegistry";
 
 export type AuthCapabilityLevel = "FULL" | "DEGRADED" | "OFFLINE_ONLY" | "UNAVAILABLE";
 
@@ -18,6 +26,10 @@ export interface CapabilitySnapshot {
   refreshCapable: boolean;
   offlineSessionViable: boolean;
   securePersistenceAvailable: boolean;
+  /** Clerk JS SDK runtime status */
+  clerkRuntimeStatus: ClerkRuntimeStatus;
+  /** True if the Clerk transport layer is operational */
+  clerkTransportAvailable: boolean;
 }
 
 export class AuthCapabilityRegistry {
@@ -30,9 +42,12 @@ export class AuthCapabilityRegistry {
     refreshCapable: false,
     offlineSessionViable: false,
     securePersistenceAvailable: false,
+    clerkRuntimeStatus: "PENDING",
+    clerkTransportAvailable: false,
   };
 
   private _listeners: Set<(s: CapabilitySnapshot) => void> = new Set();
+  private _clerkUnsub: (() => void) | null = null;
 
   get snapshot(): CapabilitySnapshot { return { ...this._snapshot }; }
   get level(): AuthCapabilityLevel { return this._snapshot.level; }
@@ -70,6 +85,17 @@ export class AuthCapabilityRegistry {
       }
     }
 
+    // Subscribe to Clerk runtime status changes
+    this._clerkUnsub?.();
+    this._clerkUnsub = ClerkRuntimeRegistry.instance.subscribe((status) => {
+      const available = status === "CLERK_RUNTIME_AVAILABLE" ||
+                        status === "CLERK_RUNTIME_RECREATED";
+      this.update({
+        clerkRuntimeStatus: status,
+        clerkTransportAvailable: available,
+      });
+    });
+
     this.update({
       nativeSignInAvailable: isNative && nativeGoogleAvailable,
       googlePlayServicesAvailable: isNative && nativeGoogleAvailable,
@@ -97,10 +123,16 @@ export class AuthCapabilityRegistry {
     this.update({ offlineSessionViable: viable });
   }
 
+  dispose(): void {
+    this._clerkUnsub?.();
+    this._listeners.clear();
+  }
+
   private _computeLevel(): AuthCapabilityLevel {
     const s = this._snapshot;
     if (!s.networkAvailable && !s.offlineSessionViable) return "UNAVAILABLE";
     if (!s.networkAvailable) return "OFFLINE_ONLY";
+    if (!s.clerkTransportAvailable) return "DEGRADED";
     if (!s.backendReachable || !s.refreshCapable) return "DEGRADED";
     if (s.nativeSignInAvailable || s.backendReachable) return "FULL";
     return "DEGRADED";

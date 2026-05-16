@@ -9,6 +9,7 @@ export { ClerkRuntimeBridge } from "./ClerkRuntimeBridge";
 export { NativeGoogleSignInButton } from "./NativeGoogleSignInButton";
 export { AuthRuntimeOverlay } from "./AuthRuntimeOverlay";
 
+// Types
 export type { AuthRuntimeState } from "./useAuthRuntime";
 export type { RuntimeSession } from "./AuthStateStore";
 export type { AuthState, StartupMode } from "./AuthStateMachine";
@@ -17,3 +18,15 @@ export type { BootPhase, BootTerminalPhase } from "./RuntimeBootBarrier";
 export type { TraceContext } from "./TraceCorrelationManager";
 export type { VaultedSession } from "./SecureSessionVault";
 export type { ValidationResult, ValidationOutcome } from "./SessionRestorationValidator";
+export type { ClerkRuntimeStatus } from "./ClerkRuntimeRegistry";
+export type { StartupKind, RecoveryAssessment } from "./ProcessRecoveryCoordinator";
+export type { RefreshChain, RefreshChainOutcome } from "./RefreshChainCoordinator";
+export type { OfflineCapabilities } from "./OfflineCapabilityMatrix";
+export type { RuntimeDiscontinuity, DiscontinuityKind } from "./BrowserRuntimeMonitor";
+export type { TimeSnapshot } from "./TimeAuthority";
+export type { TraceTimeline, TimelineEntry } from "./AuthTraceVisualizer";
+
+// Utilities
+export { capabilityFor, capabilitySummary } from "./OfflineCapabilityMatrix";
+export { buildTimeline, renderEntry } from "./AuthTraceVisualizer";
+export { isFullyOperational, isPartiallyOperational, requiresReauth } from "./AuthConfidenceLevel";

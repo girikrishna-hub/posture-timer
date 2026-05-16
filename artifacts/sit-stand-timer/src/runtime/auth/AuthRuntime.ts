@@ -2,25 +2,28 @@
  * AuthRuntime — central orchestrator for the auth subsystem.
  *
  * Wires together all auth components into a single operational runtime.
- * This is the ONLY class that React (via AuthRuntimeContext) interacts with.
+ * This is the ONLY class that React (via useAuthRuntime) interacts with.
  *
- * HARDENED — this version is the sole auth authority:
- * - No React hook dependency anywhere in the boot/refresh/recovery paths
- * - ClerkBridgeAdapter accesses window.Clerk directly via ClerkSessionTransport
- * - bindClerk() removed — no bind/unbind lifecycle
- * - Boot terminates into explicit FSM states via BootTerminalPhase
- * - SessionRestorationValidator validates persistence integrity
- * - SecureSessionVault replaces SecureSessionStore (schema versioning + integrity)
- * - TraceCorrelationManager tags every operation for log reconstruction
+ * HARDENED (Phase 3) — production-stable mobile authentication runtime:
  *
  * Boot sequence:
  *   1. FSM → INITIALIZING
- *   2. Probe capabilities (Google Play Services, network, backend)
- *   3. Validate + restore persisted session via SessionRestorationValidator
- *   4. Wait for window.Clerk (ClerkSessionTransport.waitForReady, max 5s)
- *   5. Attempt JWT refresh if session restorable
- *   6. Attach lifecycle listeners
- *   7. Clear RuntimeBootBarrier with explicit terminal phase
+ *   2. ProcessRecoveryCoordinator.assess() — classify startup, detect mid-write death
+ *   3. Expire stale refresh chains from prior process
+ *   4. Probe capabilities (Google Play Services, network, backend)
+ *   5. Validate + restore persisted session via SessionRestorationValidator
+ *   6. Wait for Clerk (ClerkRuntimeRegistry.waitForReady — event-driven, not polling)
+ *   7. Attempt JWT refresh if session restorable
+ *   8. Attach lifecycle listeners + BrowserRuntimeMonitor
+ *   9. Wire BrowserRuntimeMonitor discontinuity handler
+ *  10. Clear RuntimeBootBarrier with explicit terminal phase
+ *
+ * New public properties (Phase 3):
+ *   refreshChains    — RefreshChainCoordinator (accessible from overlay + tests)
+ *   processRecovery  — ProcessRecoveryCoordinator
+ *   browserMonitor   — BrowserRuntimeMonitor
+ *   time             — TimeAuthority singleton
+ *   recoveryKind     — startup classification result (from processRecovery.assess())
  */
 
 import { AuthStateMachine } from "./AuthStateMachine";
@@ -40,11 +43,17 @@ import { AuthLifecycleCoordinator } from "./AuthLifecycleCoordinator";
 import { AuthRecoveryCoordinator } from "./AuthRecoveryCoordinator";
 import { TraceCorrelationManager } from "./TraceCorrelationManager";
 import { SessionRestorationValidator } from "./SessionRestorationValidator";
+import { RefreshChainCoordinator } from "./RefreshChainCoordinator";
+import { ProcessRecoveryCoordinator } from "./ProcessRecoveryCoordinator";
+import type { StartupKind } from "./ProcessRecoveryCoordinator";
+import { BrowserRuntimeMonitor } from "./BrowserRuntimeMonitor";
+import { TimeAuthority } from "./TimeAuthority";
 import type { AuthConfidenceLevel } from "./AuthConfidenceLevel";
 import { setAuthTokenGetter, setBaseUrl } from "@workspace/api-client-react";
 import { Capacitor } from "@capacitor/core";
 
 export class AuthRuntime {
+  // ── Core subsystems ─────────────────────────────────────────────────────────
   readonly fsm = new AuthStateMachine();
   readonly store = new AuthStateStore();
   readonly queue = new AuthOperationQueue();
@@ -56,6 +65,15 @@ export class AuthRuntime {
   readonly bootBarrier = new RuntimeBootBarrier(8000);
   readonly trace = new TraceCorrelationManager();
   readonly validator = new SessionRestorationValidator();
+
+  // ── Phase 3 additions ───────────────────────────────────────────────────────
+  readonly refreshChains = new RefreshChainCoordinator();
+  readonly processRecovery: ProcessRecoveryCoordinator;
+  readonly browserMonitor: BrowserRuntimeMonitor;
+  readonly time: TimeAuthority;
+
+  /** Set after processRecovery.assess() completes during boot */
+  recoveryKind: StartupKind | null = null;
 
   private _sessionMgr!: AuthSessionManager;
   private _lifecycle!: AuthLifecycleCoordinator;
@@ -72,8 +90,15 @@ export class AuthRuntime {
   }
 
   private constructor() {
+    this.processRecovery = new ProcessRecoveryCoordinator(
+      this.vault, this.journal, this.trace,
+    );
+    this.browserMonitor = new BrowserRuntimeMonitor(this.journal);
+    this.time = TimeAuthority.instance;
+
     this._sessionMgr = new AuthSessionManager(
-      this.store, this.queue, this.clerk, this.vault, this.journal, this.trace,
+      this.store, this.queue, this.clerk, this.vault,
+      this.journal, this.trace, this.refreshChains,
     );
     this._lifecycle = new AuthLifecycleCoordinator(
       this.fsm, this.store, this.queue, this._sessionMgr,
@@ -126,28 +151,63 @@ export class AuthRuntime {
     this._booted = true;
 
     const bootCtx = this.trace.newOperation({ newRefreshChain: true });
-    const startupMode = mode ?? this._detectStartupMode();
-    this.fsm.setStartupMode(startupMode);
-    this.fsm.transition("INITIALIZING", "boot");
 
     this.journal.record("AUTH_INITIALIZED",
-      `Boot started — mode=${startupMode} boot=${bootCtx.bootSessionId}`);
+      `Boot started — boot=${bootCtx.bootSessionId}`);
 
     let terminalPhase: BootTerminalPhase;
 
     try {
-      // 1. Initialize native Google Sign-In plugin
+      // 1. Classify startup and detect process death recovery
+      const assessment = await this.processRecovery.assess();
+      this.recoveryKind = assessment.kind;
+
+      // 2. Expire stale refresh chains from prior process
+      const staleChains = this.refreshChains.expireStaleChains();
+      if (staleChains.length > 0) {
+        this.journal.record("AUTH_RECOVERY_STARTED",
+          `Expired ${staleChains.length} stale refresh chain(s) from prior process`);
+      }
+
+      // 3. Set startup mode for FSM
+      const startupMode = mode ?? this._kindToMode(assessment.kind);
+      this.fsm.setStartupMode(startupMode);
+      this.fsm.transition("INITIALIZING", "boot");
+
+      // 4. Log time authority snapshot
+      const timeSnap = this.time.snapshot;
+      this.journal.record("AUTH_INITIALIZED",
+        `TimeAuthority: drift=${Math.round(timeSnap.clockDriftMs)}ms ` +
+        `trustworthy=${timeSnap.isTrustworthy} suspends=${timeSnap.suspendCount}`);
+
+      // 5. Initialize native Google Sign-In plugin
       await this.google.initialize();
 
-      // 2. Probe capabilities
+      // 6. Probe capabilities
       await this.capabilities.probe(this.google.isAvailable);
 
-      // 3. Attempt session restoration (returns explicit terminal phase)
+      // 7. Attempt session restoration (returns explicit terminal phase)
       this.fsm.transition("RESTORING_SESSION", "boot");
       terminalPhase = await this._restoreSession();
 
-      // 4. Attach lifecycle listeners
+      // 8. Attach lifecycle listeners
       this._lifecycle.attach();
+
+      // 9. Attach browser runtime monitor
+      this.browserMonitor.attach();
+      this.browserMonitor.onDiscontinuity((d) => {
+        this.journal.record("AUTH_DEGRADED",
+          `Browser runtime discontinuity: ${d.kind} — ${d.message}`);
+        // If Clerk was recreated, mark transport capability as changed
+        if (d.kind === "CLERK_RECREATED") {
+          this.capabilities.update({ clerkTransportAvailable: false });
+          // Re-check after brief delay to allow Clerk to re-initialize
+          setTimeout(() => {
+            const available = (window as { Clerk?: { loaded?: boolean } }).Clerk?.loaded ?? false;
+            this.capabilities.update({ clerkTransportAvailable: available });
+          }, 500);
+        }
+      });
 
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -158,10 +218,11 @@ export class AuthRuntime {
       this.store.patch({ isRestored: true });
     }
 
-    // 5. Clear boot barrier with explicit outcome
+    // 10. Clear boot barrier with explicit outcome
     this.bootBarrier.clear(terminalPhase);
     this.journal.record("AUTH_BOOT_BARRIER_CLEARED",
-      `Boot complete — state=${this.fsm.state} phase=${terminalPhase} boot=${bootCtx.bootSessionId}`);
+      `Boot complete — state=${this.fsm.state} phase=${terminalPhase} ` +
+      `kind=${this.recoveryKind ?? "unknown"} boot=${bootCtx.bootSessionId}`);
   }
 
   /**
@@ -243,10 +304,6 @@ export class AuthRuntime {
 
   // ── private helpers ─────────────────────────────────────────────────────────
 
-  /**
-   * Validate persisted session and attempt restoration.
-   * Returns the explicit BootTerminalPhase for this boot.
-   */
   private async _restoreSession(): Promise<BootTerminalPhase> {
     const meta = await this.vault.load();
 
@@ -273,7 +330,6 @@ export class AuthRuntime {
         return "UNAUTHENTICATED";
 
       case "OFFLINE_RESTORABLE":
-        // Device offline — restore from metadata, no JWT (API calls will fail gracefully)
         this.store.patch({
           session: {
             sessionId: meta.sessionId,
@@ -292,7 +348,7 @@ export class AuthRuntime {
 
       case "RESTORABLE":
       case "REFRESH_REQUIRED": {
-        // Online — wait for Clerk to load, then refresh the JWT
+        // Event-driven wait — no polling in this method
         const ready = await this.clerk.waitForReady(5_000);
         if (!ready) {
           this.journal.record("AUTH_DEGRADED",
@@ -313,7 +369,6 @@ export class AuthRuntime {
           return "DEGRADED";
         }
 
-        // Validate session continuity — make sure Clerk's session matches ours
         const continuityOk = this.clerk.hydrator.validateContinuity(meta.sessionId);
         if (!continuityOk) {
           this.journal.record("AUTH_SESSION_RESTORED",
@@ -339,8 +394,6 @@ export class AuthRuntime {
           const msg = e instanceof Error ? e.message : String(e);
           this.journal.record("AUTH_REFRESH_FAILED",
             `Session restoration refresh failed: ${msg} — restoring degraded`);
-
-          // Keep session metadata without JWT — surface as degraded
           this.store.patch({
             session: {
               sessionId: meta.sessionId,
@@ -379,12 +432,13 @@ export class AuthRuntime {
     this._recovery.resetAttempts();
   }
 
-  private _detectStartupMode(): StartupMode {
-    const entries = performance.getEntriesByType?.("navigation") ?? [];
-    const nav = entries[0] as PerformanceNavigationTiming | undefined;
-    if (nav?.type === "reload") return "WARM_RESUME";
-    if (nav?.type === "back_forward") return "PROCESS_RECOVERY";
-    return "COLD_START";
+  private _kindToMode(kind: StartupKind): StartupMode {
+    switch (kind) {
+      case "WARM_RESUME":      return "WARM_RESUME";
+      case "PROCESS_RECOVERY":
+      case "BACKGROUND_RESTORE": return "PROCESS_RECOVERY";
+      default:                 return "COLD_START";
+    }
   }
 
   private _parseJwtExp(jwt: string): number {

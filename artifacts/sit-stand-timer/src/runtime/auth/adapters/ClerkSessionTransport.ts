@@ -4,13 +4,15 @@
  * NO React dependency. NO hook dependency. NO UI dependency.
  *
  * Accesses Clerk's JavaScript SDK via the global window.Clerk object, which is
- * populated by InternalClerkProvider during React's first render. Because Clerk
- * JS loads independently of React's component lifecycle, we can poll for
- * window.Clerk.loaded and then call its methods directly without hooks.
+ * populated by InternalClerkProvider during React's first render.
  *
- * This is the ONLY file in RuntimeCore that knows the shape of the Clerk SDK.
- * Every Clerk API call funnels through here.
+ * HARDENED: waitForReady() now delegates to ClerkRuntimeRegistry instead of
+ * maintaining its own polling loop. There is exactly ONE polling source in the
+ * entire codebase (ClerkRuntimeRegistry's 50ms interval watcher) — this transport
+ * is a pure consumer of the registry's promise-based readiness API.
  */
+
+import { ClerkRuntimeRegistry } from "../ClerkRuntimeRegistry";
 
 // ── Minimal window.Clerk shape (avoids a full @clerk/types import) ────────────
 
@@ -70,10 +72,10 @@ export interface ClerkSessionMeta {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export class ClerkSessionTransport {
-  private readonly _readyTimeoutMs: number;
+  private readonly _defaultTimeoutMs: number;
 
-  constructor(readyTimeoutMs = 10_000) {
-    this._readyTimeoutMs = readyTimeoutMs;
+  constructor(defaultTimeoutMs = 10_000) {
+    this._defaultTimeoutMs = defaultTimeoutMs;
   }
 
   /** True when window.Clerk is loaded and operational. */
@@ -82,32 +84,13 @@ export class ClerkSessionTransport {
   }
 
   /**
-   * Poll until window.Clerk.loaded is true.
+   * Wait for Clerk to become ready.
+   * Delegates to ClerkRuntimeRegistry — no internal polling.
    * Returns true on success, false on timeout.
-   * Safe to call any number of times — immediately resolves if already ready.
    */
   async waitForReady(timeoutMs?: number): Promise<boolean> {
     if (this.isReady) return true;
-    const timeout = timeoutMs ?? this._readyTimeoutMs;
-    const deadline = Date.now() + timeout;
-
-    return new Promise<boolean>((resolve) => {
-      const poll = setInterval(() => {
-        if (window.Clerk?.loaded) {
-          clearInterval(poll);
-          clearTimeout(failTimer);
-          resolve(true);
-        } else if (Date.now() >= deadline) {
-          clearInterval(poll);
-          resolve(false);
-        }
-      }, 50);
-
-      const failTimer = setTimeout(() => {
-        clearInterval(poll);
-        resolve(false);
-      }, timeout + 100); // +100ms grace over the poll deadline
-    });
+    return ClerkRuntimeRegistry.instance.waitForReady(timeoutMs ?? this._defaultTimeoutMs);
   }
 
   /**
