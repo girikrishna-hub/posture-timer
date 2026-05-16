@@ -8,10 +8,12 @@ import fitbitRouter from "./fitbit";
 import pushRouter from "./push";
 import debugRouter from "./debug";
 import nativeOauthRouter from "./nativeOauth";
+import nativeAuthRouter from "./nativeAuth";
 
 const router: IRouter = Router();
 
 router.use(nativeOauthRouter);
+router.use(nativeAuthRouter);
 router.use(healthRouter);
 router.use(sessionsRouter);
 router.use(settingsRouter);

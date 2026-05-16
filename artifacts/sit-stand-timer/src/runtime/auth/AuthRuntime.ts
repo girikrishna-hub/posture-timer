@@ -59,7 +59,7 @@ export class AuthRuntime {
   readonly queue = new AuthOperationQueue();
   readonly vault = new SecureSessionVault();
   readonly google = new GoogleAuthAdapter();
-  readonly clerk = new ClerkBridgeAdapter();
+  readonly clerk = new ClerkBridgeAdapter(() => this.store.session?.jwt ?? null);
   readonly capabilities = new AuthCapabilityRegistry();
   readonly journal = new AuthDiagnosticsJournal();
   readonly bootBarrier = new RuntimeBootBarrier(8000);
