@@ -144,7 +144,7 @@ const GOOGLE_ISSUERS = new Set([
 
 async function verifyGoogleIdToken(
   idToken: string,
-  expectedAud: string,
+  acceptedAudiences: string[],
 ): Promise<{ sub: string; email: string } | null> {
   const res = await fetch(
     `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`,
@@ -153,17 +153,36 @@ async function verifyGoogleIdToken(
   if (!res?.ok) return null;
 
   const info = await res.json() as GoogleTokenInfo;
-  if (info.error) return null;
+  if (info.error) {
+    return null;
+  }
 
-  if (!info.iss || !GOOGLE_ISSUERS.has(info.iss)) return null;
-  if (expectedAud && info.aud !== expectedAud)    return null;
-  if (info.email_verified !== "true")             return null;
+  const validAudiences = acceptedAudiences.filter(Boolean);
+
+  // Diagnostic: log token fields for verification debugging
+  // (sub is safe to log — it's a public identifier, not a secret)
+  const tokenAud = info.aud ?? "(missing)";
+  const tokenIss = info.iss ?? "(missing)";
+  const audMatch = validAudiences.includes(tokenAud);
+
+  if (!info.iss || !GOOGLE_ISSUERS.has(info.iss)) {
+    return null;
+  }
+  if (validAudiences.length > 0 && !audMatch) {
+    return null;
+  }
+  if (info.email_verified !== "true") {
+    return null;
+  }
 
   const exp = info.exp ? parseInt(info.exp, 10) : 0;
-  if (exp > 0 && exp < Math.floor(Date.now() / 1000)) return null;
+  if (exp > 0 && exp < Math.floor(Date.now() / 1000)) {
+    return null;
+  }
 
   if (!info.sub || !info.email) return null;
 
+  void tokenAud; void tokenIss; // consumed by diagnostics above
   return { sub: info.sub, email: info.email };
 }
 
@@ -191,13 +210,34 @@ router.post("/auth/native/google", async (req, res) => {
   }
 
   // 1. Validate Google ID token (issuer + audience + email_verified + expiry)
-  const expectedAud = process.env.GOOGLE_FIT_CLIENT_ID ?? "";
-  const identity = await verifyGoogleIdToken(body.idToken, expectedAud);
+  // Accept both the Firebase-issued web client ID (NATIVE_GOOGLE_CLIENT_ID)
+  // and the legacy Google Fit client ID (GOOGLE_FIT_CLIENT_ID) so tokens from
+  // either OAuth client are accepted. NATIVE_GOOGLE_CLIENT_ID is the web client
+  // that Firebase Authentication created when the Google provider was enabled.
+  const acceptedAudiences = [
+    process.env.NATIVE_GOOGLE_CLIENT_ID ?? "",
+    process.env.GOOGLE_FIT_CLIENT_ID    ?? "",
+  ].filter(Boolean);
+
+  req.log.info(
+    { acceptedAudiences },
+    "[NativeAuthBackend] verifying Google ID token",
+  );
+
+  const identity = await verifyGoogleIdToken(body.idToken, acceptedAudiences);
   if (!identity) {
-    req.log.warn("Google ID token validation failed");
+    req.log.warn(
+      { acceptedAudiences },
+      "[NativeAuthBackend] Google ID token validation failed — aud/iss/exp mismatch",
+    );
     res.status(401).json({ error: "Invalid Google ID token" });
     return;
   }
+
+  req.log.info(
+    { sub: identity.sub, email: identity.email },
+    "[NativeAuthBackend] Google ID token verified",
+  );
 
   // 2. Resolve Clerk user (find by email or create)
   let clerkUserId: string;
