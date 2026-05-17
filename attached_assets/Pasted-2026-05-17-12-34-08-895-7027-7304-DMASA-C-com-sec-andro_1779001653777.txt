@@ -1,0 +1,97 @@
+2026-05-17 12:34:08.895  7027-7304  DMASA[C]                com.sec.android.diagmonagent         E  [LOGWING][k]Failed to get App version : com.sitstand.timer
+2026-05-17 12:34:09.019 27983-26230 PhSharedDirectoryWriter com.google.android.gms.persistent    E  Failed to delete the CE shared dir for Android package: com.sitstand.timer. [CONTEXT service_id=51 ]
+                                                                                                    java.lang.IllegalStateException: Failed to delete directory
+                                                                                                    	at hfup.s(:com.google.android.gms@261833035@26.18.33 (260400-913931251):10)
+                                                                                                    	at fclb.a(:com.google.android.gms@261833035@26.18.33 (260400-913931251):87)
+                                                                                                    	at com.google.android.gms.phenotype.notification.PackagesChangedIntentOperation.onHandleIntent(:com.google.android.gms@261833035@26.18.33 (260400-913931251):105)
+                                                                                                    	at com.google.android.chimera.IntentOperation.onHandleIntent(:com.google.android.gms@261833035@26.18.33 (260400-913931251):1)
+                                                                                                    	at bdle.onHandleIntent(:com.google.android.gms@261833035@26.18.33 (260400-913931251):88)
+                                                                                                    	at abem.run(:com.google.android.gms@261833035@26.18.33 (260400-913931251):58)
+                                                                                                    	at abel.run(:com.google.android.gms@261833035@26.18.33 (260400-913931251):132)
+                                                                                                    	at hdpo.run(:com.google.android.gms@261833035@26.18.33 (260400-913931251):23)
+                                                                                                    	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1154)
+                                                                                                    	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:652)
+                                                                                                    	at java.lang.Thread.run(Thread.java:1564)
+2026-05-17 12:34:09.021 27983-26230 PhSharedDirectoryWriter com.google.android.gms.persistent    E  Failed to delete the DE shared dir for Android package: com.sitstand.timer. [CONTEXT service_id=51 ]
+                                                                                                    java.lang.IllegalStateException: Failed to delete directory
+                                                                                                    	at hfup.s(:com.google.android.gms@261833035@26.18.33 (260400-913931251):10)
+                                                                                                    	at fclb.a(:com.google.android.gms@261833035@26.18.33 (260400-913931251):136)
+                                                                                                    	at com.google.android.gms.phenotype.notification.PackagesChangedIntentOperation.onHandleIntent(:com.google.android.gms@261833035@26.18.33 (260400-913931251):105)
+                                                                                                    	at com.google.android.chimera.IntentOperation.onHandleIntent(:com.google.android.gms@261833035@26.18.33 (260400-913931251):1)
+                                                                                                    	at bdle.onHandleIntent(:com.google.android.gms@261833035@26.18.33 (260400-913931251):88)
+                                                                                                    	at abem.run(:com.google.android.gms@261833035@26.18.33 (260400-913931251):58)
+                                                                                                    	at abel.run(:com.google.android.gms@261833035@26.18.33 (260400-913931251):132)
+                                                                                                    	at hdpo.run(:com.google.android.gms@261833035@26.18.33 (260400-913931251):23)
+                                                                                                    	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1154)
+                                                                                                    	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:652)
+                                                                                                    	at java.lang.Thread.run(Thread.java:1564)
+2026-05-17 12:34:09.047 10241-10493 android.vending         com.android.vending                  E  Failed to open APK '/data/app/~~vzxUB6jf2OjYrBtBERaZlg==/com.sitstand.timer-Cjf7rrJ7_yM_mnolSFrLrw==/base.apk': I/O error
+2026-05-17 12:34:09.061 10241-10493 android.vending         com.android.vending                  E  Failed to open APK '/data/app/~~vzxUB6jf2OjYrBtBERaZlg==/com.sitstand.timer-Cjf7rrJ7_yM_mnolSFrLrw==/base.apk': I/O error
+2026-05-17 12:34:09.072 10241-10493 ResourcesManager        com.android.vending                  E  failed to add asset path '/data/app/~~vzxUB6jf2OjYrBtBERaZlg==/com.sitstand.timer-Cjf7rrJ7_yM_mnolSFrLrw==/base.apk'
+                                                                                                    java.io.IOException: Failed to load asset path /data/app/~~vzxUB6jf2OjYrBtBERaZlg==/com.sitstand.timer-Cjf7rrJ7_yM_mnolSFrLrw==/base.apk
+                                                                                                    	at android.content.res.ApkAssets.nativeLoad(Native Method)
+                                                                                                    	at android.content.res.ApkAssets.<init>(ApkAssets.java:322)
+                                                                                                    	at android.content.res.ApkAssets.loadFromPath(ApkAssets.java:171)
+                                                                                                    	at android.app.ResourcesManager.loadApkAssets(ResourcesManager.java:684)
+                                                                                                    	at android.app.ResourcesManager$ApkAssetsSupplier.load(ResourcesManager.java:330)
+                                                                                                    	at android.app.ResourcesManager.createAssetManager(ResourcesManager.java:780)
+                                                                                                    	at android.app.ResourcesManager.createResourcesImpl(ResourcesManager.java:914)
+                                                                                                    	at android.app.ResourcesManager.findOrCreateResourcesImplForKeyLocked(ResourcesManager.java:980)
+                                                                                                    	at android.app.ResourcesManager.createResources(ResourcesManager.java:1440)
+                                                                                                    	at android.app.ResourcesManager.getResources(ResourcesManager.java:1581)
+                                                                                                    	at android.app.ResourcesManager.getResources(ResourcesManager.java:1515)
+                                                                                                    	at android.app.ActivityThread.getTopLevelResources(ActivityThread.java:3283)
+                                                                                                    	at android.app.ApplicationPackageManager.getResourcesForApplication(ApplicationPackageManager.java:2325)
+                                                                                                    	at android.app.ApplicationPackageManager.getResourcesForApplication(ApplicationPackageManager.java:2311)
+                                                                                                    	at android.app.ApplicationPackageManager.getDrawable(ApplicationPackageManager.java:1982)
+                                                                                                    	at android.app.ApplicationPackageManager.loadUnbadgedItemIcon(ApplicationPackageManager.java:3926)
+                                                                                                    	at android.app.ApplicationPackageManager.loadItemIcon(ApplicationPackageManager.java:3801)
+                                                                                                    	at android.content.pm.PackageItemInfo.loadIcon(PackageItemInfo.java:320)
+                                                                                                    	at android.content.pm.PackageItemInfo.loadIcon(PackageItemInfo.java:315)
+                                                                                                    	at android.app.ApplicationPackageManager.getApplicationIcon(ApplicationPackageManager.java:2052)
+                                                                                                    	at pbz.a(PG:19)
+                                                                                                    	at pcg.l(PG:30)
+                                                                                                    	at rv.kV(PG:794)
+                                                                                                    	at pbj.k(PG:36)
+                                                                                                    	at pba.f(PG:17)
+                                                                                                    	at pba.i(PG:31)
+                                                                                                    	at pce.i(PG:1)
+                                                                                                    	at pch.d(PG:11)
+                                                                                                    	at pch.e(PG:13)
+                                                                                                    	at ooq.apply(PG:1769)
+                                                                                                    	at bmsn.d(PG:3)
+                                                                                                    	at bmso.run(PG:47)
+                                                                                                    	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1154)
+                                                                                                    	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:652)
+                                                                                                    	at vpo.run(PG:638)
+                                                                                                    	at java.lang.Thread.run(Thread.java:1564)
+2026-05-17 12:36:25.400 28694-28694 nativeloader            com.sitstand.timer                   D  Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
+2026-05-17 12:36:25.404 28694-28694 ActivityThread          com.sitstand.timer                   D  setConscryptValidator
+2026-05-17 12:36:25.404 28694-28694 ActivityThread          com.sitstand.timer                   D  setConscryptValidator - put
+---------------------------- PROCESS STARTED (28694) for package com.sitstand.timer ----------------------------
+2026-05-17 12:36:25.654 28694-28694 nativeloader            com.sitstand.timer                   D  Configuring clns-9 for other apk /data/app/~~qj0g0fJmKg1U6Mz4sFSwWg==/com.sitstand.timer-gyy7RpsEX8Ik4rcpg35Ikg==/base.apk. target_sdk_version=36, uses_libraries=, library_path=/data/app/~~qj0g0fJmKg1U6Mz4sFSwWg==/com.sitstand.timer-gyy7RpsEX8Ik4rcpg35Ikg==/lib/arm64, permitted_path=/data:/mnt/expand:/data/user/0/com.sitstand.timer
+2026-05-17 12:36:25.659 28694-28694 GraphicsEnvironment     com.sitstand.timer                   V  Currently set values for:
+2026-05-17 12:36:25.659 28694-28694 GraphicsEnvironment     com.sitstand.timer                   V    angle_gl_driver_selection_pkgs=[]
+2026-05-17 12:36:25.659 28694-28694 GraphicsEnvironment     com.sitstand.timer                   V    angle_gl_driver_selection_values=[]
+2026-05-17 12:36:25.659 28694-28694 GraphicsEnvironment     com.sitstand.timer                   V  com.sitstand.timer is not listed in per-application setting
+2026-05-17 12:36:25.659 28694-28694 GraphicsEnvironment     com.sitstand.timer                   V  ANGLE allowlist from config: 
+2026-05-17 12:36:25.659 28694-28694 GraphicsEnvironment     com.sitstand.timer                   V  com.sitstand.timer is not listed in ANGLE allowlist or settings, returning default
+2026-05-17 12:36:25.659 28694-28694 GraphicsEnvironment     com.sitstand.timer                   V  App is not on the allowlist for updatable production driver.
+2026-05-17 12:36:25.680 28694-28726 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-17 12:36:25.683 28694-28726 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-17 12:36:25.683 28694-28726 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-17 12:36:25.684 28694-28726 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-17 12:36:25.684 28694-28726 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-17 12:36:25.684 28694-28726 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-17 12:36:25.685 28694-28726 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-17 12:36:25.685 28694-28726 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-17 12:36:25.685 28694-28726 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-17 12:36:25.686 28694-28726 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-17 12:36:25.686 28694-28726 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-17 12:36:25.687 28694-28726 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-17 12:36:25.687 28694-28726 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-17 12:36:25.688 28694-28726 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-17 12:36:25.688 28694-28726 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-17 12:36:25.689 28694-28726 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-17 12:36:25.689 28694-28726 BackupAgent             com.sitstand.timer                   I  mDisableDataExtractionRule = false
+2026-05-17 12:36:25.689 28694-28726 BackupAgent             com.sitstand.timer                   I  mDisableDataExtracti
