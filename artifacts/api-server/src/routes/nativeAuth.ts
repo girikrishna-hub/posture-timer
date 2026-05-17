@@ -170,6 +170,7 @@ async function verifyGoogleIdToken(
 // ── POST /api/auth/native/google ──────────────────────────────────────────────
 
 router.post("/auth/native/google", async (req, res) => {
+  req.log.info("[NativeAuthBackend] route hit — POST /api/auth/native/google");
   const body = req.body as {
     idToken?:    unknown;
     deviceId?:   unknown;
