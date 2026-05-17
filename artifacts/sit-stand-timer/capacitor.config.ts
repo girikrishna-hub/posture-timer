@@ -16,7 +16,7 @@ const config: CapacitorConfig = {
     // GOOGLE_FIT_CLIENT_ID is re-used here since it was created for the same project.
     GoogleAuth: {
       scopes: ["profile", "email"],
-      serverClientId: process.env.GOOGLE_FIT_CLIENT_ID ?? "",
+      serverClientId: process.env.GOOGLE_FIT_CLIENT_ID ?? "408487352425-95qksguhssbuhn9t3sllea635t7c9s8u.apps.googleusercontent.com",
       forceCodeForRefreshToken: false,
     },
     // Splash screen: we hide it manually after React mounts (see main.tsx)
