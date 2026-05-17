@@ -411,6 +411,9 @@ importers:
 
   artifacts/sit-stand-timer:
     dependencies:
+      '@capacitor-firebase/authentication':
+        specifier: ^8.2.0
+        version: 8.2.0(@capacitor/core@8.3.4)
       '@capacitor/app':
         specifier: ^8.1.0
         version: 8.1.0(@capacitor/core@8.3.4)
@@ -1270,6 +1273,15 @@ packages:
   '@bcoe/v8-coverage@1.0.2':
     resolution: {integrity: sha512-6zABk/ECA/QYSCQ1NGiVwwbQerUCZ+TQbp64Q3AgmfNvurHH0j8TtXa1qbShXA6qqkpAj4V5W8pP6mLe1mcMqA==}
     engines: {node: '>=18'}
+
+  '@capacitor-firebase/authentication@8.2.0':
+    resolution: {integrity: sha512-9TXdnxnDVuptwUM0fcChnAbejYAjO6UR7VHWHak7PRaBL/6MyHKtb8vgorFMH3Gf+pInZ6jAJUVpVBcaJ5HnLw==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
+      firebase: ^12.6.0
+    peerDependenciesMeta:
+      firebase:
+        optional: true
 
   '@capacitor/android@8.3.4':
     resolution: {integrity: sha512-7gJjrG3X32Am1QMLqgMztWTYMLMVNE+VZwhekNxhvYizH4mOV05vH+rC9B+f17bCkYZfyu/qXQX6hoY7kLeVZw==}
@@ -6117,6 +6129,10 @@ snapshots:
       '@babel/helper-validator-identifier': 7.28.5
 
   '@bcoe/v8-coverage@1.0.2': {}
+
+  '@capacitor-firebase/authentication@8.2.0(@capacitor/core@8.3.4)':
+    dependencies:
+      '@capacitor/core': 8.3.4
 
   '@capacitor/android@8.3.4(@capacitor/core@8.3.4)':
     dependencies:
