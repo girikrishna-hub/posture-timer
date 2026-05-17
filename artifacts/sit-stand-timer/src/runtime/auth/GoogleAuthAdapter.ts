@@ -31,6 +31,7 @@ export type GoogleAuthError =
   | { code: "unknown"; message: string; cause?: unknown };
 
 type FirebasePlugin = {
+  getCurrentUser: () => Promise<{ user: unknown | null }>;
   signInWithGoogle: (options?: unknown) => Promise<{
     credential: {
       providerId: string;
@@ -59,14 +60,19 @@ export class GoogleAuthAdapter {
     if (!this._isNative) return;
     try {
       const mod = await import("@capacitor-firebase/authentication");
-      this._plugin = mod.FirebaseAuthentication as unknown as FirebasePlugin;
+      const candidate = mod.FirebaseAuthentication as unknown as FirebasePlugin;
+      // Probe the actual native bridge — getCurrentUser() will throw
+      // "not implemented" if the plugin is not registered on this platform.
+      // A null user response is fine; we just need the bridge to respond.
+      await candidate.getCurrentUser();
+      this._plugin = candidate;
       console.log(
-        "[NativeAuth] GoogleAuthAdapter.initialize() SUCCESS — firebase plugin ready",
+        "[NativeAuth] GoogleAuthAdapter.initialize() SUCCESS — native bridge confirmed",
       );
     } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
       console.warn(
-        "[NativeAuth] GoogleAuthAdapter.initialize() FAILED — plugin not available:",
-        e,
+        `[NativeAuth] GoogleAuthAdapter.initialize() FAILED — native bridge unavailable: ${msg}`,
       );
       this._plugin = null;
     }
