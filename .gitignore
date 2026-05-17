@@ -47,3 +47,6 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Android secrets — never commit, re-download from Firebase Console
+android/app/google-services.json
