@@ -1,12 +1,16 @@
 /**
- * GoogleAuthAdapter — native Google Sign-In via @codetrix-studio/capacitor-google-auth.
+ * GoogleAuthAdapter — native Google Sign-In via @capacitor-firebase/authentication.
  *
- * Acquires a Google ID token from the platform account picker (Android Account
- * Manager / iOS GIDSignIn). The ID token is then exchanged with the backend
- * via ClerkBridgeAdapter — this adapter owns ONLY the identity acquisition step.
+ * Acquires a Google ID token from the platform account picker (Android / iOS).
+ * The ID token is then exchanged with the backend via ClerkBridgeAdapter —
+ * this adapter owns ONLY the identity acquisition step.
  *
- * Falls back to the web OAuth flow on non-native platforms so the same adapter
- * interface works in browser development without crashing.
+ * Firebase Authentication is used solely as the native credential transport.
+ * It does NOT own session state, refresh orchestration, or JWT lifecycle —
+ * those remain entirely within RuntimeCore.
+ *
+ * Falls back gracefully on non-native platforms so the same interface works
+ * in browser development without crashing.
  */
 
 import { Capacitor } from "@capacitor/core";
@@ -16,7 +20,7 @@ export interface GoogleIdentity {
   email: string;
   displayName: string | null;
   photoUrl: string | null;
-  /** Provider-level user ID (sub claim) */
+  /** Provider-level user ID (uid claim) */
   providerId: string;
 }
 
@@ -26,22 +30,44 @@ export type GoogleAuthError =
   | { code: "network_error"; message: string }
   | { code: "unknown"; message: string; cause?: unknown };
 
+type FirebasePlugin = {
+  signInWithGoogle: (options?: unknown) => Promise<{
+    credential: {
+      providerId: string;
+      idToken: string | null;
+      accessToken: string | null;
+    } | null;
+    user: {
+      uid: string;
+      email: string | null;
+      displayName: string | null;
+      photoUrl: string | null;
+    } | null;
+  }>;
+  signOut: () => Promise<void>;
+};
+
 export class GoogleAuthAdapter {
   private readonly _isNative = Capacitor.isNativePlatform();
-  private _plugin: unknown = null;
+  private _plugin: FirebasePlugin | null = null;
 
   /** Must be called during runtime boot before any sign-in attempt. */
   async initialize(): Promise<void> {
-    console.log(`[NativeAuth] GoogleAuthAdapter.initialize() — isNative=${this._isNative}`);
+    console.log(
+      `[NativeAuth] GoogleAuthAdapter.initialize() — isNative=${this._isNative}`,
+    );
     if (!this._isNative) return;
     try {
-      const mod = await import("@codetrix-studio/capacitor-google-auth");
-      this._plugin = mod.GoogleAuth;
-      // initialize() is synchronous in v3 of this plugin (returns void, not Promise)
-      (mod.GoogleAuth as unknown as { initialize: () => void }).initialize();
-      console.log("[NativeAuth] GoogleAuthAdapter.initialize() SUCCESS — plugin ready");
+      const mod = await import("@capacitor-firebase/authentication");
+      this._plugin = mod.FirebaseAuthentication as unknown as FirebasePlugin;
+      console.log(
+        "[NativeAuth] GoogleAuthAdapter.initialize() SUCCESS — firebase plugin ready",
+      );
     } catch (e) {
-      console.warn("[NativeAuth] GoogleAuthAdapter.initialize() FAILED — plugin not available:", e);
+      console.warn(
+        "[NativeAuth] GoogleAuthAdapter.initialize() FAILED — plugin not available:",
+        e,
+      );
       this._plugin = null;
     }
   }
@@ -51,7 +77,9 @@ export class GoogleAuthAdapter {
   }
 
   /**
-   * Open the native account picker and acquire a Google ID token.
+   * Open the native Google account picker and acquire a Google ID token.
+   * Firebase Auth is used only for the native credential acquisition —
+   * the resulting idToken is passed to RuntimeCore for Clerk exchange.
    * Throws a GoogleAuthError on any failure.
    */
   async signIn(): Promise<GoogleIdentity> {
@@ -60,40 +88,43 @@ export class GoogleAuthAdapter {
     );
 
     if (!this._isNative || !this._plugin) {
-      console.error("[NativeAuth] GoogleAuthAdapter.signIn() ABORT — not native or plugin null");
-      throw this._makeError("play_services_unavailable",
-        "Native Google Sign-In is only available on Android/iOS");
+      console.error(
+        "[NativeAuth] GoogleAuthAdapter.signIn() ABORT — not native or plugin null",
+      );
+      throw this._makeError(
+        "play_services_unavailable",
+        "Native Google Sign-In is only available on Android/iOS",
+      );
     }
 
     try {
-      const plugin = this._plugin as {
-        signIn: () => Promise<{
-          idToken?: string;
-          authentication?: { idToken?: string };
-          email: string;
-          name?: string;
-          givenName?: string;
-          imageUrl?: string;
-          id: string;
-        }>;
-      };
       console.log("[NativeAuth] GoogleAuthAdapter — launching account picker");
-      const result = await plugin.signIn();
-      const idToken = result.idToken ?? result.authentication?.idToken;
+      const result = await this._plugin.signInWithGoogle();
+
+      const idToken = result.credential?.idToken ?? null;
+      const email = result.user?.email ?? "";
+
       console.log(
-        `[NativeAuth] GoogleAuthAdapter — picker returned hasIdToken=${!!idToken} hasEmail=${!!result.email}`,
+        `[NativeAuth] GoogleAuthAdapter — picker returned hasIdToken=${!!idToken} hasEmail=${!!email}`,
       );
+
       if (!idToken) {
-        console.error("[NativeAuth] GoogleAuthAdapter — picker returned NO id token");
-        throw this._makeError("unknown", "Google Sign-In returned no ID token");
+        console.error(
+          "[NativeAuth] GoogleAuthAdapter — Firebase sign-in returned no ID token",
+        );
+        throw this._makeError(
+          "unknown",
+          "Google Sign-In returned no ID token",
+        );
       }
+
       console.log("[NativeAuth] GoogleAuthAdapter.signIn() SUCCESS");
       return {
         idToken,
-        email: result.email,
-        displayName: result.name ?? result.givenName ?? null,
-        photoUrl: result.imageUrl ?? null,
-        providerId: result.id,
+        email,
+        displayName: result.user?.displayName ?? null,
+        photoUrl: result.user?.photoUrl ?? null,
+        providerId: result.user?.uid ?? "",
       };
     } catch (e) {
       if (e && typeof e === "object" && "code" in e) {
@@ -101,19 +132,39 @@ export class GoogleAuthAdapter {
         console.error(
           `[NativeAuth] GoogleAuthAdapter.signIn() ERROR (typed) — code=${coded.code} msg=${coded.message ?? ""}`,
         );
-        throw e as GoogleAuthError;
+        const code = coded.code as string;
+        if (
+          code.includes("cancelled") ||
+          code.includes("dismissed") ||
+          code.includes("popup-closed") ||
+          code.includes("12501")
+        ) {
+          throw this._makeError("cancelled", "User cancelled Google Sign-In");
+        }
+        if (code.includes("network") || code.includes("7:")) {
+          throw this._makeError(
+            "network_error",
+            "Network error during Google Sign-In",
+          );
+        }
+        throw this._makeError(
+          "unknown",
+          coded.message ?? "Google Sign-In failed",
+          e,
+        );
       }
       const msg = e instanceof Error ? e.message : String(e);
-      console.error(`[NativeAuth] GoogleAuthAdapter.signIn() ERROR (raw) — ${msg}`);
+      console.error(
+        `[NativeAuth] GoogleAuthAdapter.signIn() ERROR (raw) — ${msg}`,
+      );
       if (msg.includes("cancel") || msg.includes("12501")) {
         throw this._makeError("cancelled", "User cancelled Google Sign-In");
       }
       if (msg.includes("network") || msg.includes("7:")) {
-        throw this._makeError("network_error", "Network error during Google Sign-In");
-      }
-      if (msg.includes("play") || msg.includes("10:")) {
-        throw this._makeError("play_services_unavailable",
-          "Google Play Services not available");
+        throw this._makeError(
+          "network_error",
+          "Network error during Google Sign-In",
+        );
       }
       throw this._makeError("unknown", msg, e);
     }
@@ -122,7 +173,7 @@ export class GoogleAuthAdapter {
   async signOut(): Promise<void> {
     if (!this._isNative || !this._plugin) return;
     try {
-      await (this._plugin as { signOut: () => Promise<void> }).signOut();
+      await this._plugin.signOut();
     } catch {
       /* sign-out errors are non-fatal */
     }
@@ -133,6 +184,10 @@ export class GoogleAuthAdapter {
     message: string,
     cause?: unknown,
   ): GoogleAuthError {
-    return { code, message, ...(cause !== undefined ? { cause } : {}) } as GoogleAuthError;
+    return {
+      code,
+      message,
+      ...(cause !== undefined ? { cause } : {}),
+    } as GoogleAuthError;
   }
 }

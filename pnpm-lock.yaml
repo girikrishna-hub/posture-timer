@@ -438,9 +438,6 @@ importers:
       '@clerk/themes':
         specifier: ^2.4.57
         version: 2.4.57(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      '@codetrix-studio/capacitor-google-auth':
-        specifier: ^3.3.6
-        version: 3.3.6(@capacitor/core@8.3.4)
       html2canvas:
         specifier: ^1.4.1
         version: 1.4.1
@@ -1365,11 +1362,6 @@ packages:
   '@clerk/themes@2.4.57':
     resolution: {integrity: sha512-Nb3bO79rMTU/MPVTC/dde6LG27/IgOMKIYi5KSvAmO4ZUHlj0OWufu6CMvz5OYVZ0YdyMnTBU2aPGRUiRzO+2w==}
     engines: {node: '>=18.17.0'}
-
-  '@codetrix-studio/capacitor-google-auth@3.3.6':
-    resolution: {integrity: sha512-SiMjYq5O2rWzEdKrmu3VZQ2nmFdq6LUXPzsNbjs4Ri6WTJVCtzp1HI12t4Dcwi5YoSw8g94Iyi3Can8msj57QA==}
-    peerDependencies:
-      '@capacitor/core': ^5.0.0
 
   '@commander-js/extra-typings@14.0.0':
     resolution: {integrity: sha512-hIn0ncNaJRLkZrxBIp5AsW/eXEHNKYQBh0aPdoUqNgD+Io3NIykQqpKFyKcuasZhicGaEZJX/JBSIkZ4e5x8Dg==}
@@ -6240,10 +6232,6 @@ snapshots:
     transitivePeerDependencies:
       - react
       - react-dom
-
-  '@codetrix-studio/capacitor-google-auth@3.3.6(@capacitor/core@8.3.4)':
-    dependencies:
-      '@capacitor/core': 8.3.4
 
   '@commander-js/extra-typings@14.0.0(commander@14.0.3)':
     dependencies:

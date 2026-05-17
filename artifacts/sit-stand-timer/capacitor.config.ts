@@ -8,16 +8,15 @@ const config: CapacitorConfig = {
     androidScheme: "https",
   },
   plugins: {
-    // Google Sign-In (native account picker).
-    // scopes: email + profile are the minimum needed for Clerk's oauth_google exchange.
-    // clientId: the Web client OAuth client ID from Google Cloud Console
-    // (Project → APIs & Services → Credentials → OAuth 2.0 Client IDs → Web client).
-    // This is NOT the Android client ID — that one is configured via google-services.json.
-    // GOOGLE_FIT_CLIENT_ID is re-used here since it was created for the same project.
-    GoogleAuth: {
-      scopes: ["profile", "email"],
-      serverClientId: process.env.GOOGLE_FIT_CLIENT_ID ?? "408487352425-95qksguhssbuhn9t3sllea635t7c9s8u.apps.googleusercontent.com",
-      forceCodeForRefreshToken: false,
+    // Firebase Authentication — used ONLY as native Google identity acquisition.
+    // skipNativeAuth: false so we get a populated user object (email, displayName).
+    // RuntimeCore owns FSM, session lifecycle, JWT management, and refresh —
+    // Firebase Auth is not used for session persistence or state.
+    // The Web client ID (serverClientId equivalent) is read from google-services.json
+    // automatically by the Firebase SDK on Android.
+    FirebaseAuthentication: {
+      skipNativeAuth: false,
+      providers: ["google.com"],
     },
     // Splash screen: we hide it manually after React mounts (see main.tsx)
     // so the native overlay never outlives the first real WebView frame.
