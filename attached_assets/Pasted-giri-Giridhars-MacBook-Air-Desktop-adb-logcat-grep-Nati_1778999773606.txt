@@ -1,0 +1,17 @@
+giri@Giridhars-MacBook-Air Desktop % adb logcat | grep NativeAuth
+05-17 12:05:07.792  4174  4174 I Capacitor/Console: File: https://localhost/assets/index-C0zcoNf8.js - Line 2 - Msg: [NativeAuth] FSM INIT → UNINITIALIZED
+05-17 12:05:07.844  4174  4174 I Capacitor/Console: File: https://localhost/assets/index-C0zcoNf8.js - Line 2 - Msg: [NativeAuth] FSM UNINITIALIZED → INITIALIZING
+05-17 12:05:07.845  4174  4174 I Capacitor/Console: File: https://localhost/assets/index-C0zcoNf8.js - Line 2 - Msg: [NativeAuth] GoogleAuthAdapter.initialize() — isNative=true
+05-17 12:05:07.850  4174  4174 I Capacitor/Console: File: https://localhost/assets/index-C0zcoNf8.js - Line 2 - Msg: [NativeAuth] GoogleAuthAdapter.initialize() SUCCESS — plugin ready
+05-17 12:05:07.850  4174  4174 I Capacitor/Console: File: https://localhost/assets/index-C0zcoNf8.js - Line 2 - Msg: [NativeAuth] Boot — googleIsAvailable=true isNative=true
+05-17 12:05:08.200  4174  4174 I Capacitor/Console: File: https://localhost/assets/index-C0zcoNf8.js - Line 2 - Msg: [NativeAuth] FSM INITIALIZING → RESTORING_SESSION
+05-17 12:05:08.202  4174  4174 I Capacitor/Console: File: https://localhost/assets/index-C0zcoNf8.js - Line 2 - Msg: [NativeAuth] FSM RESTORING_SESSION → SIGNED_OUT
+05-17 12:05:13.737  4174  4174 I Capacitor/Console: File: https://localhost/assets/index-C0zcoNf8.js - Line 2 - Msg: [NativeAuth] Button.tap — nativeGoogleAvailable=true fsmState=SIGNED_OUT
+05-17 12:05:13.738  4174  4174 I Capacitor/Console: File: https://localhost/assets/index-C0zcoNf8.js - Line 2 - Msg: [NativeAuth] FSM SIGNED_OUT → SIGNING_IN
+05-17 12:05:13.739  4174  4174 I Capacitor/Console: File: https://localhost/assets/index-C0zcoNf8.js - Line 2 - Msg: [NativeAuth] GoogleAuthAdapter.signIn() START — isNative=true pluginLoaded=true
+05-17 12:05:13.739  4174  4174 I Capacitor/Console: File: https://localhost/assets/index-C0zcoNf8.js - Line 2 - Msg: [NativeAuth] GoogleAuthAdapter — launching account picker
+05-17 12:05:16.464  4174  4174 E Capacitor/Console: File: https://localhost/assets/index-C0zcoNf8.js - Line 2 - Msg: [NativeAuth] GoogleAuthAdapter.signIn() ERROR (typed) — code=10 msg=Something went wrong
+05-17 12:05:16.464  4174  4174 E Capacitor/Console: File: https://localhost/assets/index-C0zcoNf8.js - Line 2 - Msg: [NativeAuth] AuthRuntime.signInWithGoogle() FAILED — Something went wrong
+05-17 12:05:16.464  4174  4174 I Capacitor/Console: File: https://localhost/assets/index-C0zcoNf8.js - Line 2 - Msg: [NativeAuth] FSM SIGNING_IN → SIGNED_OUT
+05-17 12:05:16.464  4174  4174 E Capacitor/Console: File: https://localhost/assets/index-C0zcoNf8.js - Line 2 - Msg: [NativeAuth] Button.tap ERROR — code=10 msg=Something went wrong
+
