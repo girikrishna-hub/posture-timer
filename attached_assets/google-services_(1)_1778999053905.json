@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "408487352425",
+    "project_id": "posture-timer-1777533387497",
+    "storage_bucket": "posture-timer-1777533387497.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:408487352425:android:4451a23fe96e8e019f2af8",
+        "android_client_info": {
+          "package_name": "com.sitstand.timer"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "408487352425-b5nkk0vdkpvrcgp3hf5jjvlflsuujgg3.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sitstand.timer",
+            "certificate_hash": "5d15bc1d466567074504388520e0dcad411fd40c"
+          }
+        },
+        {
+          "client_id": "408487352425-95qksguhssbuhn9t3sllea635t7c9s8u.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDnt8ZPnpjTf_-4PaqBF7f3rgzRGzz6rVU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "408487352425-95qksguhssbuhn9t3sllea635t7c9s8u.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
