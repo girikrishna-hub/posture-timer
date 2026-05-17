@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CAPACITOR_DEBUG</key>
+        <string>$(CAPACITOR_DEBUG)</string>
+        <key>CFBundleDevelopmentRegion</key>
+        <string>en</string>
+        <key>CFBundleDisplayName</key>
+        <string>Sit+Stand Timer</string>
+        <key>CFBundleExecutable</key>
+        <string>$(EXECUTABLE_NAME)</string>
+        <key>CFBundleIdentifier</key>
+        <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+        <key>CFBundleInfoDictionaryVersion</key>
+        <string>6.0</string>
+        <key>CFBundleName</key>
+        <string>$(PRODUCT_NAME)</string>
+        <key>CFBundlePackageType</key>
+        <string>APPL</string>
+        <key>CFBundleShortVersionString</key>
+        <string>$(MARKETING_VERSION)</string>
+        <key>CFBundleVersion</key>
+        <string>$(CURRENT_PROJECT_VERSION)</string>
+        <key>LSRequiresIPhoneOS</key>
+        <true/>
+        <key>UILaunchStoryboardName</key>
+        <string>LaunchScreen</string>
+        <key>UIMainStoryboardFile</key>
+        <string>Main</string>
+        <key>UIRequiredDeviceCapabilities</key>
+        <array>
+                <string>armv7</string>
+        </array>
+        <key>UISupportedInterfaceOrientations</key>
+        <array>
+                <string>UIInterfaceOrientationPortrait</string>
+                <string>UIInterfaceOrientationLandscapeLeft</string>
+                <string>UIInterfaceOrientationLandscapeRight</string>
+        </array>
+        <key>UISupportedInterfaceOrientations~ipad</key>
+        <array>
+                <string>UIInterfaceOrientationPortrait</string>
+                <string>UIInterfaceOrientationPortraitUpsideDown</string>
+                <string>UIInterfaceOrientationLandscapeLeft</string>
+                <string>UIInterfaceOrientationLandscapeRight</string>
+        </array>
+        <key>UIViewControllerBasedStatusBarAppearance</key>
+        <true/>
+        <key>CFBundleURLTypes</key>
+        <array>
+                <!-- posture-timer:// — Clerk OAuth callback deep link (mirrors Android intent filter) -->
+                <dict>
+                        <key>CFBundleURLName</key>
+                        <string>com.sitstand.timer.clerk</string>
+                        <key>CFBundleURLSchemes</key>
+                        <array>
+                                <string>posture-timer</string>
+                        </array>
+                </dict>
+                <!-- REVERSED_CLIENT_ID from GoogleService-Info.plist — required for Google Sign-In.  -->
+                <!-- Run ios-setup.sh to fill this in automatically after adding GoogleService-Info.plist. -->
+                <dict>
+                        <key>CFBundleURLName</key>
+                        <string>com.sitstand.timer.google</string>
+                        <key>CFBundleURLSchemes</key>
+                        <array>
+                                <string>REVERSED_CLIENT_ID_PLACEHOLDER</string>
+                        </array>
+                </dict>
+        </array>
+        <key>NSCameraUsageDescription</key>
+        <string>This app does not use the camera.</string>
+        <key>NSLocationWhenInUseUsageDescription</key>
+        <string>Location is used to detect walking speed for automatic walk-mode switching.</string>
+        <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+        <string>Location is used in the background to detect walking and automatically switch modes.</string>
+</dict>
+</plist>

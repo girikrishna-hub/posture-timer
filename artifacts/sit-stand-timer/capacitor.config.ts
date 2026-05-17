@@ -6,6 +6,7 @@ const config: CapacitorConfig = {
   webDir: "dist/public",
   server: {
     androidScheme: "https",
+    iosScheme: "https",
   },
   plugins: {
     // Firebase Authentication — used ONLY as native Google identity acquisition.

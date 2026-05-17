@@ -48,5 +48,6 @@ Thumbs.db
 .cache/
 .local/
 
-# Android secrets — never commit, re-download from Firebase Console
+# Native secrets — never commit, re-download from Firebase Console
 android/app/google-services.json
+artifacts/sit-stand-timer/ios/App/App/GoogleService-Info.plist
