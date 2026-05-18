@@ -69,6 +69,7 @@ export async function requestNativeNotificationPermission(): Promise<boolean> {
 
 const SITTING_BASE  = 2000;
 const STANDING_BASE = 3000;
+const BLADDER_BASE  = 4000;
 const MAX_REMINDERS = 11;
 
 // ─── Cancel helpers ─────────────────────────────────────────────────────────
@@ -92,6 +93,33 @@ export async function cancelStandingAlarms(): Promise<void> {
 export async function cancelAllNativePostureNotifications(): Promise<void> {
   await cancelSittingAlarms();
   await cancelStandingAlarms();
+}
+
+// ─── Cancel bladder alarm ────────────────────────────────────────────────────
+
+export async function cancelNativeBladderAlarm(): Promise<void> {
+  if (!isNativePlatform()) return;
+  try {
+    // Cancel both the main alarm and the snooze slot
+    await AlarmManager.cancelAlarms({ ids: [BLADDER_BASE, BLADDER_BASE + 500] });
+  } catch { /* silent */ }
+}
+
+// ─── Schedule bladder alarm ──────────────────────────────────────────────────
+
+export async function scheduleNativeBladderAlarm(
+  delayMs: number,
+  intervalMinutes: number,
+): Promise<void> {
+  if (!isNativePlatform()) return;
+  try {
+    await AlarmManager.scheduleAlarm({
+      id:      BLADDER_BASE,
+      title:   "Time to void",
+      body:    `Your ${intervalMinutes}-minute bladder timer has fired. Go now — do not delay.`,
+      delayMs,
+    });
+  } catch { /* silent */ }
 }
 
 // ─── Schedule sitting reminders ─────────────────────────────────────────────

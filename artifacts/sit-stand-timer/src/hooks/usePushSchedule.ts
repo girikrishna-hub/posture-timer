@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { schedulePush, cancelPushSchedule } from "@workspace/api-client-react";
 import { useTimer, type TimerMode } from "@/contexts/TimerContext";
+import { isNativePlatform } from "@/utils/nativeNotifications";
 
 interface Settings {
   sittingAlertMinutes: number;
@@ -41,6 +42,14 @@ export function usePushSchedule(settings: Settings | null | undefined) {
   // Update the helper every render (outside any dependency array) so it always
   // reads the latest ref values — no stale closure risk.
   doSchedule.current = () => {
+    // On native Android, AlarmManager handles all reminder scheduling.
+    // Server-side push would duplicate those alarms and cause the backlog
+    // of stacked notifications the user sees when opening the app.
+    if (isNativePlatform()) {
+      mountedRef.current = true;
+      return;
+    }
+
     const s = settingsRef.current;
     const m = modeRef.current;
 

@@ -24,6 +24,20 @@ class AlarmReceiver : BroadcastReceiver() {
         const val ACTION_BOOT  = Intent.ACTION_BOOT_COMPLETED
         const val ACTION_LBOOT = "android.intent.action.LOCKED_BOOT_COMPLETED"
         private const val PREFS = "alarm_prefs"
+
+        // Fixed display notification IDs — all posture alarms share one slot so
+        // each new reminder replaces the previous one instead of stacking.
+        // Bladder alarms get their own slot so they never clobber a posture alert.
+        const val POSTURE_NOTIF_ID = 1
+        const val BLADDER_NOTIF_ID = 2
+
+        // Alarm ID ranges (must match nativeNotifications.ts on the JS side)
+        //   2000–2010  sitting reminders
+        //   3000–3010  standing reminders
+        //   4000–4001  bladder + bladder-snooze
+        //   501, 502   posture/bladder snooze (notifId + 500)
+        fun displayNotifId(alarmId: Int) =
+            if (alarmId >= 4000) BLADDER_NOTIF_ID else POSTURE_NOTIF_ID
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -40,19 +54,26 @@ class AlarmReceiver : BroadcastReceiver() {
         val title = intent.getStringExtra("title") ?: "Posture reminder"
         val body  = intent.getStringExtra("body")  ?: ""
 
+        // Use a fixed display notification ID per type so each new alarm
+        // *replaces* the previous one rather than stacking in the drawer.
+        val notifId = displayNotifId(id)
+
         ensureChannel(context)
 
         // Full-screen intent → AlarmFullScreenActivity
+        // Pass notifId (not the scheduling id) so the activity cancels the
+        // correct visible notification on Dismiss/Snooze.
         val fsIntent = Intent(context, AlarmFullScreenActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_NO_USER_ACTION or
                     Intent.FLAG_ACTIVITY_SINGLE_TOP
-            putExtra("id",    id)
-            putExtra("title", title)
-            putExtra("body",  body)
+            putExtra("id",       notifId)   // used by activity to cancel notification
+            putExtra("alarm_id", id)        // original scheduling id (for snooze chain)
+            putExtra("title",    title)
+            putExtra("body",     body)
         }
         val fsPi = PendingIntent.getActivity(
-            context, id, fsIntent,
+            context, notifId, fsIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -70,7 +91,7 @@ class AlarmReceiver : BroadcastReceiver() {
             .build()
 
         (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-            .notify(id, notification)
+            .notify(notifId, notification)
 
         // Also start the activity directly so it appears immediately on the
         // lock screen even on devices that throttle fullScreenIntent.

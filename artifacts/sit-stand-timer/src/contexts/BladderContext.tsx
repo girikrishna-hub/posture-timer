@@ -11,6 +11,11 @@ import {
   cancelBladderPush,
 } from "@workspace/api-client-react";
 import { useTimer } from "@/contexts/TimerContext";
+import {
+  isNativePlatform,
+  scheduleNativeBladderAlarm,
+  cancelNativeBladderAlarm,
+} from "@/utils/nativeNotifications";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -453,16 +458,19 @@ export function BladderProvider({ children }: { children: React.ReactNode }) {
       fireCycleRef.current?.();
     }, remaining);
 
-    // Keep SW in sync — always schedule relative to now so the notification
-    // fires at the correct absolute time even if the SW was cleared.
-    scheduleSWBladder(remaining, "");
-
-    // Also schedule a server-side Web Push so the notification can reach the
-    // lock screen even when the browser is fully closed. Best-effort only.
-    void scheduleBladderPush({
-      delayMs: remaining,
-      logId: crypto.randomUUID(),
-    }).catch(() => { /* best-effort */ });
+    if (isNativePlatform()) {
+      // Native Android: AlarmManager fires setExactAndAllowWhileIdle so the
+      // alarm survives Doze mode, app-kill, and lock screen.
+      void scheduleNativeBladderAlarm(remaining, intervalRef.current);
+    } else {
+      // Web PWA: use SW setTimeout for foreground/near-background delivery,
+      // plus server-side VAPID push for fully-backgrounded browsers.
+      scheduleSWBladder(remaining, "");
+      void scheduleBladderPush({
+        delayMs: remaining,
+        logId: crypto.randomUUID(),
+      }).catch(() => { /* best-effort */ });
+    }
   }, []);
 
   // Stable fireCycle that uses refs so scheduleTimer's closure stays fresh.
@@ -479,7 +487,11 @@ export function BladderProvider({ children }: { children: React.ReactNode }) {
       savePending(log);
       setPendingLog(log);
 
-      showBladderNotificationNow(log.id);
+      // On native Android the AlarmManager already fired the full-screen alarm;
+      // showing a second SW notification would duplicate it.
+      if (!isNativePlatform()) {
+        showBladderNotificationNow(log.id);
+      }
 
       // Compute and persist the NEXT void deadline immediately so a crash or
       // refresh between now and the user's response preserves the schedule.
