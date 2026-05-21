@@ -427,11 +427,15 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     if (!initialized) return;
     void cancelAllNativePostureNotifications();
     const s = settingsRef.current;
+    const silent = (() => {
+      try { return localStorage.getItem("silentReminders") === "true"; } catch { return false; }
+    })();
     if (mode === "sitting") {
       void scheduleNativeSittingReminders({
         sittingAlertMinutes: s.sittingAlertMinutes,
         reminderIntervalMinutes: s.reminderIntervalMinutes,
         remindersCount: s.remindersCount,
+        silent,
       });
     } else if (mode === "standing") {
       void scheduleNativeStandingReminders({
@@ -439,6 +443,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
         standingMaxMinutes: s.standingMaxMinutes,
         reminderIntervalMinutes: s.reminderIntervalMinutes,
         remindersCount: s.remindersCount,
+        silent,
       });
     }
     // idle / resting / walking / workout: no posture reminders needed

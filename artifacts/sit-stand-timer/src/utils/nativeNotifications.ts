@@ -159,6 +159,7 @@ interface SittingSettings {
   sittingAlertMinutes:    number;
   reminderIntervalMinutes: number;
   remindersCount:          number;
+  silent?:                 boolean;
 }
 
 export async function scheduleNativeSittingReminders(
@@ -174,6 +175,7 @@ export async function scheduleNativeSittingReminders(
       title:   "Time to stand!",
       body:    `You've been sitting for ${s.sittingAlertMinutes} minutes. Stand up!`,
       delayMs: alertMs,
+      silent:  s.silent,
     });
 
     // Follow-up reminders
@@ -184,6 +186,7 @@ export async function scheduleNativeSittingReminders(
         title:   `Stand up — reminder ${i}/${s.remindersCount}`,
         body:    `Still sitting after ${s.sittingAlertMinutes + i * s.reminderIntervalMinutes} minutes.`,
         delayMs,
+        silent:  s.silent,
       });
     }
   } catch { /* silent */ }
@@ -196,6 +199,7 @@ interface StandingSettings {
   standingMaxMinutes:      number;
   reminderIntervalMinutes: number;
   remindersCount:          number;
+  silent?:                 boolean;
 }
 
 export async function scheduleNativeStandingReminders(
@@ -212,6 +216,7 @@ export async function scheduleNativeStandingReminders(
       title:   "Time to sit!",
       body:    `You've been standing for ${s.standingMinMinutes} minutes. Have a seat.`,
       delayMs: minMs,
+      silent:  s.silent,
     });
 
     // Intermediate reminders
@@ -223,6 +228,7 @@ export async function scheduleNativeStandingReminders(
         title:   `Sit down — reminder ${i}/${s.remindersCount}`,
         body:    `Still standing after ${s.standingMinMinutes + i * s.reminderIntervalMinutes} minutes.`,
         delayMs,
+        silent:  s.silent,
       });
     }
 
@@ -232,6 +238,7 @@ export async function scheduleNativeStandingReminders(
       title:   "Final reminder — please sit down",
       body:    `Maximum standing time of ${s.standingMaxMinutes} minutes reached.`,
       delayMs: maxMs,
+      silent:  s.silent,
     });
   } catch { /* silent */ }
 }

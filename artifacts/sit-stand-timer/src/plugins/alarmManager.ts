@@ -17,6 +17,11 @@ export interface ScheduleAlarmOptions {
   body: string;
   /** Milliseconds from now until the alarm fires. */
   delayMs: number;
+  /**
+   * When true the notification uses the vibrate-only channel (no sound).
+   * Use this for public-place / silent mode. Defaults to false.
+   */
+  silent?: boolean;
 }
 
 /**

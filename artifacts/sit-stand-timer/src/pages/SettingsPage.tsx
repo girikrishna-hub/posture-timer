@@ -384,6 +384,17 @@ export default function SettingsPage() {
     });
   }, []);
 
+  const [silentReminders, setSilentReminders] = useState(() => {
+    try { return localStorage.getItem("silentReminders") === "true"; } catch { return false; }
+  });
+  const handleToggleSilentReminders = useCallback(() => {
+    setSilentReminders((prev) => {
+      const next = !prev;
+      try { localStorage.setItem("silentReminders", String(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+
   const [queueCleared, setQueueCleared] = useState(false);
   const handleClearQueue = useCallback(() => {
     try { localStorage.removeItem("sit-stand-offline-queue"); } catch { /* ignore */ }
@@ -702,6 +713,30 @@ export default function SettingsPage() {
               <span
                 className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
                   soundOn ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="border-t border-border pt-4 flex items-start justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground">Silent reminders</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Vibrate only — no sound. Use this in public places or meetings. Notifications still pop up.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={silentReminders}
+              onClick={handleToggleSilentReminders}
+              className={`relative shrink-0 mt-0.5 inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                silentReminders ? "bg-orange-500" : "bg-muted-foreground/30"
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                  silentReminders ? "translate-x-6" : "translate-x-1"
                 }`}
               />
             </button>

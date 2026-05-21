@@ -8,6 +8,8 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -22,7 +24,8 @@ class AlarmReceiver : BroadcastReceiver() {
 
     companion object {
         const val TAG = "AlarmDiag"
-        const val CHANNEL_ID = "posture-alarm"
+        const val CHANNEL_ID        = "posture-alarm"
+        const val CHANNEL_ID_SILENT = "posture-alarm-silent"
         const val ACTION_BOOT  = Intent.ACTION_BOOT_COMPLETED
         const val ACTION_LBOOT = "android.intent.action.LOCKED_BOOT_COMPLETED"
         private const val PREFS = "alarm_prefs"
@@ -50,11 +53,12 @@ class AlarmReceiver : BroadcastReceiver() {
     // ── Fire the alarm ──────────────────────────────────────────────────────
 
     private fun fireAlarm(context: Context, intent: Intent) {
-        val id    = intent.getIntExtra("id",    0)
-        val title = intent.getStringExtra("title") ?: "Posture reminder"
-        val body  = intent.getStringExtra("body")  ?: ""
+        val id     = intent.getIntExtra("id",    0)
+        val title  = intent.getStringExtra("title") ?: "Posture reminder"
+        val body   = intent.getStringExtra("body")  ?: ""
+        val silent = intent.getBooleanExtra("silent", false)
 
-        Log.i(TAG, "fireAlarm id=$id title='$title'")
+        Log.i(TAG, "fireAlarm id=$id title='$title' silent=$silent")
 
         val dp = diagPrefs(context)
         dp.edit()
@@ -65,6 +69,9 @@ class AlarmReceiver : BroadcastReceiver() {
             .apply()
 
         ensureChannel(context)
+        ensureChannelSilent(context)
+
+        val channelId = if (silent) CHANNEL_ID_SILENT else CHANNEL_ID
 
         // Full-screen intent → AlarmFullScreenActivity
         val fsIntent = Intent(context, AlarmFullScreenActivity::class.java).apply {
@@ -80,7 +87,12 @@ class AlarmReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val defaults = if (silent)
+            NotificationCompat.DEFAULT_VIBRATE
+        else
+            NotificationCompat.DEFAULT_VIBRATE or NotificationCompat.DEFAULT_SOUND
+
+        val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.ic_popup_reminder)
             .setContentTitle(title)
             .setContentText(body)
@@ -88,16 +100,15 @@ class AlarmReceiver : BroadcastReceiver() {
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setFullScreenIntent(fsPi, true)
-            .setAutoCancel(false)
-            .setOngoing(true)
-            .setDefaults(NotificationCompat.DEFAULT_VIBRATE)
+            .setAutoCancel(true)
+            .setDefaults(defaults)
             .build()
 
         var notifyError: String? = null
         try {
             (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
                 .notify(id, notification)
-            Log.i(TAG, "notify OK id=$id")
+            Log.i(TAG, "notify OK id=$id channelId=$channelId")
             dp.edit()
                 .putInt(K_NOTIFY_COUNT, dp.getInt(K_NOTIFY_COUNT, 0) + 1)
                 .putString(K_LAST_NOTIFY_ERROR, "")
@@ -109,15 +120,6 @@ class AlarmReceiver : BroadcastReceiver() {
                 .putInt(K_NOTIFY_FAIL_COUNT, dp.getInt(K_NOTIFY_FAIL_COUNT, 0) + 1)
                 .putString(K_LAST_NOTIFY_ERROR, notifyError)
                 .apply()
-        }
-
-        // Also start the activity directly so it appears immediately on the
-        // lock screen even on devices that throttle fullScreenIntent.
-        try {
-            context.startActivity(fsIntent)
-            Log.i(TAG, "startActivity AlarmFullScreenActivity OK id=$id")
-        } catch (e: Exception) {
-            Log.w(TAG, "startActivity AlarmFullScreenActivity FAILED id=$id error=${e.message}")
         }
     }
 
@@ -172,25 +174,53 @@ class AlarmReceiver : BroadcastReceiver() {
         }
     }
 
-    // ── Notification channel ────────────────────────────────────────────────
+    // ── Notification channels ───────────────────────────────────────────────
 
     private fun ensureChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (nm.getNotificationChannel(CHANNEL_ID) != null) return
 
+        val notifSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        val audioAttr  = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build()
+
         val ch = NotificationChannel(
             CHANNEL_ID,
             "Posture Alarms",
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description              = "Sit/Stand posture alarm reminders"
-            lockscreenVisibility     = Notification.VISIBILITY_PUBLIC
+            description          = "Sit/Stand posture alarm reminders (with sound)"
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             enableVibration(true)
-            vibrationPattern         = longArrayOf(0, 500, 200, 500)
+            vibrationPattern     = longArrayOf(0, 500, 200, 500)
+            setSound(notifSound, audioAttr)
             setBypassDnd(true)
         }
         nm.createNotificationChannel(ch)
-        Log.i(TAG, "Created notification channel $CHANNEL_ID")
+        Log.i(TAG, "Created notification channel $CHANNEL_ID (sound)")
+    }
+
+    private fun ensureChannelSilent(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (nm.getNotificationChannel(CHANNEL_ID_SILENT) != null) return
+
+        val ch = NotificationChannel(
+            CHANNEL_ID_SILENT,
+            "Posture Alarms (Silent)",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description          = "Sit/Stand posture alarm reminders (vibrate only)"
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            enableVibration(true)
+            vibrationPattern     = longArrayOf(0, 500, 200, 500)
+            setSound(null, null)
+            setBypassDnd(true)
+        }
+        nm.createNotificationChannel(ch)
+        Log.i(TAG, "Created notification channel $CHANNEL_ID_SILENT (silent)")
     }
 }

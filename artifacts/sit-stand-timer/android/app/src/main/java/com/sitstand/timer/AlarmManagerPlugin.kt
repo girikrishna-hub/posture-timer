@@ -47,11 +47,14 @@ class AlarmManagerPlugin : Plugin() {
             ?: call.getDouble("delayMs")?.toLong()
             ?: return call.reject("delayMs required (got=${call.data.opt("delayMs")})")
 
+        val silent = call.getBoolean("silent") ?: false
+
         val ctx = context
         val intent = Intent(ctx, AlarmReceiver::class.java).apply {
-            putExtra("id",    id)
-            putExtra("title", title)
-            putExtra("body",  body)
+            putExtra("id",     id)
+            putExtra("title",  title)
+            putExtra("body",   body)
+            putExtra("silent", silent)
         }
         val pi = PendingIntent.getBroadcast(
             ctx, id, intent,
