@@ -196,6 +196,106 @@ else
   fi
 fi
 
+# ── 5b. Enable Kotlin in Gradle ──────────────────────────────────────────────
+# Capacitor's default Android template is Java-only — `.kt` files placed in
+# the source tree are silently ignored by javac. We bundle native alarm code
+# as Kotlin (AlarmManagerPlugin.kt, AlarmReceiver.kt, AlarmFullScreenActivity.kt)
+# so the project must enable the Kotlin Android plugin.
+#
+# Each patch is independently guarded so re-runs are idempotent.
+echo ""
+echo "▸ Enabling Kotlin in Gradle …"
+
+PROJECT_GRADLE="$SCRIPT_DIR/android/build.gradle"
+APP_GRADLE="$SCRIPT_DIR/android/app/build.gradle"
+KOTLIN_VERSION="1.9.25"
+
+if [ ! -f "$PROJECT_GRADLE" ] || [ ! -f "$APP_GRADLE" ]; then
+  echo "  ⚠  Gradle files missing — skipping Kotlin enablement."
+else
+  # 1. Project-level build.gradle: add kotlin_version ext + kotlin-gradle-plugin classpath
+  if grep -q "kotlin_version" "$PROJECT_GRADLE"; then
+    echo "  ✓ kotlin_version ext already defined"
+  else
+    # Inject `kotlin_version = '...'` as the first line inside the `ext {` block.
+    awk -v ver="$KOTLIN_VERSION" '
+      !done && /^[[:space:]]*ext[[:space:]]*\{/ {
+        print
+        print "        kotlin_version = '\''" ver "'\''"
+        done=1
+        next
+      }
+      { print }
+    ' "$PROJECT_GRADLE" > "$PROJECT_GRADLE.tmp" && mv "$PROJECT_GRADLE.tmp" "$PROJECT_GRADLE"
+    # If there was no ext block at all (rare), prepend one inside buildscript.
+    if ! grep -q "kotlin_version" "$PROJECT_GRADLE"; then
+      awk -v ver="$KOTLIN_VERSION" '
+        !done && /^buildscript[[:space:]]*\{/ {
+          print
+          print "    ext {"
+          print "        kotlin_version = '\''" ver "'\''"
+          print "    }"
+          done=1
+          next
+        }
+        { print }
+      ' "$PROJECT_GRADLE" > "$PROJECT_GRADLE.tmp" && mv "$PROJECT_GRADLE.tmp" "$PROJECT_GRADLE"
+    fi
+    echo "  ✓ kotlin_version ext added ($KOTLIN_VERSION)"
+  fi
+
+  if grep -q "kotlin-gradle-plugin" "$PROJECT_GRADLE"; then
+    echo "  ✓ kotlin-gradle-plugin classpath already present"
+  else
+    # Insert classpath line inside the buildscript -> dependencies block.
+    # Track nesting: enter `dependencies {` only while inside `buildscript {`.
+    awk '
+      /^buildscript[[:space:]]*\{/ { in_bs=1 }
+      in_bs && !done && /dependencies[[:space:]]*\{/ {
+        print
+        print "        classpath \"org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version\""
+        done=1
+        next
+      }
+      { print }
+    ' "$PROJECT_GRADLE" > "$PROJECT_GRADLE.tmp" && mv "$PROJECT_GRADLE.tmp" "$PROJECT_GRADLE"
+    echo "  ✓ kotlin-gradle-plugin classpath added"
+  fi
+
+  # 2. App-level build.gradle: apply kotlin-android plugin + kotlin-stdlib dep
+  if grep -q "kotlin-android" "$APP_GRADLE"; then
+    echo "  ✓ kotlin-android plugin already applied"
+  else
+    awk '
+      !done && /^apply plugin:[[:space:]]*['\''"]com\.android\.application['\''"]/ {
+        print
+        print "apply plugin: '\''kotlin-android'\''"
+        done=1
+        next
+      }
+      { print }
+    ' "$APP_GRADLE" > "$APP_GRADLE.tmp" && mv "$APP_GRADLE.tmp" "$APP_GRADLE"
+    echo "  ✓ kotlin-android plugin applied"
+  fi
+
+  if grep -q "kotlin-stdlib" "$APP_GRADLE"; then
+    echo "  ✓ kotlin-stdlib dependency already present"
+  else
+    # Insert `implementation` line at the top of the LAST `dependencies {` block.
+    # In Capacitor app/build.gradle there's only one top-level dependencies block.
+    awk '
+      !done && /^dependencies[[:space:]]*\{/ {
+        print
+        print "    implementation \"org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version\""
+        done=1
+        next
+      }
+      { print }
+    ' "$APP_GRADLE" > "$APP_GRADLE.tmp" && mv "$APP_GRADLE.tmp" "$APP_GRADLE"
+    echo "  ✓ kotlin-stdlib dependency added"
+  fi
+fi
+
 # ── 6. Patch MainActivity to register plugins ─────────────────────────────────
 # Capacitor can generate MainActivity.kt (Kotlin) or MainActivity.java (Java)
 # depending on the project template / init flags. We handle both.
