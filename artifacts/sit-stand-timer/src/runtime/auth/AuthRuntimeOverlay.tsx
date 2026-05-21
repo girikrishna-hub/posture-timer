@@ -76,9 +76,11 @@ const CLERK_STATUS_COLOR: Record<ClerkRuntimeStatus, string> = {
 };
 
 export function AuthRuntimeOverlay() {
-  // Production lockdown: tree-shaken out by Vite in production builds.
-  // IS_NATIVE alone is insufficient — also require DEV build.
-  if (!import.meta.env.DEV) return null;
+  // TEMP DIAG: visible on every native build so on-device debugging works
+  // without chrome://inspect. Previously gated to DEV only, which made the
+  // overlay invisible in release APKs. Re-tighten to `if (!import.meta.env.DEV)`
+  // once native auth is stable. Web builds remain DEV-only.
+  if (!IS_NATIVE && !import.meta.env.DEV) return null;
 
   const [open, setOpen] = useState(true);
   const [panel, setPanel] = useState<"main" | "timeline" | "offline" | "http">("main");
