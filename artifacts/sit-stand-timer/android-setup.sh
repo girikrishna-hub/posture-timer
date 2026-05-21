@@ -242,41 +242,49 @@ else
     fi
 
   else
-    # ── 6a-java. AlarmManagerPlugin (Java) ──────────────────────────────────
-    if grep -q "AlarmManagerPlugin" "$MAIN"; then
+    # ── 6a-java. Java MainActivity ──────────────────────────────────────────
+    # BSD sed (macOS) does not support the GNU `/pattern/a text` syntax,
+    # so all multi-line insertions use awk which is portable everywhere.
+    #
+    # Each piece below is checked independently so that re-runs after a
+    # partial previous run still complete missing steps. (Previously the
+    # import check was nested inside the onCreate check, so a second run
+    # would skip the imports if onCreate already existed.)
+
+    # Helper: append a single `import` line right after the package line
+    # if that import is not already present anywhere in the file.
+    inject_import() {
+      local import_line="$1"
+      if grep -qF "$import_line" "$MAIN"; then return; fi
+      awk -v line="$import_line" '
+        /^package / && !done { print; print line; done=1; next }
+        { print }
+      ' "$MAIN" > "$MAIN.tmp" && mv "$MAIN.tmp" "$MAIN"
+    }
+
+    # 1. Imports (each checked independently)
+    inject_import "import android.os.Bundle;"
+    inject_import "import com.sitstand.timer.AlarmManagerPlugin;"
+    echo "  ✓ Java imports present"
+
+    # 2. onCreate method with plugin registrations.
+    #    Detect by the actual registerPlugin call, not just by the symbol
+    #    name (which would also match the import line and false-positive).
+    if grep -q "registerPlugin(AlarmManagerPlugin.class)" "$MAIN"; then
       echo "  ✓ AlarmManagerPlugin already registered"
     else
-      # BSD sed (macOS) does not support the GNU `/pattern/a text` syntax,
-      # so all multi-line insertions use awk which is portable everywhere.
-
-      # 1. Add required imports after the package declaration (if absent).
-      #    AlarmManagerPlugin is in the same package but Java still requires
-      #    an explicit import when referenced as a class literal (.class).
-      if ! grep -q "import android.os.Bundle" "$MAIN"; then
-        awk '/^package /{
-          print
-          print "import android.os.Bundle;"
-          print "import com.sitstand.timer.AlarmManagerPlugin;"
-          next
-        } {print}' "$MAIN" > "$MAIN.tmp" && mv "$MAIN.tmp" "$MAIN"
-      fi
-
-      # 2. Inject onCreate right after the class opening brace.
-      #    Handles both `class Foo extends BridgeActivity {` and
-      #    the compact `class Foo extends BridgeActivity {}` form that
-      #    Capacitor generates when the body is empty.
       awk '
         /public class MainActivity extends BridgeActivity/ && !done {
           # Strip a trailing `}` so we can reprint it after the new method
-          trailing = ($0 ~ /\}\s*$/) ? "}" : ""
-          if (trailing != "") sub(/\}\s*$/, "", $0)
+          # (handles the compact `class Foo extends BridgeActivity {}` form)
+          trailing = ($0 ~ /\}[[:space:]]*$/) ? "}" : ""
+          if (trailing != "") sub(/\}[[:space:]]*$/, "", $0)
           print
           # If the opening brace is NOT on this line, print the next line
           if ($0 !~ /\{/) { getline; print }
           print "    @Override"
           print "    protected void onCreate(Bundle savedInstanceState) {"
           print "        registerPlugin(AlarmManagerPlugin.class);"
-          print "        registerPlugin(com.codetrixstudio.capacitor.GoogleAuth.GoogleAuth.class);"
           print "        super.onCreate(savedInstanceState);"
           print "    }"
           if (trailing != "") print trailing
@@ -287,11 +295,11 @@ else
       echo "  ✓ AlarmManagerPlugin registered"
     fi
 
-    # ── 6b-java. GoogleAuth (Java) ───────────────────────────────────────────
-    if grep -q "GoogleAuth" "$MAIN"; then
+    # 3. GoogleAuth registration — added separately so re-runs can repair
+    #    a file that has AlarmManager but is missing GoogleAuth.
+    if grep -q "GoogleAuth.class" "$MAIN"; then
       echo "  ✓ GoogleAuth plugin already registered"
     else
-      # Use awk for the insertion — BSD sed \n in replacement is not portable.
       awk '{
         print
         if (/registerPlugin\(AlarmManagerPlugin\.class\);/ && !done) {
