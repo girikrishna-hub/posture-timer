@@ -27,6 +27,12 @@ import { capabilityFor } from "./OfflineCapabilityMatrix";
 import type { RefreshChain } from "./RefreshChainCoordinator";
 import type { ClerkRuntimeStatus } from "./ClerkRuntimeRegistry";
 import { IS_NATIVE } from "@/lib/nativeAuth";
+import {
+  getHttpDiagEntries,
+  subscribeHttpDiag,
+  clearHttpDiag,
+  type HttpDiagClass,
+} from "./HttpDiagnosticsJournal";
 
 declare const __BUILD_TIME__: string;
 declare const __BUILD_COMMIT__: string;
@@ -52,6 +58,14 @@ const EVENT_COLOR: Record<string, string> = {
   AUTH_STATE_TRANSITION: "#888", AUTH_INITIALIZED: "#2196f3",
 };
 
+const HTTP_CLASS_COLOR: Record<HttpDiagClass, string> = {
+  "backend-json":  "#4caf50",
+  "html-fallback": "#ff9800",
+  "redirect":      "#2196f3",
+  "network-error": "#f44336",
+  "other":         "#888",
+};
+
 const CLERK_STATUS_COLOR: Record<ClerkRuntimeStatus, string> = {
   PENDING: "#888",
   CLERK_RUNTIME_AVAILABLE: "#4caf50",
@@ -67,7 +81,10 @@ export function AuthRuntimeOverlay() {
   if (!import.meta.env.DEV) return null;
 
   const [open, setOpen] = useState(true);
-  const [panel, setPanel] = useState<"main" | "timeline" | "offline">("main");
+  const [panel, setPanel] = useState<"main" | "timeline" | "offline" | "http">("main");
+  const [, setHttpTick] = useState(0);
+  useEffect(() => subscribeHttpDiag(() => setHttpTick((t) => t + 1)), []);
+  const httpEntries = getHttpDiagEntries();
   const diag = useAuthDiagnostics();
   const runtime = useAuthRuntime();
   const { phase: bootPhase } = useBootBarrier();
@@ -147,12 +164,13 @@ export function AuthRuntimeOverlay() {
         <div style={{ maxHeight: "65vh", overflowY: "auto" }}>
           {/* Panel switcher */}
           <div style={{ display: "flex", gap: 4, padding: "3px 8px", borderBottom: "1px solid #222" }}>
-            {(["main", "timeline", "offline"] as const).map((p) => (
+            {(["main", "timeline", "offline", "http"] as const).map((p) => (
               <Btn key={p} onClick={() => setPanel(p)} style={panel === p ? { background: "#444" } : {}}>
-                {p}
+                {p === "http" ? `http(${httpEntries.length})` : p}
               </Btn>
             ))}
             <Btn onClick={copyLog}>copy log</Btn>
+            {panel === "http" && <Btn onClick={() => clearHttpDiag()}>clear</Btn>}
           </div>
 
           <div style={{ padding: "4px 10px" }}>
@@ -259,6 +277,66 @@ export function AuthRuntimeOverlay() {
                     {e.detail}
                   </div>
                 ))}
+              </div>
+            )}
+
+            {panel === "http" && (
+              <div>
+                <div style={{ color: "#888", marginBottom: 4 }}>
+                  Native-auth HTTP traffic (newest first). Tap an entry to copy.
+                </div>
+                {httpEntries.length === 0 && (
+                  <div style={{ color: "#666", padding: "8px 0" }}>
+                    No requests yet — tap "Continue with Google" to populate.
+                  </div>
+                )}
+                {httpEntries.map((e) => {
+                  const color = HTTP_CLASS_COLOR[e.classification] ?? "#ccc";
+                  const copyOne = () => {
+                    const txt = [
+                      `${ts(e.timestamp)} ${e.method} ${e.url}`,
+                      `status: ${e.status ?? "—"}  ok: ${e.ok}  duration: ${e.durationMs}ms`,
+                      `content-type: ${e.contentType ?? "(none)"}`,
+                      `classification: ${e.classification}`,
+                      e.error ? `error: ${e.error}` : "",
+                      `body (first 200):`,
+                      e.snippet,
+                    ].filter(Boolean).join("\n");
+                    navigator.clipboard?.writeText(txt).catch(() => {});
+                  };
+                  return (
+                    <div key={e.id}
+                      onClick={copyOne}
+                      style={{
+                        borderTop: "1px solid #222", padding: "4px 0",
+                        cursor: "pointer", wordBreak: "break-all",
+                      }}>
+                      <div>
+                        <span style={{ color: "#444" }}>{ts(e.timestamp)} </span>
+                        <span style={{ color: "#aaa" }}>{e.method} </span>
+                        <span style={{ color }}>{e.status ?? "ERR"} </span>
+                        <span style={{ color: "#888" }}>{e.durationMs}ms </span>
+                        <span style={{ color }}>[{e.classification}]</span>
+                      </div>
+                      <div style={{ color: "#9cf" }}>{e.url}</div>
+                      <div style={{ color: "#666" }}>
+                        ct: {e.contentType ?? "(none)"}
+                      </div>
+                      {e.error && (
+                        <div style={{ color: "#f44336" }}>err: {e.error}</div>
+                      )}
+                      {e.snippet && (
+                        <div style={{
+                          color: e.classification === "html-fallback" ? "#ff9800" : "#bbb",
+                          background: "#111", padding: "2px 4px",
+                          marginTop: 2, fontSize: 10, whiteSpace: "pre-wrap",
+                        }}>
+                          {e.snippet}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
 

@@ -21,6 +21,7 @@
 
 import { Preferences } from "@capacitor/preferences";
 import { AuthProviderError } from "../AuthProviderError";
+import { fetchWithDiag, parseJsonWithDiag } from "../HttpDiagnosticsJournal";
 
 const REFRESH_TOKEN_KEY = "native_rt_v1";
 const SESSION_ID_KEY    = "native_sid_v1";
@@ -54,9 +55,9 @@ export class NativeSessionTransport {
     const url = `${this._apiRoot}/auth/native/google`;
     console.log(`[NativeAuth] NativeTransport.exchange() START — url=${url} hasIdToken=${!!idToken}`);
 
-    let resp: Response;
+    let result: Awaited<ReturnType<typeof fetchWithDiag>>;
     try {
-      resp = await fetch(url, {
+      result = await fetchWithDiag(url, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -71,23 +72,29 @@ export class NativeSessionTransport {
       throw networkErr;
     }
 
-    console.log(`[NativeAuth] NativeTransport.exchange() response — status=${resp.status} ok=${resp.ok}`);
+    const { response: resp, text, diagEntry } = result;
+    console.log(`[NativeAuth] NativeTransport.exchange() response — status=${resp.status} ok=${resp.ok} ct=${diagEntry.contentType ?? "?"} class=${diagEntry.classification}`);
 
     if (!resp.ok) {
-      const body = await resp.json().catch(() => ({ error: "exchange failed" })) as { error?: string };
-      console.error(`[NativeAuth] NativeTransport.exchange() FAILED — status=${resp.status} error=${body.error ?? "unknown"}`);
+      const errFromBody = (() => {
+        try {
+          const parsed = JSON.parse(text) as { error?: string };
+          return parsed.error;
+        } catch { return undefined; }
+      })();
+      console.error(`[NativeAuth] NativeTransport.exchange() FAILED — status=${resp.status} class=${diagEntry.classification} error=${errFromBody ?? "see diag"}`);
       throw new Error(
-        `[NativeTransport] google exchange ${resp.status}: ${body.error ?? "unknown"}`,
+        `[NativeTransport] google exchange ${resp.status} (${diagEntry.classification}): ${errFromBody ?? diagEntry.snippet.slice(0, 80) ?? "unknown"}`,
       );
     }
 
-    const data = await resp.json() as {
+    const data = parseJsonWithDiag<{
       accessToken:  string;
       refreshToken: string;
       sessionId:    string;
       userId:       string;
       expiresAt:    number;
-    };
+    }>(text, diagEntry);
 
     console.log(
       `[NativeAuth] NativeTransport.exchange() SUCCESS — userId=${data.userId} hasAccessToken=${!!data.accessToken} hasRefreshToken=${!!data.refreshToken}`,
@@ -131,9 +138,9 @@ export class NativeSessionTransport {
 
     console.log(`[NativeAuth] NativeTransport.refresh() START — hasToken=${!!refreshToken} hasSid=${!!sessionId}`);
 
-    let resp: Response;
+    let result: Awaited<ReturnType<typeof fetchWithDiag>>;
     try {
-      resp = await fetch(`${this._apiRoot}/auth/native/refresh`, {
+      result = await fetchWithDiag(`${this._apiRoot}/auth/native/refresh`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ refreshToken, sessionId }),
@@ -143,26 +150,30 @@ export class NativeSessionTransport {
       return null; // transient network error — eligible for retry
     }
 
-    console.log(`[NativeAuth] NativeTransport.refresh() response — status=${resp.status}`);
+    const { response: resp, text, diagEntry } = result;
+    console.log(`[NativeAuth] NativeTransport.refresh() response — status=${resp.status} class=${diagEntry.classification}`);
 
     if (resp.status === 401) {
-      const body = await resp.json().catch(() => ({})) as { error?: string };
-      console.error(`[NativeAuth] NativeTransport.refresh() REVOKED — ${body.error ?? "unauthorized"} → throwing SESSION_INVALIDATED`);
+      const errFromBody = (() => {
+        try { return (JSON.parse(text) as { error?: string }).error; }
+        catch { return undefined; }
+      })();
+      console.error(`[NativeAuth] NativeTransport.refresh() REVOKED — ${errFromBody ?? "unauthorized"} → throwing SESSION_INVALIDATED`);
       throw new AuthProviderError(
         "SESSION_INVALIDATED",
-        `[NativeTransport] refresh rejected: ${body.error ?? "unauthorized"}`,
+        `[NativeTransport] refresh rejected: ${errFromBody ?? "unauthorized"}`,
       );
     }
 
     if (!resp.ok) {
-      console.warn(`[NativeAuth] NativeTransport.refresh() server error status=${resp.status} — retry eligible`);
+      console.warn(`[NativeAuth] NativeTransport.refresh() server error status=${resp.status} class=${diagEntry.classification} — retry eligible`);
       return null;
     }
 
-    const data = await resp.json() as {
+    const data = parseJsonWithDiag<{
       accessToken?:  string;
       refreshToken?: string;
-    };
+    }>(text, diagEntry);
 
     // Rotate stored refresh token — old one is now permanently invalid
     if (data.refreshToken) {
