@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useBanner } from "@/hooks/useBanner";
 import { useTimer } from "@/contexts/TimerContext";
 import {
@@ -165,8 +165,16 @@ export default function SettingsPage() {
     return () => document.removeEventListener("visibilitychange", onVis);
   }, []);
 
+  // Hydrate localSettings from server ONCE on first arrival. Re-syncing on
+  // every settings change would silently revert slider drags whenever an
+  // unrelated query invalidation triggers a /settings refetch while the
+  // user is mid-edit — that's how a user's standing_min=5 drag can snap
+  // back to 10 before they click Save, causing the save to submit stale
+  // values.
+  const hydratedRef = useRef(false);
   useEffect(() => {
-    if (settings) {
+    if (settings && !hydratedRef.current) {
+      hydratedRef.current = true;
       setLocalSettings({
         dailyStandingGoalMinutes: settings.dailyStandingGoalMinutes,
         sittingAlertMinutes: settings.sittingAlertMinutes,
