@@ -13,6 +13,7 @@ import android.media.RingtoneManager
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 
 /**
  * Fires when an AlarmManager alarm triggers.
@@ -26,9 +27,11 @@ class AlarmReceiver : BroadcastReceiver() {
         const val TAG = "AlarmDiag"
         const val CHANNEL_ID        = "posture-alarm"
         const val CHANNEL_ID_SILENT = "posture-alarm-silent"
-        const val ACTION_BOOT  = Intent.ACTION_BOOT_COMPLETED
-        const val ACTION_LBOOT = "android.intent.action.LOCKED_BOOT_COMPLETED"
-        private const val PREFS = "alarm_prefs"
+        const val ACTION_BOOT    = Intent.ACTION_BOOT_COMPLETED
+        const val ACTION_LBOOT   = "android.intent.action.LOCKED_BOOT_COMPLETED"
+        const val ACTION_DISMISS = "com.sitstand.timer.DISMISS_ALARM"
+        const val ACTION_SNOOZE  = "com.sitstand.timer.SNOOZE_ALARM"
+        private const val PREFS  = "alarm_prefs"
         // Diagnostic keys (written into AlarmManagerPlugin's prefs file)
         const val K_LAST_FIRE_ID       = "last_fire_id"
         const val K_LAST_FIRE_AT       = "last_fire_at"
@@ -43,7 +46,9 @@ class AlarmReceiver : BroadcastReceiver() {
         Log.i(TAG, "AlarmReceiver.onReceive action=${intent.action} extras=${intent.extras?.keySet()}")
         when (intent.action) {
             ACTION_BOOT, ACTION_LBOOT -> rescheduleOnBoot(context)
-            else                       -> fireAlarm(context, intent)
+            ACTION_DISMISS            -> dismissAlarm(context, intent)
+            ACTION_SNOOZE             -> snoozeAlarm(context, intent)
+            else                      -> fireAlarm(context, intent)
         }
     }
 
@@ -73,7 +78,16 @@ class AlarmReceiver : BroadcastReceiver() {
 
         val channelId = if (silent) CHANNEL_ID_SILENT else CHANNEL_ID
 
-        // Full-screen intent → AlarmFullScreenActivity
+        // Tap notification → open the app
+        val openIntent = context.packageManager
+            .getLaunchIntentForPackage(context.packageName)
+            ?.apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP }
+        val contentPi = PendingIntent.getActivity(
+            context, id + 10_000, openIntent ?: Intent(),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // Full-screen intent → AlarmFullScreenActivity (fires on lock screen)
         val fsIntent = Intent(context, AlarmFullScreenActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_NO_USER_ACTION or
@@ -87,6 +101,29 @@ class AlarmReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        // Dismiss action — cancels the notification immediately
+        val dismissIntent = Intent(context, AlarmReceiver::class.java).apply {
+            action = ACTION_DISMISS
+            putExtra("id", id)
+        }
+        val dismissPi = PendingIntent.getBroadcast(
+            context, id + 20_000, dismissIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // Snooze action — reschedules 5 minutes from now
+        val snoozeIntent = Intent(context, AlarmReceiver::class.java).apply {
+            action = ACTION_SNOOZE
+            putExtra("id",     id)
+            putExtra("title",  title)
+            putExtra("body",   body)
+            putExtra("silent", silent)
+        }
+        val snoozePi = PendingIntent.getBroadcast(
+            context, id + 30_000, snoozeIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val defaults = if (silent)
             NotificationCompat.DEFAULT_VIBRATE
         else
@@ -96,12 +133,17 @@ class AlarmReceiver : BroadcastReceiver() {
             .setSmallIcon(android.R.drawable.ic_popup_reminder)
             .setContentTitle(title)
             .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setContentIntent(contentPi)
             .setFullScreenIntent(fsPi, true)
-            .setAutoCancel(true)
+            .setAutoCancel(false)
+            .setOngoing(true)
             .setDefaults(defaults)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Dismiss", dismissPi)
+            .addAction(android.R.drawable.ic_menu_recent_history,     "Snooze 5 min", snoozePi)
             .build()
 
         var notifyError: String? = null
@@ -120,6 +162,53 @@ class AlarmReceiver : BroadcastReceiver() {
                 .putInt(K_NOTIFY_FAIL_COUNT, dp.getInt(K_NOTIFY_FAIL_COUNT, 0) + 1)
                 .putString(K_LAST_NOTIFY_ERROR, notifyError)
                 .apply()
+        }
+    }
+
+    // ── Notification action handlers ────────────────────────────────────────
+
+    private fun dismissAlarm(context: Context, intent: Intent) {
+        val id = intent.getIntExtra("id", 0)
+        Log.i(TAG, "dismissAlarm id=$id")
+        (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+            .cancel(id)
+    }
+
+    private fun snoozeAlarm(context: Context, intent: Intent) {
+        val id     = intent.getIntExtra("id",    0)
+        val title  = intent.getStringExtra("title") ?: "Posture reminder"
+        val body   = intent.getStringExtra("body")  ?: ""
+        val silent = intent.getBooleanExtra("silent", false)
+
+        Log.i(TAG, "snoozeAlarm id=$id — rescheduling in 5 min")
+
+        // Cancel the current notification
+        (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+            .cancel(id)
+
+        // Schedule a new alarm 5 minutes from now (use id+500 to avoid collision)
+        val snoozeId = id + 500
+        val alarmIntent = Intent(context, AlarmReceiver::class.java).apply {
+            putExtra("id",     snoozeId)
+            putExtra("title",  "⏱ Snoozed: $title")
+            putExtra("body",   body)
+            putExtra("silent", silent)
+        }
+        val pi = PendingIntent.getBroadcast(
+            context, snoozeId, alarmIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val am       = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        val triggerAt = System.currentTimeMillis() + 5 * 60_000L
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+            } else {
+                am.setExact(AlarmManager.RTC_WAKEUP, triggerAt, pi)
+            }
+            Log.i(TAG, "snooze alarm scheduled id=$snoozeId triggerAt=$triggerAt")
+        } catch (e: Exception) {
+            Log.w(TAG, "snooze schedule failed: ${e.message}")
         }
     }
 
