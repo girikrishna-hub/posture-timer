@@ -39,7 +39,13 @@ class AlarmManagerPlugin : Plugin() {
         val id    = call.getInt("id")    ?: return call.reject("id required")
         val title = call.getString("title") ?: "Reminder"
         val body  = call.getString("body")  ?: ""
-        val delayMs = call.getLong("delayMs") ?: return call.reject("delayMs required")
+        // NOTE: Capacitor's PluginCall.getLong() returns null when the JSON
+        // number is small enough to deserialize as Integer (e.g. 10_000).
+        // JS always sends a Number, so we must coerce from Int too.
+        val delayMs: Long = call.getLong("delayMs")
+            ?: call.getInt("delayMs")?.toLong()
+            ?: call.getDouble("delayMs")?.toLong()
+            ?: return call.reject("delayMs required (got=${call.data.opt("delayMs")})")
 
         val ctx = context
         val intent = Intent(ctx, AlarmReceiver::class.java).apply {
