@@ -124,6 +124,42 @@ else
 fi
 echo "  ✓ Permissions added"
 
+# Cleanup: strip USE_EXACT_ALARM if a previous run injected it.
+# USE_EXACT_ALARM is reserved for clock / calendar / alarm-clock apps;
+# Google Play silently denies it to general-purpose apps AND it suppresses
+# the app from the "Alarms & reminders" Settings list, making the
+# SCHEDULE_EXACT_ALARM permission un-grantable through the normal UI.
+# Only SCHEDULE_EXACT_ALARM should remain in the merged manifest.
+if grep -q 'android.permission.USE_EXACT_ALARM' "$MANIFEST"; then
+  awk '!/android\.permission\.USE_EXACT_ALARM/' "$MANIFEST" \
+    > "$MANIFEST.tmp" && mv "$MANIFEST.tmp" "$MANIFEST"
+  echo "  ✓ Removed stale USE_EXACT_ALARM permission"
+fi
+
+# Defensive: if any third-party plugin manifest ever starts merging
+# USE_EXACT_ALARM back in, the only way to keep it out of the final
+# packaged manifest is a tools:node="remove" override in the app manifest.
+# Add the tools namespace + the override line if missing.
+if ! grep -q 'tools:node="remove".*USE_EXACT_ALARM\|USE_EXACT_ALARM.*tools:node="remove"' "$MANIFEST"; then
+  # Ensure xmlns:tools is declared on <manifest ...>
+  if ! grep -q 'xmlns:tools=' "$MANIFEST"; then
+    sedi 's|<manifest |<manifest xmlns:tools="http://schemas.android.com/tools" |' "$MANIFEST"
+  fi
+  # Insert the override right after <manifest ...> opening tag
+  REMOVE_LINE='    <uses-permission android:name="android.permission.USE_EXACT_ALARM" tools:node="remove" />'
+  awk -v line="$REMOVE_LINE" '
+    !done && /<manifest/ {
+      print
+      # If the <manifest ...> tag spans multiple lines, print until we see `>`
+      while ($0 !~ />/) { getline; print }
+      print line
+      done=1; next
+    }
+    { print }
+  ' "$MANIFEST" > "$MANIFEST.tmp" && mv "$MANIFEST.tmp" "$MANIFEST"
+  echo "  ✓ Added manifest-merger override to block USE_EXACT_ALARM"
+fi
+
 # ── 4. Add deep-link intent filter for Clerk OAuth callbacks ─────────────────
 # After Google OAuth, Clerk redirects to posture-timer://oauth-callback
 # so the WebView can complete sign-in via @capacitor/app's appUrlOpen event.
