@@ -19,6 +19,24 @@ import {
   canScheduleExactAlarms,
   openExactAlarmSettings,
 } from "@/utils/nativeNotifications";
+import { Capacitor } from "@capacitor/core";
+import { AlarmManager } from "@/plugins/alarmManager";
+
+// ── Temporary runtime diagnostics ─────────────────────────────────────────
+// The amber permission card was never appearing on a device where Android
+// also was NOT listing the app under "Alarms & reminders". That combination
+// means either (a) Capacitor.isNativePlatform() is returning false, or
+// (b) canScheduleExactAlarms() is incorrectly returning true. The panel
+// below shows the raw values so we can tell which one is happening.
+// REMOVE this entire block once the permission flow is confirmed working.
+type AlarmDiag = {
+  isNative: boolean;
+  platform: string;
+  pluginAvailable: boolean;
+  canScheduleRaw: unknown;
+  canScheduleError: string | null;
+  checkedAt: string;
+};
 
 type GeoPermissionStatus = "unknown" | "prompt" | "requesting" | "granted" | "denied" | "unsupported";
 
@@ -102,14 +120,49 @@ export default function SettingsPage() {
   // ── Exact-alarm permission (Android 12+ only) ───────────────────────────
   const [exactAlarmGranted, setExactAlarmGranted] = useState<boolean | null>(null);
 
+  // ── Temporary runtime diagnostics (remove once confirmed working) ──────
+  const [alarmDiag, setAlarmDiag] = useState<AlarmDiag>({
+    isNative: false,
+    platform: "unknown",
+    pluginAvailable: false,
+    canScheduleRaw: "(not yet checked)",
+    canScheduleError: null,
+    checkedAt: "",
+  });
+
   useEffect(() => {
-    if (!isNativePlatform()) return;
-    const check = () =>
-      void canScheduleExactAlarms().then(setExactAlarmGranted).catch(() => {});
-    check();
-    // Re-check whenever the user comes back from the OS settings screen.
-    document.addEventListener("visibilitychange", check);
-    return () => document.removeEventListener("visibilitychange", check);
+    const runDiag = async () => {
+      const isNative = Capacitor.isNativePlatform();
+      const platform = Capacitor.getPlatform();
+      const pluginAvailable = Capacitor.isPluginAvailable("AlarmManager");
+      let canScheduleRaw: unknown = "(skipped — not native)";
+      let canScheduleError: string | null = null;
+      if (isNative) {
+        try {
+          canScheduleRaw = await AlarmManager.canScheduleExactAlarms();
+          const v = (canScheduleRaw as { value?: boolean })?.value;
+          if (typeof v === "boolean") setExactAlarmGranted(v);
+        } catch (e) {
+          canScheduleError = e instanceof Error
+            ? `${e.name}: ${e.message}`
+            : String(e);
+        }
+      } else {
+        setExactAlarmGranted(true);
+      }
+      setAlarmDiag({
+        isNative,
+        platform,
+        pluginAvailable,
+        canScheduleRaw,
+        canScheduleError,
+        checkedAt: new Date().toLocaleTimeString(),
+      });
+    };
+    const onVis = () => void runDiag();
+    void runDiag();
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
   }, []);
 
   useEffect(() => {
@@ -274,6 +327,37 @@ export default function SettingsPage() {
           <p className="text-xs text-muted-foreground">Customize your timer</p>
         </div>
       </header>
+
+      {/* ── TEMP runtime diagnostics — remove once permission flow confirmed ── */}
+      <div className="mx-6 mb-4 rounded-2xl border-2 border-fuchsia-400 bg-fuchsia-50 px-4 py-3 font-mono text-[11px] leading-relaxed text-fuchsia-900">
+        <div className="mb-1 text-xs font-bold uppercase tracking-wide">
+          🔍 Alarm permission diagnostics
+        </div>
+        <div>Capacitor.isNativePlatform(): <b>{String(alarmDiag.isNative)}</b></div>
+        <div>Capacitor.getPlatform(): <b>{alarmDiag.platform}</b></div>
+        <div>isPluginAvailable("AlarmManager"): <b>{String(alarmDiag.pluginAvailable)}</b></div>
+        <div>
+          canScheduleExactAlarms() raw:{" "}
+          <b className="break-all">{JSON.stringify(alarmDiag.canScheduleRaw)}</b>
+        </div>
+        <div>
+          plugin call error:{" "}
+          <b className="break-all">{alarmDiag.canScheduleError ?? "(none)"}</b>
+        </div>
+        <div>
+          exactAlarmGranted state:{" "}
+          <b>{exactAlarmGranted === null ? "null" : String(exactAlarmGranted)}</b>
+        </div>
+        <div>amber card visible: <b>{String(isNativePlatform() && exactAlarmGranted === false)}</b></div>
+        <div className="mt-1 text-fuchsia-600">checked at {alarmDiag.checkedAt || "(pending)"}</div>
+        <button
+          type="button"
+          onClick={() => document.dispatchEvent(new Event("visibilitychange"))}
+          className="mt-2 rounded bg-fuchsia-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-fuchsia-700"
+        >
+          Re-run check
+        </button>
+      </div>
 
       {goalBanner.shown && (
         <div
