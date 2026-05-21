@@ -249,10 +249,16 @@ else
       # BSD sed (macOS) does not support the GNU `/pattern/a text` syntax,
       # so all multi-line insertions use awk which is portable everywhere.
 
-      # 1. Add Bundle import after the package declaration (if absent).
+      # 1. Add required imports after the package declaration (if absent).
+      #    AlarmManagerPlugin is in the same package but Java still requires
+      #    an explicit import when referenced as a class literal (.class).
       if ! grep -q "import android.os.Bundle" "$MAIN"; then
-        awk '/^package /{print; print "import android.os.Bundle;"; next} {print}' \
-          "$MAIN" > "$MAIN.tmp" && mv "$MAIN.tmp" "$MAIN"
+        awk '/^package /{
+          print
+          print "import android.os.Bundle;"
+          print "import com.sitstand.timer.AlarmManagerPlugin;"
+          next
+        } {print}' "$MAIN" > "$MAIN.tmp" && mv "$MAIN.tmp" "$MAIN"
       fi
 
       # 2. Inject onCreate right after the class opening brace.
