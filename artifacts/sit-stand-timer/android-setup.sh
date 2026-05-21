@@ -75,8 +75,7 @@ insert_after() {
 }
 
 PERMISSIONS='    <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
@@ -198,41 +197,88 @@ else
 fi
 
 # ── 6. Patch MainActivity to register plugins ─────────────────────────────────
+# Capacitor can generate MainActivity.kt (Kotlin) or MainActivity.java (Java)
+# depending on the project template / init flags. We handle both.
 echo ""
 echo "▸ Registering plugins in MainActivity …"
 
-# Search for MainActivity.kt anywhere under android/ — Capacitor may place it
-# at a different subpath depending on the project setup or OS.
-MAIN=$(find "$SCRIPT_DIR/android" -name "MainActivity.kt" 2>/dev/null | head -1)
+MAIN_KT=$(find "$SCRIPT_DIR/android" -name "MainActivity.kt" 2>/dev/null | head -1)
+MAIN_JAVA=$(find "$SCRIPT_DIR/android" -name "MainActivity.java" 2>/dev/null | head -1)
+
+if [ -n "$MAIN_KT" ]; then
+  MAIN="$MAIN_KT"
+  LANG="kotlin"
+elif [ -n "$MAIN_JAVA" ]; then
+  MAIN="$MAIN_JAVA"
+  LANG="java"
+else
+  MAIN=""
+fi
 
 if [ -z "$MAIN" ]; then
-  echo "  ⚠  MainActivity.kt not found anywhere under android/."
+  echo "  ⚠  Neither MainActivity.kt nor MainActivity.java found under android/."
   echo "     Run 'npx cap add android' first, then re-run this script."
 else
-  echo "  (found: $MAIN)"
+  echo "  (found [$LANG]: $MAIN)"
 
-  # ── 6a. AlarmManagerPlugin ────────────────────────────────────────────────
-  if grep -q "AlarmManagerPlugin" "$MAIN"; then
-    echo "  ✓ AlarmManagerPlugin already registered"
-  else
-    # Add onCreate override with AlarmManagerPlugin registration
-    sedi 's/class MainActivity : BridgeActivity() {/class MainActivity : BridgeActivity() {\n    override fun onCreate(savedInstanceState: Bundle?) {\n        registerPlugin(AlarmManagerPlugin::class.java)\n        super.onCreate(savedInstanceState)\n    }/' "$MAIN"
-
-    if ! grep -q "import android.os.Bundle" "$MAIN"; then
-      sedi '1s/^/import android.os.Bundle\n/' "$MAIN"
+  if [ "$LANG" = "kotlin" ]; then
+    # ── 6a-kt. AlarmManagerPlugin (Kotlin) ──────────────────────────────────
+    if grep -q "AlarmManagerPlugin" "$MAIN"; then
+      echo "  ✓ AlarmManagerPlugin already registered"
+    else
+      sedi 's/class MainActivity : BridgeActivity() {/class MainActivity : BridgeActivity() {\n    override fun onCreate(savedInstanceState: Bundle?) {\n        registerPlugin(AlarmManagerPlugin::class.java)\n        super.onCreate(savedInstanceState)\n    }/' "$MAIN"
+      if ! grep -q "import android.os.Bundle" "$MAIN"; then
+        sedi '1s/^/import android.os.Bundle\n/' "$MAIN"
+      fi
+      echo "  ✓ AlarmManagerPlugin registered"
     fi
-    echo "  ✓ AlarmManagerPlugin registered"
-  fi
 
-  # ── 6b. GoogleAuth plugin ─────────────────────────────────────────────────
-  # @codetrix-studio/capacitor-google-auth requires explicit registration on
-  # newer versions of Capacitor (v5+). We add it alongside AlarmManagerPlugin.
-  if grep -q "GoogleAuth" "$MAIN"; then
-    echo "  ✓ GoogleAuth plugin already registered"
+    # ── 6b-kt. GoogleAuth (Kotlin) ───────────────────────────────────────────
+    if grep -q "GoogleAuth" "$MAIN"; then
+      echo "  ✓ GoogleAuth plugin already registered"
+    else
+      sedi 's/registerPlugin(AlarmManagerPlugin::class.java)/registerPlugin(AlarmManagerPlugin::class.java)\n        registerPlugin(com.codetrixstudio.capacitor.GoogleAuth.GoogleAuth::class.java)/' "$MAIN"
+      echo "  ✓ GoogleAuth plugin registered"
+    fi
+
   else
-    # Insert registerPlugin(GoogleAuth::class.java) into the existing onCreate
-    sedi 's/registerPlugin(AlarmManagerPlugin::class.java)/registerPlugin(AlarmManagerPlugin::class.java)\n        registerPlugin(com.codetrixstudio.capacitor.GoogleAuth.GoogleAuth::class.java)/' "$MAIN"
-    echo "  ✓ GoogleAuth plugin registered"
+    # ── 6a-java. AlarmManagerPlugin (Java) ──────────────────────────────────
+    if grep -q "AlarmManagerPlugin" "$MAIN"; then
+      echo "  ✓ AlarmManagerPlugin already registered"
+    else
+      # Add Bundle import if absent
+      if ! grep -q "import android.os.Bundle" "$MAIN"; then
+        sedi '/^package /a import android.os.Bundle;' "$MAIN"
+      fi
+
+      # Inject onCreate right after the class opening brace.
+      # Works for both `class Foo {` (same-line brace) and:
+      #   class Foo extends BridgeActivity {}   ← empty body on same line
+      awk '
+        /public class MainActivity extends BridgeActivity/ && !done {
+          print
+          # consume next line if it is just a lone `{`
+          if ($0 !~ /\{/) { getline; print }
+          print "    @Override"
+          print "    protected void onCreate(Bundle savedInstanceState) {"
+          print "        registerPlugin(AlarmManagerPlugin.class);"
+          print "        registerPlugin(com.codetrixstudio.capacitor.GoogleAuth.GoogleAuth.class);"
+          print "        super.onCreate(savedInstanceState);"
+          print "    }"
+          done=1; next
+        }
+        { print }
+      ' "$MAIN" > "$MAIN.tmp" && mv "$MAIN.tmp" "$MAIN"
+      echo "  ✓ AlarmManagerPlugin registered"
+    fi
+
+    # ── 6b-java. GoogleAuth (Java) ───────────────────────────────────────────
+    if grep -q "GoogleAuth" "$MAIN"; then
+      echo "  ✓ GoogleAuth plugin already registered"
+    else
+      sedi 's/registerPlugin(AlarmManagerPlugin.class);/registerPlugin(AlarmManagerPlugin.class);\n        registerPlugin(com.codetrixstudio.capacitor.GoogleAuth.GoogleAuth.class);/' "$MAIN"
+      echo "  ✓ GoogleAuth plugin registered"
+    fi
   fi
 fi
 
@@ -312,6 +358,16 @@ echo "  npx cap open android   ← build & run in Android Studio"
 echo ""
 echo "On first launch, the app will ask for:"
 echo "  • Notification permission (POST_NOTIFICATIONS)"
-echo "  • Exact alarm permission (SCHEDULE_EXACT_ALARM / Alarms & reminders)"
 echo "  • Battery optimisation exemption"
+echo ""
+echo "You MUST also grant the exact-alarm permission manually:"
+echo "  1. Open the app and go to Settings (gear icon)"
+echo "  2. Tap 'Grant permission →' in the amber Alarm permission card"
+echo "     (takes you to Settings → Apps → Special access → Alarms & reminders)"
+echo "  3. Toggle ON for Sit+Stand Timer"
+echo "  Without this the app falls back to inexact alarms (~10 min drift)"
+echo ""
+echo "If the amber card is not visible, grant it directly:"
+echo "  Android Settings → Apps → Sit+Stand Timer → Permissions"
+echo "  → Alarms & reminders → Allow"
 echo ""

@@ -13,11 +13,14 @@
 <!-- Wake the CPU while in Doze (required for RTC_WAKEUP alarms) -->
 <uses-permission android:name="android.permission.WAKE_LOCK" />
 
-<!-- Exact alarms: Android 12+ (API 31+) -->
-<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"
-    android:maxSdkVersion="32" />
-<!-- Android 13+ (API 33+) – silently ignored on older versions -->
-<uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+<!-- Exact alarms (Android 12+ / API 31+).
+     SCHEDULE_EXACT_ALARM makes the app appear in
+     Settings → Apps → Special access → Alarms & reminders
+     where the user must grant permission once.
+     USE_EXACT_ALARM is intentionally omitted: it is silently not granted
+     to general-purpose apps and causes the app to disappear from the
+     Alarms & reminders list entirely, making the permission unrecoverable. -->
+<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
 <!-- Show notification over lock screen -->
 <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />

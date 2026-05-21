@@ -14,6 +14,11 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { useQueryClient } from "@tanstack/react-query";
 import { isSoundEnabled, setSoundEnabled } from "@/utils/audio";
+import {
+  isNativePlatform,
+  canScheduleExactAlarms,
+  openExactAlarmSettings,
+} from "@/utils/nativeNotifications";
 
 type GeoPermissionStatus = "unknown" | "prompt" | "requesting" | "granted" | "denied" | "unsupported";
 
@@ -93,6 +98,19 @@ export default function SettingsPage() {
   const [geoPermission, setGeoPermission] = useState<GeoPermissionStatus>(
     "geolocation" in navigator ? "unknown" : "unsupported"
   );
+
+  // ── Exact-alarm permission (Android 12+ only) ───────────────────────────
+  const [exactAlarmGranted, setExactAlarmGranted] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!isNativePlatform()) return;
+    const check = () =>
+      void canScheduleExactAlarms().then(setExactAlarmGranted).catch(() => {});
+    check();
+    // Re-check whenever the user comes back from the OS settings screen.
+    document.addEventListener("visibilitychange", check);
+    return () => document.removeEventListener("visibilitychange", check);
+  }, []);
 
   useEffect(() => {
     if (settings) {
@@ -456,6 +474,30 @@ export default function SettingsPage() {
             </button>
           </div>
         </div>
+
+        {/* Android exact-alarm permission card — only shown on native when not yet granted */}
+        {isNativePlatform() && exactAlarmGranted === false && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-4">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl mt-0.5">⏰</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-amber-900">Alarm permission required</p>
+                <p className="text-xs text-amber-700 mt-1">
+                  Android needs the <strong>Alarms &amp; reminders</strong> permission to fire
+                  posture and bladder notifications while the app is closed or the screen is locked.
+                  Without it, alarms arrive late or not at all.
+                </p>
+                <Button
+                  size="sm"
+                  className="mt-3 bg-amber-500 hover:bg-amber-600 text-white border-0"
+                  onClick={() => void openExactAlarmSettings()}
+                >
+                  Grant permission →
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Google Fit Assisted Mode card */}
         <div className="bg-card border border-border rounded-2xl p-5 mb-4 space-y-4">

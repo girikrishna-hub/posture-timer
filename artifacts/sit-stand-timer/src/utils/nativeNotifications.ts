@@ -95,6 +95,37 @@ export async function cancelAllNativePostureNotifications(): Promise<void> {
   await cancelStandingAlarms();
 }
 
+// ─── Exact-alarm permission ──────────────────────────────────────────────────
+// On Android 12+ the user must explicitly grant SCHEDULE_EXACT_ALARM in
+// Settings → Apps → Special access → Alarms & reminders.  Without it the
+// AlarmManager plugin falls back to inexact delivery (~10 min drift).
+
+/** Returns true if exact alarms can be scheduled (always true on web). */
+export async function canScheduleExactAlarms(): Promise<boolean> {
+  if (!isNativePlatform()) return true;
+  try {
+    const { value } = await AlarmManager.canScheduleExactAlarms();
+    return value;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Opens the OS settings page so the user can grant the exact-alarm permission.
+ * Returns whether the permission was already granted before opening.
+ */
+export async function openExactAlarmSettings(): Promise<boolean> {
+  if (!isNativePlatform()) return true;
+  try {
+    const { value } = await AlarmManager.canScheduleExactAlarms();
+    if (!value) await AlarmManager.openExactAlarmSettings();
+    return value;
+  } catch {
+    return false;
+  }
+}
+
 // ─── Cancel bladder alarm ────────────────────────────────────────────────────
 
 export async function cancelNativeBladderAlarm(): Promise<void> {

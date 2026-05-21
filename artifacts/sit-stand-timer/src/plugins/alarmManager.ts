@@ -24,15 +24,18 @@ export interface AlarmManagerPlugin {
   cancelAlarm(options: { id: number }): Promise<void>;
   cancelAlarms(options: { ids: number[] }): Promise<void>;
   canScheduleExactAlarms(): Promise<{ value: boolean }>;
+  /** Open the system Settings page where the user grants Alarms & Reminders permission. No-op below Android 12. */
+  openExactAlarmSettings(): Promise<void>;
 }
 
 // Web stub — all methods silently succeed so the calling code never needs
 // to check the platform before calling.
 const webStub: AlarmManagerPlugin = {
-  scheduleAlarm:         async () => {},
-  cancelAlarm:           async () => {},
-  cancelAlarms:          async () => {},
+  scheduleAlarm:          async () => {},
+  cancelAlarm:            async () => {},
+  cancelAlarms:           async () => {},
   canScheduleExactAlarms: async () => ({ value: false }),
+  openExactAlarmSettings: async () => {},
 };
 
 export const AlarmManager = registerPlugin<AlarmManagerPlugin>(
