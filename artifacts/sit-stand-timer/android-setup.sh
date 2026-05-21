@@ -246,18 +246,26 @@ else
     if grep -q "AlarmManagerPlugin" "$MAIN"; then
       echo "  ✓ AlarmManagerPlugin already registered"
     else
-      # Add Bundle import if absent
+      # BSD sed (macOS) does not support the GNU `/pattern/a text` syntax,
+      # so all multi-line insertions use awk which is portable everywhere.
+
+      # 1. Add Bundle import after the package declaration (if absent).
       if ! grep -q "import android.os.Bundle" "$MAIN"; then
-        sedi '/^package /a import android.os.Bundle;' "$MAIN"
+        awk '/^package /{print; print "import android.os.Bundle;"; next} {print}' \
+          "$MAIN" > "$MAIN.tmp" && mv "$MAIN.tmp" "$MAIN"
       fi
 
-      # Inject onCreate right after the class opening brace.
-      # Works for both `class Foo {` (same-line brace) and:
-      #   class Foo extends BridgeActivity {}   ← empty body on same line
+      # 2. Inject onCreate right after the class opening brace.
+      #    Handles both `class Foo extends BridgeActivity {` and
+      #    the compact `class Foo extends BridgeActivity {}` form that
+      #    Capacitor generates when the body is empty.
       awk '
         /public class MainActivity extends BridgeActivity/ && !done {
+          # Strip a trailing `}` so we can reprint it after the new method
+          trailing = ($0 ~ /\}\s*$/) ? "}" : ""
+          if (trailing != "") sub(/\}\s*$/, "", $0)
           print
-          # consume next line if it is just a lone `{`
+          # If the opening brace is NOT on this line, print the next line
           if ($0 !~ /\{/) { getline; print }
           print "    @Override"
           print "    protected void onCreate(Bundle savedInstanceState) {"
@@ -265,6 +273,7 @@ else
           print "        registerPlugin(com.codetrixstudio.capacitor.GoogleAuth.GoogleAuth.class);"
           print "        super.onCreate(savedInstanceState);"
           print "    }"
+          if (trailing != "") print trailing
           done=1; next
         }
         { print }
@@ -276,7 +285,14 @@ else
     if grep -q "GoogleAuth" "$MAIN"; then
       echo "  ✓ GoogleAuth plugin already registered"
     else
-      sedi 's/registerPlugin(AlarmManagerPlugin.class);/registerPlugin(AlarmManagerPlugin.class);\n        registerPlugin(com.codetrixstudio.capacitor.GoogleAuth.GoogleAuth.class);/' "$MAIN"
+      # Use awk for the insertion — BSD sed \n in replacement is not portable.
+      awk '{
+        print
+        if (/registerPlugin\(AlarmManagerPlugin\.class\);/ && !done) {
+          print "        registerPlugin(com.codetrixstudio.capacitor.GoogleAuth.GoogleAuth.class);"
+          done=1
+        }
+      }' "$MAIN" > "$MAIN.tmp" && mv "$MAIN.tmp" "$MAIN"
       echo "  ✓ GoogleAuth plugin registered"
     fi
   fi
