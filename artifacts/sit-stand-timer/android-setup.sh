@@ -333,12 +333,15 @@ else
       echo "  ✓ AlarmManagerPlugin registered"
     fi
 
-    # ── 6b-kt. GoogleAuth (Kotlin) ───────────────────────────────────────────
-    if grep -q "GoogleAuth" "$MAIN"; then
-      echo "  ✓ GoogleAuth plugin already registered"
-    else
-      sedi 's/registerPlugin(AlarmManagerPlugin::class.java)/registerPlugin(AlarmManagerPlugin::class.java)\n        registerPlugin(com.codetrixstudio.capacitor.GoogleAuth.GoogleAuth::class.java)/' "$MAIN"
-      echo "  ✓ GoogleAuth plugin registered"
+    # ── 6b-kt. Cleanup stale Codetrix GoogleAuth registration ───────────────
+    # @capacitor-firebase/authentication auto-registers via Capacitor plugin
+    # discovery — no manual registerPlugin() call is needed. Older versions
+    # of this script injected the Codetrix GoogleAuth class which no longer
+    # exists on the classpath. Strip it if a previous run left it behind.
+    if grep -q "codetrixstudio.capacitor.GoogleAuth" "$MAIN"; then
+      awk '!/codetrixstudio\.capacitor\.GoogleAuth/' "$MAIN" \
+        > "$MAIN.tmp" && mv "$MAIN.tmp" "$MAIN"
+      echo "  ✓ Removed stale Codetrix GoogleAuth registration"
     fi
 
   else
@@ -395,19 +398,16 @@ else
       echo "  ✓ AlarmManagerPlugin registered"
     fi
 
-    # 3. GoogleAuth registration — added separately so re-runs can repair
-    #    a file that has AlarmManager but is missing GoogleAuth.
-    if grep -q "GoogleAuth.class" "$MAIN"; then
-      echo "  ✓ GoogleAuth plugin already registered"
-    else
-      awk '{
-        print
-        if (/registerPlugin\(AlarmManagerPlugin\.class\);/ && !done) {
-          print "        registerPlugin(com.codetrixstudio.capacitor.GoogleAuth.GoogleAuth.class);"
-          done=1
-        }
-      }' "$MAIN" > "$MAIN.tmp" && mv "$MAIN.tmp" "$MAIN"
-      echo "  ✓ GoogleAuth plugin registered"
+    # 3. Cleanup stale Codetrix GoogleAuth registration.
+    #    @capacitor-firebase/authentication auto-registers via Capacitor
+    #    plugin discovery — no manual registerPlugin() is needed. Older
+    #    versions of this script injected com.codetrixstudio.capacitor.
+    #    GoogleAuth which no longer exists on the classpath. Strip it if
+    #    a previous run left it behind.
+    if grep -q "codetrixstudio.capacitor.GoogleAuth" "$MAIN"; then
+      awk '!/codetrixstudio\.capacitor\.GoogleAuth/' "$MAIN" \
+        > "$MAIN.tmp" && mv "$MAIN.tmp" "$MAIN"
+      echo "  ✓ Removed stale Codetrix GoogleAuth registration"
     fi
   fi
 fi
