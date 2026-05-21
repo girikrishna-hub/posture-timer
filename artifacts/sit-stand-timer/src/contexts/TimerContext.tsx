@@ -530,7 +530,23 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       setDebugTickCount((c) => c + 1);
       const currentMode = modeRef.current;
       if (currentMode === "idle" || currentMode === "resting") return;
-      setElapsedSeconds((prev) => prev + 1);
+      // Wall-clock based: derive elapsed from the absolute session start
+      // timestamp rather than incrementing. Android WebView throttles
+      // setInterval aggressively (even when "foregrounded" with the screen
+      // dimmed or app behind another window), so prev+1 falls way behind
+      // wall clock and the display appears frozen until a visibility
+      // resync kicks in. Recomputing from Date.now() means the display is
+      // always correct regardless of how often the callback actually fires.
+      // (Mirrors the pattern used by BladderPage's useCountdown.)
+      const startedAt = sessionStartedAtRef.current;
+      if (startedAt !== null) {
+        const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+        setElapsedSeconds((prev) => (prev === elapsed ? prev : elapsed));
+      } else {
+        // Fallback if startedAt isn't set yet (shouldn't normally happen
+        // when mode is active, but be defensive).
+        setElapsedSeconds((prev) => prev + 1);
+      }
     }, 1000);
 
     return () => clearInterval(interval);
