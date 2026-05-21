@@ -20,7 +20,7 @@ import {
   openExactAlarmSettings,
 } from "@/utils/nativeNotifications";
 import { Capacitor } from "@capacitor/core";
-import { AlarmManager } from "@/plugins/alarmManager";
+import { AlarmManager, type AlarmDiagnostics } from "@/plugins/alarmManager";
 
 // ── Temporary runtime diagnostics ─────────────────────────────────────────
 // The amber permission card was never appearing on a device where Android
@@ -120,7 +120,65 @@ export default function SettingsPage() {
   // ── Exact-alarm permission (Android 12+ only) ───────────────────────────
   const [exactAlarmGranted, setExactAlarmGranted] = useState<boolean | null>(null);
 
-  // ── Temporary runtime diagnostics (remove once confirmed working) ──────
+  // ── TEMP DIAG: native alarm runtime diagnostics ────────────────────────
+  // Pulled from AlarmManagerPlugin.getDiagnostics() — shows whether
+  // scheduleAlarm() actually reached the OS and whether the AlarmReceiver
+  // ever fired. Refreshed on mount, every 3s, and whenever the tab regains
+  // visibility. Remove once notification delivery is confirmed working.
+  const [alarmRuntime, setAlarmRuntime] = useState<AlarmDiagnostics | null>(null);
+  const [alarmRuntimeError, setAlarmRuntimeError] = useState<string | null>(null);
+  const [testAlarmStatus, setTestAlarmStatus] = useState<string>("");
+
+  const refreshAlarmRuntime = useCallback(async () => {
+    if (!Capacitor.isNativePlatform()) {
+      setAlarmRuntime(null);
+      setAlarmRuntimeError("not on native platform");
+      return;
+    }
+    try {
+      const d = await AlarmManager.getDiagnostics();
+      setAlarmRuntime(d);
+      setAlarmRuntimeError(null);
+    } catch (e) {
+      setAlarmRuntimeError(e instanceof Error ? `${e.name}: ${e.message}` : String(e));
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshAlarmRuntime();
+    const t = window.setInterval(() => { void refreshAlarmRuntime(); }, 3000);
+    const onVis = () => void refreshAlarmRuntime();
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.clearInterval(t);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [refreshAlarmRuntime]);
+
+  const fireTestAlarm = useCallback(async () => {
+    setTestAlarmStatus("scheduling…");
+    try {
+      const res = await AlarmManager.scheduleAlarm({
+        id: 9999,
+        title: "TEST alarm",
+        body: "If you see this, AlarmReceiver fired & notification posted.",
+        delayMs: 10_000,
+      });
+      const r = res as { triggerAt?: number; usedExact?: boolean; error?: string } | void;
+      const trig = r?.triggerAt ? new Date(r.triggerAt).toLocaleTimeString() : "?";
+      setTestAlarmStatus(
+        `scheduled id=9999 trigger=${trig} exact=${String(r?.usedExact ?? "?")} ` +
+        `err=${r?.error || "none"} — wait 10s, watch for notification`,
+      );
+      void refreshAlarmRuntime();
+    } catch (e) {
+      setTestAlarmStatus(
+        `scheduleAlarm THREW: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  }, [refreshAlarmRuntime]);
+
+  // ── Permission/plugin-availability diagnostics (existing) ──────────────
   const [alarmDiag, setAlarmDiag] = useState<AlarmDiag>({
     isNative: false,
     platform: "unknown",
@@ -365,6 +423,75 @@ export default function SettingsPage() {
         >
           Re-run check
         </button>
+      </div>
+
+      {/* ── TEMP DIAG: alarm runtime panel — remove once delivery confirmed ── */}
+      <div className="mx-6 mb-4 rounded-2xl border-2 border-cyan-500 bg-cyan-50 px-4 py-3 font-mono text-[11px] leading-relaxed text-cyan-900">
+        <div className="mb-1 flex items-center justify-between">
+          <span className="text-xs font-bold uppercase tracking-wide">
+            🔔 Alarm runtime (native)
+          </span>
+          <button
+            type="button"
+            onClick={() => void refreshAlarmRuntime()}
+            className="rounded bg-cyan-600 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-cyan-700"
+          >
+            refresh
+          </button>
+        </div>
+        {alarmRuntimeError && (
+          <div className="text-red-700">getDiagnostics error: <b>{alarmRuntimeError}</b></div>
+        )}
+        {alarmRuntime && (() => {
+          const now = alarmRuntime.now || Date.now();
+          const fmt = (ts: number) =>
+            !ts ? "(never)" : `${new Date(ts).toLocaleTimeString()} (${Math.round((now - ts) / 1000)}s ago)`;
+          const fmtFuture = (ts: number) => {
+            if (!ts) return "(none)";
+            const diff = ts - now;
+            return `${new Date(ts).toLocaleTimeString()} (in ${Math.round(diff / 1000)}s)`;
+          };
+          return (
+            <>
+              <div className="mt-1 font-semibold">scheduling</div>
+              <div>schedule count: <b>{alarmRuntime.scheduleCount}</b></div>
+              <div>last scheduled id: <b>{alarmRuntime.lastScheduledId}</b> ({alarmRuntime.lastScheduledTitle || "—"})</div>
+              <div>last scheduled at: <b>{fmt(alarmRuntime.lastScheduledAt)}</b></div>
+              <div>fires at: <b>{fmtFuture(alarmRuntime.lastScheduledTriggerAt)}</b></div>
+              <div>used exact: <b>{String(alarmRuntime.lastScheduledUsedExact)}</b> · canExact: <b>{String(alarmRuntime.canScheduleExactAlarms)}</b></div>
+              <div>last sched error: <b className="break-all">{alarmRuntime.lastScheduledError || "(none)"}</b></div>
+              <div>nextAlarmClock: <b>{fmtFuture(alarmRuntime.nextAlarmClockTriggerAt)}</b> <span className="text-cyan-700">(only shows alarms set as wakeup-clock; informational)</span></div>
+
+              <div className="mt-2 font-semibold">cancellation</div>
+              <div>cancel count: <b>{alarmRuntime.cancelCount}</b> · last cancel id: <b>{alarmRuntime.lastCancelId}</b> · at: <b>{fmt(alarmRuntime.lastCancelAt)}</b></div>
+
+              <div className="mt-2 font-semibold">receiver / notification</div>
+              <div>receiver fire count: <b>{alarmRuntime.receiverFireCount}</b></div>
+              <div>last fire id: <b>{alarmRuntime.lastReceiverFireId}</b> ({alarmRuntime.lastReceiverFireTitle || "—"})</div>
+              <div>last fire at: <b>{fmt(alarmRuntime.lastReceiverFireAt)}</b></div>
+              <div>notify OK count: <b>{alarmRuntime.notifyCount}</b> · notify FAIL count: <b>{alarmRuntime.notifyFailCount}</b></div>
+              <div>last notify error: <b className="break-all">{alarmRuntime.lastNotifyError || "(none)"}</b></div>
+            </>
+          );
+        })()}
+        <button
+          type="button"
+          onClick={() => void fireTestAlarm()}
+          className="mt-3 rounded bg-cyan-700 px-3 py-1 text-[11px] font-semibold text-white hover:bg-cyan-800"
+        >
+          🚨 Fire test alarm in 10s
+        </button>
+        {testAlarmStatus && (
+          <div className="mt-1 break-all text-cyan-800">{testAlarmStatus}</div>
+        )}
+        <div className="mt-2 text-cyan-700">
+          Interpret:
+          <ul className="ml-4 list-disc">
+            <li>schedule count rising but receiver fire count flat → AlarmManager is dropping alarms (Doze / OEM battery saver / inexact fallback).</li>
+            <li>receiver fires but notify FAIL → notification permission revoked or channel issue.</li>
+            <li>both counts rising but you hear/see nothing → channel importance, DND, or full-screen-intent restriction.</li>
+          </ul>
+        </div>
       </div>
 
       {goalBanner.shown && (
