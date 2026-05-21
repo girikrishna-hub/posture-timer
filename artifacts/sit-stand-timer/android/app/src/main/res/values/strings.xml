@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Sit+Stand Timer</string>
+    <string name="title_activity_main">Sit+Stand Timer</string>
+    <string name="package_name">com.sitstand.timer</string>
+    <string name="custom_url_scheme">com.sitstand.timer</string>
+</resources>

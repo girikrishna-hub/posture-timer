@@ -441,6 +441,9 @@ importers:
       '@clerk/themes':
         specifier: ^2.4.57
         version: 2.4.57(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      firebase:
+        specifier: ^12.13.0
+        version: 12.13.0
       html2canvas:
         specifier: ^1.4.1
         version: 1.4.1

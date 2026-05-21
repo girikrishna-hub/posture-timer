@@ -105,6 +105,7 @@
     "@capacitor/splash-screen": "^8.0.1",
     "@clerk/react": "^6.4.7",
     "@clerk/themes": "^2.4.57",
+    "firebase": "^12.13.0",
     "html2canvas": "^1.4.1"
   }
 }
