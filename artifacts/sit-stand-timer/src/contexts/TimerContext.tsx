@@ -184,6 +184,8 @@ interface TimerContextValue {
   isInLockWindow: () => boolean;
   /** True once the active session has been loaded from the server API. */
   initialized: boolean;
+  /** TEMP DIAG: counter incremented inside the 1s tick interval. Remove once freeze regression confirmed fixed. */
+  __debugTickCount: number;
 }
 
 export type { GpsStatus };
@@ -198,6 +200,8 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   const [mode, setMode] = useState<TimerMode>("idle");
   const [restType, setRestType] = useState<"nap" | "sleep" | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  // TEMP DIAG (remove with __debugTickCount in context value)
+  const [__debugTickCount, setDebugTickCount] = useState(0);
   const [reminderCount, setReminderCount] = useState(0);
   const [inReminderPhase, setInReminderPhase] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
@@ -521,6 +525,9 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     if (mode === "idle" || mode === "resting") return;
 
     const interval = setInterval(() => {
+      // TEMP DIAG: always increment, independent of mode/elapsed branching,
+      // so we can tell if the interval itself is alive in the WebView.
+      setDebugTickCount((c) => c + 1);
       const currentMode = modeRef.current;
       if (currentMode === "idle" || currentMode === "resting") return;
       setElapsedSeconds((prev) => prev + 1);
@@ -827,6 +834,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
         stateSource,
         isInLockWindow,
         initialized,
+        __debugTickCount,
       }}
     >
       {children}
