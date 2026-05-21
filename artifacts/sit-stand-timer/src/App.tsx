@@ -5,7 +5,7 @@ import { Show, ClerkLoaded, ClerkLoading, useClerk } from "@clerk/react";
 import { publishableKeyFromHost, InternalClerkProvider } from "@clerk/react/internal";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { TimerProvider, useTimer } from "@/contexts/TimerContext";
+import { TimerProvider, useTimer, clearPersistedTimerState } from "@/contexts/TimerContext";
 import { BladderProvider } from "@/contexts/BladderContext";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
 
@@ -149,6 +149,9 @@ function ClerkQueryClientCacheInvalidator() {
       const userId = user?.id ?? null;
       if (prevUserIdRef.current !== undefined && prevUserIdRef.current !== userId) {
         qc.clear();
+        // Also wipe per-user timer hydration so user B doesn't briefly see
+        // user A's mode/elapsed while /sessions/active is in flight.
+        clearPersistedTimerState();
       }
       prevUserIdRef.current = userId;
     });

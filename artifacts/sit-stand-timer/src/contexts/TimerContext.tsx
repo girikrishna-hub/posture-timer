@@ -54,6 +54,59 @@ const OFFLINE_QUEUE_KEY = "sit-stand-offline-queue";
 const IDLE_TIMEOUT_SECONDS = 60 * 60;
 const OFFLINE_SESSION_SENTINEL = -1;
 
+// ─── Timer state persistence (survives TimerProvider remount) ──────────────
+//
+// On Native shells the AppRoutes tree (and therefore TimerProvider) is gated
+// on auth-runtime state which can briefly flip during navigation, causing a
+// provider remount that resets all useState back to defaults.  Persisting a
+// small snapshot to localStorage lets us hydrate instantly on remount so the
+// UI does not flash to "idle".  The server-side restore effect still runs
+// afterward and overrides this with the authoritative active-session record.
+
+const TIMER_STATE_KEY = "sit-stand-timer-state-v1";
+
+interface PersistedTimerState {
+  mode: TimerMode;
+  restType: "nap" | "sleep" | null;
+  sessionStartedAt: number | null; // ms since epoch
+  activeSessionId: number | null;
+}
+
+function loadPersistedTimerState(): PersistedTimerState | null {
+  try {
+    const raw = localStorage.getItem(TIMER_STATE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<PersistedTimerState>;
+    if (!parsed || typeof parsed.mode !== "string") return null;
+    const validModes: TimerMode[] = ["idle", "sitting", "standing", "resting", "walking", "workout"];
+    if (!validModes.includes(parsed.mode as TimerMode)) return null;
+    return {
+      mode: parsed.mode as TimerMode,
+      restType: (parsed.restType as "nap" | "sleep" | null) ?? null,
+      sessionStartedAt: typeof parsed.sessionStartedAt === "number" ? parsed.sessionStartedAt : null,
+      activeSessionId: typeof parsed.activeSessionId === "number" ? parsed.activeSessionId : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function savePersistedTimerState(state: PersistedTimerState): void {
+  try {
+    localStorage.setItem(TIMER_STATE_KEY, JSON.stringify(state));
+  } catch {
+    /* ignore quota / disabled storage */
+  }
+}
+
+export function clearPersistedTimerState(): void {
+  try {
+    localStorage.removeItem(TIMER_STATE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 function loadQueue(): OfflineOp[] {
   try {
     const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
@@ -184,8 +237,6 @@ interface TimerContextValue {
   isInLockWindow: () => boolean;
   /** True once the active session has been loaded from the server API. */
   initialized: boolean;
-  /** TEMP DIAG: counter incremented inside the 1s tick interval. Remove once freeze regression confirmed fixed. */
-  __debugTickCount: number;
 }
 
 export type { GpsStatus };
@@ -197,14 +248,27 @@ const TimerContext = createContext<TimerContextValue | null>(null);
 export function TimerProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
 
-  const [mode, setMode] = useState<TimerMode>("idle");
-  const [restType, setRestType] = useState<"nap" | "sleep" | null>(null);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  // TEMP DIAG (remove with __debugTickCount in context value)
-  const [__debugTickCount, setDebugTickCount] = useState(0);
+  // Hydrate from localStorage on first render so a TimerProvider remount
+  // (e.g. Native auth gates briefly flipping during navigation) does NOT
+  // wipe the active session.  The server-side restore effect still runs
+  // afterwards and reconciles; this just prevents a visible flash to idle.
+  const persisted = loadPersistedTimerState();
+
+  const [mode, setMode] = useState<TimerMode>(persisted?.mode ?? "idle");
+  const [restType, setRestType] = useState<"nap" | "sleep" | null>(
+    persisted?.restType ?? null,
+  );
+  const [elapsedSeconds, setElapsedSeconds] = useState(() => {
+    if (persisted?.sessionStartedAt && persisted.mode !== "idle" && persisted.mode !== "resting") {
+      return Math.max(0, Math.floor((Date.now() - persisted.sessionStartedAt) / 1000));
+    }
+    return 0;
+  });
   const [reminderCount, setReminderCount] = useState(0);
   const [inReminderPhase, setInReminderPhase] = useState(false);
-  const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
+  const [activeSessionId, setActiveSessionId] = useState<number | null>(
+    persisted?.activeSessionId ?? null,
+  );
   const notificationPermission = useNotificationPermission();
   const [initialized, setInitialized] = useState(false);
   const [stateSource, setStateSource] = useState<StateSource>("manual");
@@ -228,7 +292,11 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   const elapsedSecondsRef = useRef(elapsedSeconds);
   // Wall-clock timestamp (ms) when the current session started. Used to
   // resync elapsedSeconds after browser throttles the interval in the background.
-  const sessionStartedAtRef = useRef<number | null>(null);
+  // Hydrated from localStorage on first render so a TimerProvider remount
+  // does not lose the absolute session start (which the tick depends on).
+  const sessionStartedAtRef = useRef<number | null>(
+    persisted?.sessionStartedAt ?? null,
+  );
 
   useEffect(() => { modeRef.current = mode; }, [mode]);
   useEffect(() => { elapsedSecondsRef.current = elapsedSeconds; }, [elapsedSeconds]);
@@ -292,10 +360,37 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
         setRestType((active.restType as "nap" | "sleep" | null) ?? null);
         setElapsedSeconds(elapsed);
         setActiveSessionId(active.id);
+      } else {
+        // Server says no active session — clear any stale localStorage
+        // hydration (e.g. the user ended the session on another device,
+        // or hydration brought back a session that has since ended).
+        clearPersistedTimerState();
+        sessionStartedAtRef.current = null;
+        setMode("idle");
+        setRestType(null);
+        setElapsedSeconds(0);
+        setActiveSessionId(null);
       }
       setInitialized(true);
     }
   }, [activeSessionData, initialized]);
+
+  // Persist a small snapshot of timer state to localStorage on every change
+  // so a TimerProvider remount can hydrate instantly (see loadPersistedTimerState).
+  useEffect(() => {
+    if (mode === "idle") {
+      clearPersistedTimerState();
+      return;
+    }
+    savePersistedTimerState({
+      mode,
+      restType,
+      sessionStartedAt: sessionStartedAtRef.current,
+      activeSessionId,
+    });
+    // sessionStartedAtRef.current is intentionally read fresh; it is updated
+    // synchronously alongside `mode` in switchMode/endCurrentSession.
+  }, [mode, restType, activeSessionId, elapsedSeconds]);
 
   // ─── Native (Capacitor) notification setup ────────────────────────────────
 
@@ -525,9 +620,6 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     if (mode === "idle" || mode === "resting") return;
 
     const interval = setInterval(() => {
-      // TEMP DIAG: always increment, independent of mode/elapsed branching,
-      // so we can tell if the interval itself is alive in the WebView.
-      setDebugTickCount((c) => c + 1);
       const currentMode = modeRef.current;
       if (currentMode === "idle" || currentMode === "resting") return;
       // Wall-clock based: derive elapsed from the absolute session start
@@ -850,7 +942,6 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
         stateSource,
         isInLockWindow,
         initialized,
-        __debugTickCount,
       }}
     >
       {children}

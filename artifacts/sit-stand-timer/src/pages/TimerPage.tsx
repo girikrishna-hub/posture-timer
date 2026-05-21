@@ -358,8 +358,6 @@ export default function TimerPage() {
     gpsStatus,
     requestNotificationPermission,
     notificationPermission,
-    initialized,
-    __debugTickCount,
   } = useTimer();
 
   const { canInstall, install } = useInstallPrompt();
@@ -634,10 +632,6 @@ export default function TimerPage() {
         <div className="text-center space-y-1">
           <div className="text-6xl font-mono font-light tracking-tight text-foreground tabular-nums">
             {mode === "idle" ? "—:——" : formatTime(elapsedSeconds)}
-          </div>
-          {/* TEMP DIAG: remove once timer-freeze regression is confirmed fixed */}
-          <div className="text-[10px] font-mono text-fuchsia-600 dark:text-fuchsia-400 opacity-70">
-            tick:{__debugTickCount} es:{elapsedSeconds} m:{mode} init:{initialized ? "1" : "0"}
           </div>
           {reminderMessage ? (
             <p className="text-sm font-medium text-amber-600 dark:text-amber-400 animate-pulse">
