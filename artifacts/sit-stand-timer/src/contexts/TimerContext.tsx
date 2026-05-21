@@ -348,7 +348,19 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
-  // Restore active session from server on first load
+  // Restore active session from server on first load.
+  //
+  // Reconciliation rules with localStorage hydration:
+  //   1. Server has an active session ⇒ server wins (authoritative).
+  //   2. Server has no active session AND we hydrated a session from
+  //      localStorage that is < 24h old ⇒ keep the local state.  This
+  //      handles the common case where the user started a timer on
+  //      native, the start mutation has not yet succeeded (offline /
+  //      mid-flight), and a re-render or auth-runtime flicker remounts
+  //      the provider.  Previously we wiped to idle here, which made
+  //      the timer "reset on navigate" because every remount raced
+  //      the start-mutation.
+  //   3. Server has no active session AND no recent local state ⇒ idle.
   useEffect(() => {
     if (!initialized && activeSessionData !== undefined) {
       const active = activeSessionData.session;
@@ -361,15 +373,25 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
         setElapsedSeconds(elapsed);
         setActiveSessionId(active.id);
       } else {
-        // Server says no active session — clear any stale localStorage
-        // hydration (e.g. the user ended the session on another device,
-        // or hydration brought back a session that has since ended).
-        clearPersistedTimerState();
-        sessionStartedAtRef.current = null;
-        setMode("idle");
-        setRestType(null);
-        setElapsedSeconds(0);
-        setActiveSessionId(null);
+        const hydratedStartedAt = sessionStartedAtRef.current;
+        const hydratedIsRecent =
+          hydratedStartedAt != null &&
+          Date.now() - hydratedStartedAt < 24 * 60 * 60 * 1000;
+        const hydratedIsActiveMode =
+          modeRef.current !== "idle" && modeRef.current !== "resting";
+
+        if (hydratedIsActiveMode && hydratedIsRecent) {
+          // Keep the hydrated state — do NOT wipe to idle.  The start
+          // mutation will eventually reach the server and a future
+          // refetch will reconcile.
+        } else {
+          clearPersistedTimerState();
+          sessionStartedAtRef.current = null;
+          setMode("idle");
+          setRestType(null);
+          setElapsedSeconds(0);
+          setActiveSessionId(null);
+        }
       }
       setInitialized(true);
     }

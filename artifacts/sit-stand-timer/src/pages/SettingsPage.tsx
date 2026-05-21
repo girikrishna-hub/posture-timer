@@ -52,13 +52,18 @@ function SettingRow({
 }: {
   label: string;
   description: string;
-  value: number;
+  value: number | undefined;
   min: number;
   max: number;
   step: number;
   unit: string;
   onChange: (v: number) => void;
 }) {
+  // Defensive: if upstream state momentarily holds undefined (e.g. server
+  // returned a partial settings payload), fall back to `min` so the slider
+  // is still usable instead of crashing or rendering as a blank value.
+  const safeValue =
+    typeof value === "number" && Number.isFinite(value) ? value : min;
   return (
     <div className="space-y-2 pb-6 border-b border-border last:border-0">
       <div className="flex items-center justify-between">
@@ -67,14 +72,14 @@ function SettingRow({
           <p className="text-xs text-muted-foreground">{description}</p>
         </div>
         <span className="text-sm font-semibold tabular-nums text-foreground min-w-[3rem] text-right">
-          {value}{unit}
+          {safeValue}{unit}
         </span>
       </div>
       <Slider
         min={min}
         max={max}
         step={step}
-        value={[value]}
+        value={[safeValue]}
         onValueChange={([v]) => onChange(v)}
         className="w-full"
       />
@@ -233,15 +238,24 @@ export default function SettingsPage() {
   useEffect(() => {
     if (settings && !hydratedRef.current) {
       hydratedRef.current = true;
-      setLocalSettings({
-        dailyStandingGoalMinutes: settings.dailyStandingGoalMinutes,
-        sittingAlertMinutes: settings.sittingAlertMinutes,
-        standingMinMinutes: settings.standingMinMinutes,
-        standingMaxMinutes: settings.standingMaxMinutes,
-        reminderIntervalMinutes: settings.reminderIntervalMinutes,
-        remindersCount: settings.remindersCount,
-        autoDetectWalking: settings.autoDetectWalking,
-      });
+      // Use `?? prev` for every field so a partial server payload (e.g. a
+      // field added after the user's row was inserted with NULL) does not
+      // wipe out the in-memory defaults and leave the sliders unusable.
+      setLocalSettings((prev) => ({
+        dailyStandingGoalMinutes:
+          settings.dailyStandingGoalMinutes ?? prev.dailyStandingGoalMinutes,
+        sittingAlertMinutes:
+          settings.sittingAlertMinutes ?? prev.sittingAlertMinutes,
+        standingMinMinutes:
+          settings.standingMinMinutes ?? prev.standingMinMinutes,
+        standingMaxMinutes:
+          settings.standingMaxMinutes ?? prev.standingMaxMinutes,
+        reminderIntervalMinutes:
+          settings.reminderIntervalMinutes ?? prev.reminderIntervalMinutes,
+        remindersCount: settings.remindersCount ?? prev.remindersCount,
+        autoDetectWalking:
+          settings.autoDetectWalking ?? prev.autoDetectWalking,
+      }));
     }
   }, [settings]);
 
