@@ -1,0 +1,81 @@
+Here is the complete picture. Every exact-alarm API call, flag, and native component in Voice Reminder:
+
+The full Android scheduling stack
+Layer 1 — AlarmManager call (FullScreenIntentPlugin.java:88–101)
+// Permission check at schedule time (runtime, not just manifest):
+if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !am.canScheduleExactAlarms()) {
+    // Falls back — alarm will be batched/delayed by OS
+    am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerMs, pi);
+} else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+    am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerMs, pi);  // ← primary path
+} else {
+    am.setExact(AlarmManager.RTC_WAKEUP, triggerMs, pi);
+}
+// SecurityException caught → falls back to setAndAllowWhileIdle
+
+No AlarmClockInfo / setAlarmClock(). It uses setExactAndAllowWhileIdle — this is the Doze-exempt path, not the clock-app path.
+
+Layer 2 — PendingIntent flags (FullScreenIntentPlugin.java:218–222)
+int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) flags |= PendingIntent.FLAG_IMMUTABLE;
+PendingIntent.getBroadcast(getContext(), id, intent, flags);
+// → targets AlarmBroadcastReceiver via explicit package-scoped broadcast
+
+Layer 3 — Broadcast receiver posts the notification with fullScreenIntent (AlarmBroadcastReceiver.java:67–77)
+nm.notify(notifId, new NotificationCompat.Builder(context, CHANNEL_ID)
+    .setPriority(NotificationCompat.PRIORITY_MAX)
+    .setCategory(NotificationCompat.CATEGORY_ALARM)
+    .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+    .setFullScreenIntent(fullScreenPi, true)   // ← highPriority=true
+    .setContentIntent(fullScreenPi)
+    .setAutoCancel(true)
+    .build());
+
+The fullScreenPi targets ReminderAlarmActivity.
+
+Layer 4 — ReminderAlarmActivity shows over the lock screen (ReminderAlarmActivity.java:29–41)
+// API 27+
+setShowWhenLocked(true);
+setTurnScreenOn(true);
+getWindow().addFlags(FLAG_KEEP_SCREEN_ON);
+// API < 27 fallback
+getWindow().addFlags(
+    FLAG_SHOW_WHEN_LOCKED | FLAG_TURN_SCREEN_ON | FLAG_KEEP_SCREEN_ON
+);
+
+Layer 5 — Runtime permission check (JS side, checkSpecialPermissions)
+// API 31+ (Android 12):
+AlarmManager am = ...;
+canExact = am.canScheduleExactAlarms();  // ← live query, not cached
+// API 34+ (Android 14):
+NotificationManager nm = ...;
+canFullScreen = nm.canUseFullScreenIntent();
+
+This is called on every app foreground via LifecycleManager.onForeground() in useAndroidAlarmPermission.ts.
+
+Layer 6 — Settings deep-link (openAlarmSettings)
+// exactAlarm target:
+new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+    .setData(Uri.parse("package:" + pkg));
+// fullScreenIntent target (API 34+):
+new Intent("android.settings.MANAGE_APP_USE_FULL_SCREEN_INTENT")
+    .setData(Uri.parse("package:" + pkg));
+// Fallback (API < 31 or activity not resolvable):
+new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+    .setData(Uri.parse("package:" + pkg));
+
+What posture-timer needs to replicate — the exact checklist
+Component	Voice Reminder has it	What to look for in posture-timer
+SCHEDULE_EXACT_ALARM in AndroidManifest.xml	✓	<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+USE_FULL_SCREEN_INTENT in manifest	✓	<uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+am.canScheduleExactAlarms() called at schedule time	✓ line 89	Does posture-timer check this before calling setExact*? Or assume it's granted?
+setExactAndAllowWhileIdle() (not setExact)	✓ line 94	setExact() alone gets batched during Doze
+SecurityException catch → inexact fallback	✓ line 98–100	Without this, uncaught exception silently kills the alarm
+BroadcastReceiver posts notification (not direct Activity launch)	✓	AlarmManager fires receiver → receiver calls nm.notify()
+.setFullScreenIntent(pi, true) with highPriority=true	✓ line 74	Without true, Android treats it as a regular notification, no lock-screen takeover
+.setCategory(CATEGORY_ALARM)	✓ line 72	Bypasses DND; critical for alarm delivery
+setShowWhenLocked(true) + setTurnScreenOn(true) in the Activity	✓	Without this the alarm fires but screen stays off
+canScheduleExactAlarms() queried on every foreground return	✓ (JS hook)	Permission can be revoked at runtime; must re-check on resume
+Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM deep-link	✓	App must direct user to the right screen, not just app details
+USE_FULL_SCREEN_INTENT declared on the Activity in manifest	✓	<activity android:name=".ReminderAlarmActivity"/> needs no extra attr, but the permission must exist
+The most likely gap in posture-timer: either am.canScheduleExactAlarms() is never checked so a SecurityException kills the schedule call silently, or setExactAndAllowWhileIdle() is never reached at all because there is no FullScreenIntentPlugin equivalent and it relies on @capacitor/local-notifications which uses setExact() — not the Doze-exempt variant.
