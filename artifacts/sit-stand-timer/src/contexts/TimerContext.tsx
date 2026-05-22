@@ -430,12 +430,24 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     const silent = (() => {
       try { return localStorage.getItem("silentReminders") === "true"; } catch { return false; }
     })();
+
+    // Compute how far we are into the current session so we schedule for the
+    // REMAINING time, not the full duration.  This is critical when this effect
+    // fires because `initialized` just flipped true (app reopen / hydration) —
+    // at that point the session may already be N seconds old and passing the
+    // full delayMs would cause alarms to fire N seconds late.
+    // On a fresh mode switch sessionStartedAtRef is set moments before this
+    // effect runs, so elapsedMs ≈ 0 and behaviour is unchanged.
+    const startedAt = sessionStartedAtRef.current;
+    const elapsedMs = startedAt !== null ? Math.max(0, Date.now() - startedAt) : 0;
+
     if (mode === "sitting") {
       void scheduleNativeSittingReminders({
         sittingAlertMinutes: s.sittingAlertMinutes,
         reminderIntervalMinutes: s.reminderIntervalMinutes,
         remindersCount: s.remindersCount,
         silent,
+        elapsedMs,
       });
     } else if (mode === "standing") {
       void scheduleNativeStandingReminders({
@@ -444,6 +456,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
         reminderIntervalMinutes: s.reminderIntervalMinutes,
         remindersCount: s.remindersCount,
         silent,
+        elapsedMs,
       });
     }
     // idle / resting / walking / workout: no posture reminders needed

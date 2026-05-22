@@ -201,10 +201,14 @@ export async function scheduleNativeBladderAlarm(
 // ─── Schedule sitting reminders ─────────────────────────────────────────────
 
 interface SittingSettings {
-  sittingAlertMinutes:    number;
+  sittingAlertMinutes:     number;
   reminderIntervalMinutes: number;
   remindersCount:          number;
   silent?:                 boolean;
+  /** Milliseconds already elapsed in the current session.
+   *  Used to compute remaining delay so alarms fire at the correct absolute
+   *  time even when rescheduled mid-session (e.g. app reopen / hydration). */
+  elapsedMs?:              number;
 }
 
 export async function scheduleNativeSittingReminders(
@@ -212,25 +216,31 @@ export async function scheduleNativeSittingReminders(
 ): Promise<void> {
   if (!isNativePlatform()) return;
   try {
-    const alertMs = s.sittingAlertMinutes * 60_000;
+    const elapsed = s.elapsedMs ?? 0;
+    const alertAbsMs = s.sittingAlertMinutes * 60_000;
 
-    // First alert
-    await AlarmManager.scheduleAlarm({
-      id:      SITTING_BASE,
-      title:   "Time to stand!",
-      body:    `You've been sitting for ${s.sittingAlertMinutes} minutes. Stand up!`,
-      delayMs: alertMs,
-      silent:  s.silent,
-    });
+    // First alert — skip if the threshold has already passed
+    const firstDelay = alertAbsMs - elapsed;
+    if (firstDelay > 0) {
+      await AlarmManager.scheduleAlarm({
+        id:      SITTING_BASE,
+        title:   "Time to stand!",
+        body:    `You've been sitting for ${s.sittingAlertMinutes} minutes. Stand up!`,
+        delayMs: firstDelay,
+        silent:  s.silent,
+      });
+    }
 
-    // Follow-up reminders
+    // Follow-up reminders — skip any whose absolute threshold has already passed
     for (let i = 1; i <= Math.min(s.remindersCount, MAX_REMINDERS - 1); i++) {
-      const delayMs = alertMs + i * s.reminderIntervalMinutes * 60_000;
+      const absDelay    = alertAbsMs + i * s.reminderIntervalMinutes * 60_000;
+      const remainingMs = absDelay - elapsed;
+      if (remainingMs <= 0) continue;
       await AlarmManager.scheduleAlarm({
         id:      SITTING_BASE + i,
         title:   `Stand up — reminder ${i}/${s.remindersCount}`,
         body:    `Still sitting after ${s.sittingAlertMinutes + i * s.reminderIntervalMinutes} minutes.`,
-        delayMs,
+        delayMs: remainingMs,
         silent:  s.silent,
       });
     }
@@ -245,6 +255,8 @@ interface StandingSettings {
   reminderIntervalMinutes: number;
   remindersCount:          number;
   silent?:                 boolean;
+  /** Milliseconds already elapsed in the current session. See SittingSettings. */
+  elapsedMs?:              number;
 }
 
 export async function scheduleNativeStandingReminders(
@@ -252,38 +264,47 @@ export async function scheduleNativeStandingReminders(
 ): Promise<void> {
   if (!isNativePlatform()) return;
   try {
-    const minMs = s.standingMinMinutes  * 60_000;
-    const maxMs = s.standingMaxMinutes  * 60_000;
+    const elapsed = s.elapsedMs ?? 0;
+    const minAbsMs = s.standingMinMinutes * 60_000;
+    const maxAbsMs = s.standingMaxMinutes * 60_000;
 
-    // First alert at standingMinMinutes
-    await AlarmManager.scheduleAlarm({
-      id:      STANDING_BASE,
-      title:   "Time to sit!",
-      body:    `You've been standing for ${s.standingMinMinutes} minutes. Have a seat.`,
-      delayMs: minMs,
-      silent:  s.silent,
-    });
-
-    // Intermediate reminders
-    for (let i = 1; i < Math.min(s.remindersCount, MAX_REMINDERS - 1); i++) {
-      const delayMs = minMs + i * s.reminderIntervalMinutes * 60_000;
-      if (delayMs >= maxMs) break;
+    // First alert at standingMinMinutes — skip if already passed
+    const firstDelay = minAbsMs - elapsed;
+    if (firstDelay > 0) {
       await AlarmManager.scheduleAlarm({
-        id:      STANDING_BASE + i,
-        title:   `Sit down — reminder ${i}/${s.remindersCount}`,
-        body:    `Still standing after ${s.standingMinMinutes + i * s.reminderIntervalMinutes} minutes.`,
-        delayMs,
+        id:      STANDING_BASE,
+        title:   "Time to sit!",
+        body:    `You've been standing for ${s.standingMinMinutes} minutes. Have a seat.`,
+        delayMs: firstDelay,
         silent:  s.silent,
       });
     }
 
-    // Hard final alert at standingMaxMinutes
-    await AlarmManager.scheduleAlarm({
-      id:      STANDING_BASE + MAX_REMINDERS - 1,
-      title:   "Final reminder — please sit down",
-      body:    `Maximum standing time of ${s.standingMaxMinutes} minutes reached.`,
-      delayMs: maxMs,
-      silent:  s.silent,
-    });
+    // Intermediate reminders
+    for (let i = 1; i < Math.min(s.remindersCount, MAX_REMINDERS - 1); i++) {
+      const absDelay    = minAbsMs + i * s.reminderIntervalMinutes * 60_000;
+      if (absDelay >= maxAbsMs) break;
+      const remainingMs = absDelay - elapsed;
+      if (remainingMs <= 0) continue;
+      await AlarmManager.scheduleAlarm({
+        id:      STANDING_BASE + i,
+        title:   `Sit down — reminder ${i}/${s.remindersCount}`,
+        body:    `Still standing after ${s.standingMinMinutes + i * s.reminderIntervalMinutes} minutes.`,
+        delayMs: remainingMs,
+        silent:  s.silent,
+      });
+    }
+
+    // Hard final alert at standingMaxMinutes — skip if already passed
+    const finalDelay = maxAbsMs - elapsed;
+    if (finalDelay > 0) {
+      await AlarmManager.scheduleAlarm({
+        id:      STANDING_BASE + MAX_REMINDERS - 1,
+        title:   "Final reminder — please sit down",
+        body:    `Maximum standing time of ${s.standingMaxMinutes} minutes reached.`,
+        delayMs: finalDelay,
+        silent:  s.silent,
+      });
+    }
   } catch { /* silent */ }
 }
