@@ -137,6 +137,41 @@ if grep -q 'USE_EXACT_ALARM.*tools:node="remove"\|tools:node="remove".*USE_EXACT
   echo "  ✓ Removed obsolete USE_EXACT_ALARM tools:node=\"remove\" override"
 fi
 
+# Cleanup: REMOVE android:maxSdkVersion="32" from SCHEDULE_EXACT_ALARM.
+# With maxSdkVersion="32", Android 13+ devices silently ignore the permission
+# so the app never appears in Settings → Alarms & reminders.  The fix is to
+# declare SCHEDULE_EXACT_ALARM without any version restriction — USE_EXACT_ALARM
+# (also declared) continues to auto-grant scheduling on API 33+ regardless.
+if grep -q 'SCHEDULE_EXACT_ALARM.*maxSdkVersion="32"\|maxSdkVersion="32".*SCHEDULE_EXACT_ALARM' "$MANIFEST"; then
+  # Remove the attribute however it appears — on same line or split across two lines
+  awk '
+    /SCHEDULE_EXACT_ALARM/ {
+      # Remove inline maxSdkVersion="32" and any surrounding whitespace
+      gsub(/[[:space:]]*android:maxSdkVersion="32"/, "")
+    }
+    !/^[[:space:]]*android:maxSdkVersion="32"[[:space:]]*\/?>[[:space:]]*$/ { print }
+  ' "$MANIFEST" > "$MANIFEST.tmp" && mv "$MANIFEST.tmp" "$MANIFEST"
+  echo "  ✓ Removed maxSdkVersion=\"32\" from SCHEDULE_EXACT_ALARM (app now listed in Alarms & reminders on API 33+)"
+fi
+
+# Patch: add showWhenLocked + turnScreenOn to MainActivity so the app can
+# open over the lock screen when the user taps a notification.
+# The voice reminder reference app has both attributes on its MainActivity.
+if grep -q 'showWhenLocked' "$MANIFEST"; then
+  echo "  ✓ MainActivity showWhenLocked already present"
+else
+  awk '
+    /android:launchMode="singleTask"/ && !done {
+      print
+      print "            android:showWhenLocked=\"true\""
+      print "            android:turnScreenOn=\"true\""
+      done=1; next
+    }
+    { print }
+  ' "$MANIFEST" > "$MANIFEST.tmp" && mv "$MANIFEST.tmp" "$MANIFEST"
+  echo "  ✓ Added showWhenLocked + turnScreenOn to MainActivity"
+fi
+
 # ── 4. Add deep-link intent filter for Clerk OAuth callbacks ─────────────────
 # After Google OAuth, Clerk redirects to posture-timer://oauth-callback
 # so the WebView can complete sign-in via @capacitor/app's appUrlOpen event.

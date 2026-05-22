@@ -14,20 +14,15 @@
 <uses-permission android:name="android.permission.WAKE_LOCK" />
 
 <!-- Exact alarms.
-     Android 12 (API 31–32): SCHEDULE_EXACT_ALARM — user-revocable, appears
-       in Settings → Apps → Special access → Alarms & reminders.
-     Android 13+ (API 33+): USE_EXACT_ALARM — system-granted at install,
-       NOT user-revocable. On Samsung/One UI the Alarms & reminders toggle
-       appears GREYED (locked on) when this is declared; that is the
-       expected, working state. canScheduleExactAlarms() returns true.
-
-     IMPORTANT: USE_EXACT_ALARM is evaluated at install time. After adding
-     it, a full uninstall + reinstall is required — install-over does not
-     re-grant. The prior comment in this file ("intentionally omitted")
-     was based on outdated Play-Store guidance and did not apply to a
-     sideloaded personal-use APK. -->
-<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"
-    android:maxSdkVersion="32" />
+     SCHEDULE_EXACT_ALARM (no maxSdkVersion): declared on ALL API levels so
+       the app always appears in Settings → Apps → Special access →
+       Alarms & reminders — including on Android 13+ Samsung devices.
+       Without maxSdkVersion="32", API 33+ devices no longer ignore this
+       permission and the app is listed in Alarms & reminders normally.
+     USE_EXACT_ALARM (API 33+): auto-granted at install, ensures
+       canScheduleExactAlarms() returns true even if user revokes the above.
+       Both together: scheduling always works AND the UI entry is visible. -->
+<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
 <!-- Show notification over lock screen -->
