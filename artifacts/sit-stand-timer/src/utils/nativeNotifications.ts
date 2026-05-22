@@ -126,6 +126,51 @@ export async function openExactAlarmSettings(): Promise<boolean> {
   }
 }
 
+// ─── Full-screen intent permission (Android 14+) ────────────────────────────
+
+/**
+ * Returns whether the app may show full-screen alarm activities over the lock
+ * screen. Requires explicit user grant on Android 14+. Always true below 14.
+ */
+export async function canUseFullScreenIntent(): Promise<boolean> {
+  if (!isNativePlatform()) return true;
+  try {
+    const { value } = await AlarmManager.canUseFullScreenIntent();
+    return value;
+  } catch {
+    return true;
+  }
+}
+
+/** Opens the Android 14+ Settings page to grant full-screen intent permission. */
+export async function openFullScreenIntentSettings(): Promise<void> {
+  if (!isNativePlatform()) return;
+  try { await AlarmManager.openFullScreenIntentSettings(); } catch { /* silent */ }
+}
+
+// ─── Battery optimisation ────────────────────────────────────────────────────
+
+/**
+ * Returns whether the app is exempt from battery optimisation (Doze).
+ * Non-exempt apps on Samsung may have alarm delivery throttled.
+ * Always true on web / below Android 6.
+ */
+export async function isIgnoringBatteryOptimizations(): Promise<boolean> {
+  if (!isNativePlatform()) return true;
+  try {
+    const { value } = await AlarmManager.isIgnoringBatteryOptimizations();
+    return value;
+  } catch {
+    return true;
+  }
+}
+
+/** Opens the system dialog to request battery-optimisation exemption. */
+export async function requestIgnoreBatteryOptimizations(): Promise<void> {
+  if (!isNativePlatform()) return;
+  try { await AlarmManager.requestIgnoreBatteryOptimizations(); } catch { /* silent */ }
+}
+
 // ─── Cancel bladder alarm ────────────────────────────────────────────────────
 
 export async function cancelNativeBladderAlarm(): Promise<void> {

@@ -25,8 +25,12 @@ class AlarmReceiver : BroadcastReceiver() {
 
     companion object {
         const val TAG = "AlarmDiag"
-        const val CHANNEL_ID        = "posture-alarm"
-        const val CHANNEL_ID_SILENT = "posture-alarm-silent"
+        // v2 suffix forces channel recreation on Samsung devices that cache
+        // the old channel (vibrate-only) in the system notification DB even
+        // after a full app uninstall.  Channel sound/vibration settings are
+        // locked once created; a new ID is the only way to change them.
+        const val CHANNEL_ID        = "posture-alarm-v2"
+        const val CHANNEL_ID_SILENT = "posture-alarm-silent-v2"
         const val ACTION_BOOT    = Intent.ACTION_BOOT_COMPLETED
         const val ACTION_LBOOT   = "android.intent.action.LOCKED_BOOT_COMPLETED"
         const val ACTION_DISMISS = "com.sitstand.timer.DISMISS_ALARM"
@@ -270,9 +274,14 @@ class AlarmReceiver : BroadcastReceiver() {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (nm.getNotificationChannel(CHANNEL_ID) != null) return
 
-        val notifSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        // USAGE_ALARM: plays on the alarm volume stream, bypasses DND /
+        // silent / vibrate mode, and honours the user's alarm volume level.
+        // TYPE_ALARM gives the louder, persistent alarm ringtone rather than
+        // the quieter notification blip.
+        val alarmSound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
         val audioAttr  = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+            .setUsage(AudioAttributes.USAGE_ALARM)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
             .build()
 
@@ -285,11 +294,11 @@ class AlarmReceiver : BroadcastReceiver() {
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             enableVibration(true)
             vibrationPattern     = longArrayOf(0, 500, 200, 500)
-            setSound(notifSound, audioAttr)
+            setSound(alarmSound, audioAttr)
             setBypassDnd(true)
         }
         nm.createNotificationChannel(ch)
-        Log.i(TAG, "Created notification channel $CHANNEL_ID (sound)")
+        Log.i(TAG, "Created notification channel $CHANNEL_ID (alarm-stream sound)")
     }
 
     private fun ensureChannelSilent(context: Context) {

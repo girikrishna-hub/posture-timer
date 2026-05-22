@@ -18,6 +18,10 @@ import {
   isNativePlatform,
   canScheduleExactAlarms,
   openExactAlarmSettings,
+  canUseFullScreenIntent,
+  openFullScreenIntentSettings,
+  isIgnoringBatteryOptimizations,
+  requestIgnoreBatteryOptimizations,
 } from "@/utils/nativeNotifications";
 import { Capacitor } from "@capacitor/core";
 import { AlarmManager, type AlarmDiagnostics } from "@/plugins/alarmManager";
@@ -124,6 +128,10 @@ export default function SettingsPage() {
 
   // ── Exact-alarm permission (Android 12+ only) ───────────────────────────
   const [exactAlarmGranted, setExactAlarmGranted] = useState<boolean | null>(null);
+  // ── Full-screen intent permission (Android 14+ only) ────────────────────
+  const [fullScreenGranted, setFullScreenGranted] = useState<boolean | null>(null);
+  // ── Battery optimisation exemption ──────────────────────────────────────
+  const [batteryOptExempt, setBatteryOptExempt] = useState<boolean | null>(null);
 
   // ── TEMP DIAG: native alarm runtime diagnostics ────────────────────────
   // Pulled from AlarmManagerPlugin.getDiagnostics() — shows whether
@@ -210,8 +218,19 @@ export default function SettingsPage() {
             ? `${e.name}: ${e.message}`
             : String(e);
         }
+        // Full-screen intent (Android 14+) and battery optimisation
+        try {
+          const fsi = await AlarmManager.canUseFullScreenIntent();
+          setFullScreenGranted(fsi.value);
+        } catch { setFullScreenGranted(true); }
+        try {
+          const batt = await AlarmManager.isIgnoringBatteryOptimizations();
+          setBatteryOptExempt(batt.value);
+        } catch { setBatteryOptExempt(true); }
       } else {
         setExactAlarmGranted(true);
+        setFullScreenGranted(true);
+        setBatteryOptExempt(true);
       }
       setAlarmDiag({
         isNative,
@@ -761,6 +780,53 @@ export default function SettingsPage() {
                   onClick={() => void openExactAlarmSettings()}
                 >
                   Grant permission →
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Full-screen intent permission (Android 14+) ── */}
+        {isNativePlatform() && fullScreenGranted === false && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-4">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl mt-0.5">🔔</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-amber-900">Full-screen alarm permission required</p>
+                <p className="text-xs text-amber-700 mt-1">
+                  Android 14 requires the <strong>Allow full-screen notifications</strong> permission
+                  so alarms can wake the screen and appear over the lock screen. Without it you will
+                  see only a banner when the phone is unlocked, and nothing when it is locked.
+                </p>
+                <Button
+                  size="sm"
+                  className="mt-3 bg-amber-500 hover:bg-amber-600 text-white border-0"
+                  onClick={() => void openFullScreenIntentSettings()}
+                >
+                  Grant permission →
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Battery optimisation exemption ── */}
+        {isNativePlatform() && batteryOptExempt === false && (
+          <div className="bg-orange-50 border border-orange-200 rounded-2xl p-5 mb-4">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl mt-0.5">🔋</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-orange-900">Battery optimisation is on</p>
+                <p className="text-xs text-orange-700 mt-1">
+                  Samsung's Adaptive Battery may delay or skip alarms when the app is backgrounded.
+                  Tap below to exempt the app so alarms fire on time even with the screen off.
+                </p>
+                <Button
+                  size="sm"
+                  className="mt-3 bg-orange-500 hover:bg-orange-600 text-white border-0"
+                  onClick={() => void requestIgnoreBatteryOptimizations()}
+                >
+                  Disable battery optimisation →
                 </Button>
               </div>
             </div>

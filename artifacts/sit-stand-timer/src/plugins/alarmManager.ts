@@ -68,6 +68,14 @@ export interface AlarmManagerPlugin {
   canScheduleExactAlarms(): Promise<{ value: boolean }>;
   /** Open the system Settings page where the user grants Alarms & Reminders permission. No-op below Android 12. */
   openExactAlarmSettings(): Promise<void>;
+  /** Android 14+: whether the app may use full-screen intents (needed for lock-screen alarm UI). Always true below API 34. */
+  canUseFullScreenIntent(): Promise<{ value: boolean }>;
+  /** Android 14+: opens the Settings page to grant full-screen intent permission. No-op below API 34. */
+  openFullScreenIntentSettings(): Promise<void>;
+  /** Whether the app is exempt from battery optimisation (Doze). Non-exempt apps have alarm delivery throttled on Samsung. */
+  isIgnoringBatteryOptimizations(): Promise<{ value: boolean }>;
+  /** Opens the system dialog to request battery-optimisation exemption. */
+  requestIgnoreBatteryOptimizations(): Promise<void>;
   /** TEMP DIAG — snapshot of native scheduling/firing state for in-app debug panel. */
   getDiagnostics(): Promise<AlarmDiagnostics>;
 }
@@ -98,12 +106,16 @@ const emptyDiag: AlarmDiagnostics = {
 // Web stub — all methods silently succeed so the calling code never needs
 // to check the platform before calling.
 const webStub: AlarmManagerPlugin = {
-  scheduleAlarm:          async () => {},
-  cancelAlarm:            async () => {},
-  cancelAlarms:           async () => {},
-  canScheduleExactAlarms: async () => ({ value: false }),
-  openExactAlarmSettings: async () => {},
-  getDiagnostics:         async () => ({ ...emptyDiag, now: Date.now() }),
+  scheduleAlarm:                    async () => {},
+  cancelAlarm:                      async () => {},
+  cancelAlarms:                     async () => {},
+  canScheduleExactAlarms:           async () => ({ value: false }),
+  openExactAlarmSettings:           async () => {},
+  canUseFullScreenIntent:           async () => ({ value: true }),
+  openFullScreenIntentSettings:     async () => {},
+  isIgnoringBatteryOptimizations:   async () => ({ value: true }),
+  requestIgnoreBatteryOptimizations: async () => {},
+  getDiagnostics:                   async () => ({ ...emptyDiag, now: Date.now() }),
 };
 
 export const AlarmManager = registerPlugin<AlarmManagerPlugin>(

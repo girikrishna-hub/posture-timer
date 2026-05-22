@@ -1,10 +1,14 @@
 package com.sitstand.timer
 
 import android.app.AlarmManager
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import android.util.Log
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -186,6 +190,72 @@ class AlarmManagerPlugin : Plugin() {
             } catch (e: Exception) {
                 Log.w(TAG, "openExactAlarmSettings failed: ${e.message}")
             }
+        }
+        call.resolve()
+    }
+
+    // ── Full-screen intent permission (Android 14+) ─────────────────────────
+
+    /**
+     * Returns whether this app is allowed to use full-screen intents.
+     * On Android 14+ this requires explicit user grant via Settings.
+     * Always returns true on older versions.
+     */
+    @PluginMethod
+    fun canUseFullScreenIntent(call: PluginCall) {
+        val can = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+                .canUseFullScreenIntent()
+        } else true
+        call.resolve(JSObject().put("value", can))
+    }
+
+    /**
+     * Opens the Android 14+ Settings page where the user can grant
+     * "Allow full-screen notifications". No-op on older Android.
+     */
+    @PluginMethod
+    fun openFullScreenIntentSettings(call: PluginCall) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENTS).apply {
+                data = Uri.parse("package:${context.packageName}")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            try { context.startActivity(intent) }
+            catch (e: Exception) { Log.w(TAG, "openFullScreenIntentSettings failed: ${e.message}") }
+        }
+        call.resolve()
+    }
+
+    // ── Battery optimisation ────────────────────────────────────────────────
+
+    /**
+     * Returns whether the app is exempt from battery optimisation.
+     * On Samsung / Doze, non-exempt apps have alarm delivery throttled.
+     */
+    @PluginMethod
+    fun isIgnoringBatteryOptimizations(call: PluginCall) {
+        val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+        val ignoring = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            pm.isIgnoringBatteryOptimizations(context.packageName)
+        } else true
+        call.resolve(JSObject().put("value", ignoring))
+    }
+
+    /**
+     * Opens the system dialog to request battery-optimisation exemption.
+     * Requires REQUEST_IGNORE_BATTERY_OPTIMIZATIONS permission in the manifest.
+     * No-op below Android 6.
+     */
+    @PluginMethod
+    fun requestIgnoreBatteryOptimizations(call: PluginCall) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = Uri.parse("package:${context.packageName}")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            try { context.startActivity(intent) }
+            catch (e: Exception) { Log.w(TAG, "requestIgnoreBatteryOptimizations failed: ${e.message}") }
         }
         call.resolve()
     }
