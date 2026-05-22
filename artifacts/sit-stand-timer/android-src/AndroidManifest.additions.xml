@@ -14,16 +14,13 @@
 <uses-permission android:name="android.permission.WAKE_LOCK" />
 
 <!-- Exact alarms.
-     SCHEDULE_EXACT_ALARM (no maxSdkVersion): declared on ALL API levels so
-       the app always appears in Settings → Apps → Special access →
-       Alarms & reminders — including on Android 13+ Samsung devices.
-       Without maxSdkVersion="32", API 33+ devices no longer ignore this
-       permission and the app is listed in Alarms & reminders normally.
-     USE_EXACT_ALARM (API 33+): auto-granted at install, ensures
-       canScheduleExactAlarms() returns true even if user revokes the above.
-       Both together: scheduling always works AND the UI entry is visible. -->
+     SCHEDULE_EXACT_ALARM (no maxSdkVersion): the only exact-alarm permission
+     declared. Appears in Settings → Apps → Special access → Alarms & reminders
+     on ALL API levels so the user can grant/revoke it. Matches the behaviour
+     of reference apps (e.g. voice reminder) that work correctly on Samsung.
+     DO NOT add USE_EXACT_ALARM — Samsung treats it as an auto-granted alternate
+     path and removes the app from the Alarms & reminders UI entirely. -->
 <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-<uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
 <!-- Show notification over lock screen -->
 <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />

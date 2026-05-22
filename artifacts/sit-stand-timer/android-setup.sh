@@ -124,17 +124,14 @@ else
 fi
 echo "  ✓ Permissions added"
 
-# Cleanup: REMOVE any tools:node="remove" override for USE_EXACT_ALARM that
-# a previous (now-obsolete) version of this script injected.
-# USE_EXACT_ALARM is required on Android 13+ so AlarmManager.canScheduleExactAlarms()
-# returns true and reminders fire on time instead of being batched by Doze.
-# The permission is system-granted at install for sideloaded APKs; on Samsung
-# the Alarms & reminders toggle correctly shows GREYED-and-on. The earlier
-# guidance to strip it was based on outdated Play-Store advice.
-if grep -q 'USE_EXACT_ALARM.*tools:node="remove"\|tools:node="remove".*USE_EXACT_ALARM' "$MANIFEST"; then
-  awk '!/USE_EXACT_ALARM.*tools:node="remove"|tools:node="remove".*USE_EXACT_ALARM/' "$MANIFEST" \
-    > "$MANIFEST.tmp" && mv "$MANIFEST.tmp" "$MANIFEST"
-  echo "  ✓ Removed obsolete USE_EXACT_ALARM tools:node=\"remove\" override"
+# Cleanup: REMOVE USE_EXACT_ALARM entirely from the manifest.
+# Samsung treats USE_EXACT_ALARM as an auto-granted alternate path and removes
+# the app from Settings → Alarms & reminders UI.  Only SCHEDULE_EXACT_ALARM
+# (no maxSdkVersion) should be declared — this matches the voice reminder
+# reference app that correctly appears in that UI on Samsung devices.
+if grep -q 'USE_EXACT_ALARM' "$MANIFEST"; then
+  awk '!/USE_EXACT_ALARM/' "$MANIFEST" > "$MANIFEST.tmp" && mv "$MANIFEST.tmp" "$MANIFEST"
+  echo "  ✓ Removed USE_EXACT_ALARM (Samsung: only SCHEDULE_EXACT_ALARM needed)"
 fi
 
 # Cleanup: REMOVE android:maxSdkVersion="32" from SCHEDULE_EXACT_ALARM.
