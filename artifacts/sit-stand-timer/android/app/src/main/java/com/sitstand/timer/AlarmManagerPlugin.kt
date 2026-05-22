@@ -203,9 +203,14 @@ class AlarmManagerPlugin : Plugin() {
      */
     @PluginMethod
     fun canUseFullScreenIntent(call: PluginCall) {
-        val can = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-                .canUseFullScreenIntent()
+        // Build.VERSION_CODES.UPSIDE_DOWN_CAKE (34) and
+        // NotificationManager.canUseFullScreenIntent() both require compileSdk 34.
+        // Use a raw SDK integer + reflection so this compiles on any compileSdk level.
+        val can = if (Build.VERSION.SDK_INT >= 34) {
+            try {
+                val nm = context.getSystemService(Context.NOTIFICATION_SERVICE)
+                nm?.javaClass?.getMethod("canUseFullScreenIntent")?.invoke(nm) as? Boolean ?: true
+            } catch (_: Exception) { true }
         } else true
         call.resolve(JSObject().put("value", can))
     }
@@ -213,11 +218,14 @@ class AlarmManagerPlugin : Plugin() {
     /**
      * Opens the Android 14+ Settings page where the user can grant
      * "Allow full-screen notifications". No-op on older Android.
+     * Uses a string literal for the action so it compiles on compileSdk < 34.
      */
     @PluginMethod
     fun openFullScreenIntentSettings(call: PluginCall) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENTS).apply {
+        if (Build.VERSION.SDK_INT >= 34) {
+            // Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENTS added in API 34.
+            // String literal avoids unresolved reference on lower compileSdk targets.
+            val intent = Intent("android.settings.MANAGE_APP_USE_FULL_SCREEN_INTENTS").apply {
                 data = Uri.parse("package:${context.packageName}")
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
