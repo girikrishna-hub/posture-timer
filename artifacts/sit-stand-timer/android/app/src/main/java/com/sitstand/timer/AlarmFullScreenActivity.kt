@@ -45,8 +45,9 @@ class AlarmFullScreenActivity : AppCompatActivity() {
 
         setContentView(buildLayout(title, body))
 
-        startAlarmSound()
-        startVibration()
+        val silent = intent.getBooleanExtra("silent", false)
+        if (!silent) startAlarmSound()
+        startVibration()   // vibration fires even in silent mode (matches channel behaviour)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -160,10 +161,13 @@ class AlarmFullScreenActivity : AppCompatActivity() {
         stopAlarm()
         cancelNotification()
 
-        // Reschedule the same alarm 5 minutes from now via AlarmManager
+        // Reschedule the same alarm 5 minutes from now via AlarmManager.
+        // Use alarm_id (original scheduling id) + 500 as the snooze alarm id
+        // so it doesn't collide with any currently-scheduled alarm.
         val snoozedTitle = intent.getStringExtra("title") ?: "Posture Reminder"
         val snoozedBody  = intent.getStringExtra("body")  ?: ""
-        val snoozeId     = notificationId + 500   // different ID so it doesn't clash
+        val originalId   = intent.getIntExtra("alarm_id", notificationId)
+        val snoozeId     = originalId + 500
 
         val alarmIntent = Intent(this, AlarmReceiver::class.java).apply {
             putExtra("id",    snoozeId)

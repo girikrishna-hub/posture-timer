@@ -658,16 +658,19 @@ export function BladderProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Sleep-mode integration ─────────────────────────────────────────────────
+  // ── Rest/sleep-mode integration ────────────────────────────────────────────
   //
-  // When the user enters sleep mode (resting + restType === "sleep") the bladder
-  // schedule is PAUSED — the JS timer and SW notification are cancelled but the
-  // stored deadline in localStorage is preserved.  When sleep ends the schedule
-  // resumes from that exact deadline (or starts fresh if none exists).
+  // When the user enters ANY resting mode (nap or sleep) the bladder schedule
+  // is PAUSED — the JS timer and SW notification are cancelled but the stored
+  // deadline in localStorage is preserved.  When rest ends the schedule resumes
+  // from that exact deadline (or starts fresh if none exists).
   //
-  // Rest / nap mode leaves the schedule running unchanged.
+  // Note: restType is auto-classified at session END, so during a rest session
+  // it is often null.  Checking only for "sleep" would mean the pause never
+  // triggers.  Pausing for all resting modes is the correct behaviour because
+  // bladder reminders are never appropriate while the user is asleep or resting.
   useEffect(() => {
-    const isSleeping = timerMode === "resting" && timerRestType === "sleep";
+    const isSleeping = timerMode === "resting";
 
     if (isSleeping) {
       if (!wasSleepingRef.current && enabledRef.current) {

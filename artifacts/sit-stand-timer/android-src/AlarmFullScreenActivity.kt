@@ -45,8 +45,9 @@ class AlarmFullScreenActivity : AppCompatActivity() {
 
         setContentView(buildLayout(title, body))
 
-        startAlarmSound()
-        startVibration()
+        val silent = intent.getBooleanExtra("silent", false)
+        if (!silent) startAlarmSound()
+        startVibration()   // vibration fires even in silent mode (matches channel behaviour)
     }
 
     override fun onNewIntent(intent: Intent) {

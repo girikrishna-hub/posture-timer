@@ -441,25 +441,39 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     const startedAt = sessionStartedAtRef.current;
     const elapsedMs = startedAt !== null ? Math.max(0, Date.now() - startedAt) : 0;
 
-    if (mode === "sitting") {
-      void scheduleNativeSittingReminders({
-        sittingAlertMinutes: s.sittingAlertMinutes,
-        reminderIntervalMinutes: s.reminderIntervalMinutes,
-        remindersCount: s.remindersCount,
-        silent,
-        elapsedMs,
-      });
-    } else if (mode === "standing") {
-      void scheduleNativeStandingReminders({
-        standingMinMinutes: s.standingMinMinutes,
-        standingMaxMinutes: s.standingMaxMinutes,
-        reminderIntervalMinutes: s.reminderIntervalMinutes,
-        remindersCount: s.remindersCount,
-        silent,
-        elapsedMs,
-      });
+    // IMPORTANT: cancel and schedule must run sequentially, not concurrently.
+    // If both are fired with `void` at the same time, the JS-to-native bridge
+    // delivers messages in this order:
+    //   ① cancelAlarms([sitting IDs])
+    //   ② scheduleAlarm(standing id=3000)   ← scheduled ✓
+    //   ③ cancelAlarms([standing IDs])       ← cancels #2 immediately after!
+    // The result: alarm 3000 (first standing alert) is silently wiped, and the
+    // first follow-up (id 3001, 1 min later) fires instead — exactly the
+    // "always 1 minute late" symptom.  Awaiting cancel before scheduling
+    // ensures the full cancel sweep completes before any new alarm is queued.
+    async function cancelThenSchedule() {
+      await cancelAllNativePostureNotifications();
+      if (mode === "sitting") {
+        await scheduleNativeSittingReminders({
+          sittingAlertMinutes: s.sittingAlertMinutes,
+          reminderIntervalMinutes: s.reminderIntervalMinutes,
+          remindersCount: s.remindersCount,
+          silent,
+          elapsedMs,
+        });
+      } else if (mode === "standing") {
+        await scheduleNativeStandingReminders({
+          standingMinMinutes: s.standingMinMinutes,
+          standingMaxMinutes: s.standingMaxMinutes,
+          reminderIntervalMinutes: s.reminderIntervalMinutes,
+          remindersCount: s.remindersCount,
+          silent,
+          elapsedMs,
+        });
+      }
+      // idle / resting / walking / workout: no posture reminders needed
     }
-    // idle / resting / walking / workout: no posture reminders needed
+    void cancelThenSchedule();
   }, [mode, initialized]);
 
   // Drain offline queue on reconnect

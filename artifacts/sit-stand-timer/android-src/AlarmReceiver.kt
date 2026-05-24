@@ -96,9 +96,10 @@ class AlarmReceiver : BroadcastReceiver() {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_NO_USER_ACTION or
                     Intent.FLAG_ACTIVITY_SINGLE_TOP
-            putExtra("id",    id)
-            putExtra("title", title)
-            putExtra("body",  body)
+            putExtra("id",     id)
+            putExtra("title",  title)
+            putExtra("body",   body)
+            putExtra("silent", silent)   // forwarded so the activity skips alarm audio
         }
         val fsPi = PendingIntent.getActivity(
             context, id, fsIntent,
