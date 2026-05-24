@@ -54,9 +54,6 @@ export class GoogleAuthAdapter {
 
   /** Must be called during runtime boot before any sign-in attempt. */
   async initialize(): Promise<void> {
-    console.log(
-      `[NativeAuth] GoogleAuthAdapter.initialize() — isNative=${this._isNative}`,
-    );
     if (!this._isNative) return;
     try {
       const mod = await import("@capacitor-firebase/authentication");
@@ -66,9 +63,6 @@ export class GoogleAuthAdapter {
       // A null user response is fine; we just need the bridge to respond.
       await candidate.getCurrentUser();
       this._plugin = candidate;
-      console.log(
-        "[NativeAuth] GoogleAuthAdapter.initialize() SUCCESS — native bridge confirmed",
-      );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.warn(
@@ -89,10 +83,6 @@ export class GoogleAuthAdapter {
    * Throws a GoogleAuthError on any failure.
    */
   async signIn(): Promise<GoogleIdentity> {
-    console.log(
-      `[NativeAuth] GoogleAuthAdapter.signIn() START — isNative=${this._isNative} pluginLoaded=${!!this._plugin}`,
-    );
-
     if (!this._isNative || !this._plugin) {
       console.error(
         "[NativeAuth] GoogleAuthAdapter.signIn() ABORT — not native or plugin null",
@@ -104,15 +94,10 @@ export class GoogleAuthAdapter {
     }
 
     try {
-      console.log("[NativeAuth] GoogleAuthAdapter — launching account picker");
       const result = await this._plugin.signInWithGoogle();
 
       const idToken = result.credential?.idToken ?? null;
       const email = result.user?.email ?? "";
-
-      console.log(
-        `[NativeAuth] GoogleAuthAdapter — picker returned hasIdToken=${!!idToken} hasEmail=${!!email}`,
-      );
 
       if (!idToken) {
         console.error(
@@ -124,7 +109,6 @@ export class GoogleAuthAdapter {
         );
       }
 
-      console.log("[NativeAuth] GoogleAuthAdapter.signIn() SUCCESS");
       return {
         idToken,
         email,

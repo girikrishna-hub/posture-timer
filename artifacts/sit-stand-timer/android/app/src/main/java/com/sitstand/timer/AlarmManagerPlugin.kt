@@ -98,9 +98,6 @@ class AlarmManagerPlugin : Plugin() {
             schedError = "${e.javaClass.simpleName}: ${e.message}"
         }
 
-        Log.i(TAG, "scheduleAlarm id=$id title='$title' delayMs=$delayMs " +
-                "triggerAt=$triggerAt usedExact=$usedExact canExact=$canExact " +
-                "error=${schedError ?: "none"}")
 
         prefs().edit()
             .putInt(K_LAST_SCHED_ID, id)
@@ -131,7 +128,6 @@ class AlarmManagerPlugin : Plugin() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         (ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager).cancel(pi)
-        Log.i(TAG, "cancelAlarm id=$id")
         prefs().edit()
             .putInt(K_LAST_CANCEL_ID, id)
             .putLong(K_LAST_CANCEL_AT, System.currentTimeMillis())
@@ -156,7 +152,6 @@ class AlarmManagerPlugin : Plugin() {
             if (buf.isNotEmpty()) buf.append(",")
             buf.append(id)
         }
-        Log.i(TAG, "cancelAlarms ids=[$buf]")
         prefs().edit()
             .putLong(K_LAST_CANCEL_AT, System.currentTimeMillis())
             .putInt(K_CANCEL_COUNT, prefs().getInt(K_CANCEL_COUNT, 0) + ids.length())

@@ -81,7 +81,6 @@ interface BeaconPayload {
 }
 
 function sendDebugBeacon(endpoint: string, payload: BeaconPayload): Promise<void> {
-  console.log(`[SW] ${endpoint}`, payload);
   return fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

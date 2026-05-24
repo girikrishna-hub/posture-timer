@@ -23,9 +23,6 @@ export function NativeGoogleSignInButton({ onWebFallback, className }: Props) {
   const isSigningIn = fsmState === "SIGNING_IN" || loading;
 
   const handlePress = async () => {
-    console.log(
-      `[NativeAuth] Button.tap — nativeGoogleAvailable=${nativeGoogleAvailable} fsmState=${fsmState}`,
-    );
     setError(null);
 
     if (!nativeGoogleAvailable) {

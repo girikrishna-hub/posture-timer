@@ -47,7 +47,6 @@ class AlarmReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        Log.i(TAG, "AlarmReceiver.onReceive action=${intent.action} extras=${intent.extras?.keySet()}")
         when (intent.action) {
             ACTION_BOOT, ACTION_LBOOT -> rescheduleOnBoot(context)
             ACTION_DISMISS            -> dismissAlarm(context, intent)
@@ -67,7 +66,6 @@ class AlarmReceiver : BroadcastReceiver() {
         val body   = intent.getStringExtra("body")  ?: ""
         val silent = intent.getBooleanExtra("silent", false)
 
-        Log.i(TAG, "fireAlarm id=$id title='$title' silent=$silent")
 
         val dp = diagPrefs(context)
         dp.edit()
@@ -155,7 +153,6 @@ class AlarmReceiver : BroadcastReceiver() {
         try {
             (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
                 .notify(id, notification)
-            Log.i(TAG, "notify OK id=$id channelId=$channelId")
             dp.edit()
                 .putInt(K_NOTIFY_COUNT, dp.getInt(K_NOTIFY_COUNT, 0) + 1)
                 .putString(K_LAST_NOTIFY_ERROR, "")
@@ -174,7 +171,6 @@ class AlarmReceiver : BroadcastReceiver() {
 
     private fun dismissAlarm(context: Context, intent: Intent) {
         val id = intent.getIntExtra("id", 0)
-        Log.i(TAG, "dismissAlarm id=$id")
         (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
             .cancel(id)
     }
@@ -185,7 +181,6 @@ class AlarmReceiver : BroadcastReceiver() {
         val body   = intent.getStringExtra("body")  ?: ""
         val silent = intent.getBooleanExtra("silent", false)
 
-        Log.i(TAG, "snoozeAlarm id=$id — rescheduling in 5 min")
 
         // Cancel the current notification
         (context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
@@ -211,7 +206,6 @@ class AlarmReceiver : BroadcastReceiver() {
             } else {
                 am.setExact(AlarmManager.RTC_WAKEUP, triggerAt, pi)
             }
-            Log.i(TAG, "snooze alarm scheduled id=$snoozeId triggerAt=$triggerAt")
         } catch (e: Exception) {
             Log.w(TAG, "snooze schedule failed: ${e.message}")
         }
@@ -224,7 +218,6 @@ class AlarmReceiver : BroadcastReceiver() {
         val am    = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val now   = System.currentTimeMillis()
 
-        Log.i(TAG, "rescheduleOnBoot starting; ${prefs.all.size} pref entries")
         prefs.all.forEach { (key, value) ->
             if (!key.startsWith("alarm_")) return@forEach
             val parts = (value as? String)?.split("|") ?: return@forEach
@@ -262,7 +255,6 @@ class AlarmReceiver : BroadcastReceiver() {
             } else {
                 am.setExact(AlarmManager.RTC_WAKEUP, triggerAt, pi)
             }
-            Log.i(TAG, "reschedule id=$id triggerAt=$triggerAt OK")
         } catch (e: Exception) {
             Log.w(TAG, "reschedule id=$id triggerAt=$triggerAt FAILED: ${e.message}")
         }
@@ -299,7 +291,6 @@ class AlarmReceiver : BroadcastReceiver() {
             setBypassDnd(true)
         }
         nm.createNotificationChannel(ch)
-        Log.i(TAG, "Created notification channel $CHANNEL_ID (alarm-stream sound)")
     }
 
     private fun ensureChannelSilent(context: Context) {
@@ -320,6 +311,5 @@ class AlarmReceiver : BroadcastReceiver() {
             setBypassDnd(true)
         }
         nm.createNotificationChannel(ch)
-        Log.i(TAG, "Created notification channel $CHANNEL_ID_SILENT (silent)")
     }
 }

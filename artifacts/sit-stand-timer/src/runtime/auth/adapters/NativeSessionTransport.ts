@@ -53,7 +53,6 @@ export class NativeSessionTransport {
   async exchangeGoogleIdToken(idToken: string): Promise<NativeTransportResult> {
     const deviceId = await this._getOrCreateDeviceId();
     const url = `${this._apiRoot}/auth/native/google`;
-    console.log(`[NativeAuth] NativeTransport.exchange() START — url=${url} hasIdToken=${!!idToken}`);
 
     let result: Awaited<ReturnType<typeof fetchWithDiag>>;
     try {
@@ -73,7 +72,6 @@ export class NativeSessionTransport {
     }
 
     const { response: resp, text, diagEntry } = result;
-    console.log(`[NativeAuth] NativeTransport.exchange() response — status=${resp.status} ok=${resp.ok} ct=${diagEntry.contentType ?? "?"} class=${diagEntry.classification}`);
 
     if (!resp.ok) {
       const errFromBody = (() => {
@@ -95,10 +93,6 @@ export class NativeSessionTransport {
       userId:       string;
       expiresAt:    number;
     }>(text, diagEntry);
-
-    console.log(
-      `[NativeAuth] NativeTransport.exchange() SUCCESS — userId=${data.userId} hasAccessToken=${!!data.accessToken} hasRefreshToken=${!!data.refreshToken}`,
-    );
 
     // Persist refresh credentials immediately after successful exchange
     await Promise.all([
@@ -136,8 +130,6 @@ export class NativeSessionTransport {
 
     if (!refreshToken || !sessionId) return null;
 
-    console.log(`[NativeAuth] NativeTransport.refresh() START — hasToken=${!!refreshToken} hasSid=${!!sessionId}`);
-
     let result: Awaited<ReturnType<typeof fetchWithDiag>>;
     try {
       result = await fetchWithDiag(`${this._apiRoot}/auth/native/refresh`, {
@@ -151,7 +143,6 @@ export class NativeSessionTransport {
     }
 
     const { response: resp, text, diagEntry } = result;
-    console.log(`[NativeAuth] NativeTransport.refresh() response — status=${resp.status} class=${diagEntry.classification}`);
 
     if (resp.status === 401) {
       const errFromBody = (() => {
