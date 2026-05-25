@@ -527,7 +527,7 @@ export default function SettingsPage() {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-foreground">Sound effects</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Play tones when switching positions, and the celebration fanfare when you hit your daily goal
+                Play tones when switching positions and for reminders. Turn off for silent mode — vibration only.
               </p>
             </div>
             <button

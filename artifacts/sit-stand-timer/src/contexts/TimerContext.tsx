@@ -428,7 +428,14 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     void cancelAllNativePostureNotifications();
     const s = settingsRef.current;
     const silent = (() => {
-      try { return localStorage.getItem("silentReminders") === "true"; } catch { return false; }
+      try {
+        // Native alarms are silent when either:
+        //   • "Sound effects" is switched off (sit-stand-sound-enabled = false), OR
+        //   • "Silent reminders" is switched on
+        const soundOff    = localStorage.getItem("sit-stand-sound-enabled") === "false";
+        const silentPref  = localStorage.getItem("silentReminders") === "true";
+        return soundOff || silentPref;
+      } catch { return false; }
     })();
 
     // Compute how far we are into the current session so we schedule for the
