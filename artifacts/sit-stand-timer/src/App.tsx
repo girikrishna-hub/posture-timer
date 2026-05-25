@@ -10,7 +10,7 @@ import { BladderProvider } from "@/contexts/BladderContext";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
 
 // RuntimeCore — native-first auth subsystem
-import { AuthRuntime, ClerkRuntimeBridge, AuthRuntimeOverlay } from "@/runtime/auth";
+import { AuthRuntime, ClerkRuntimeBridge } from "@/runtime/auth";
 import { useAuthRuntime, useBootBarrier } from "@/runtime/auth";
 import { NativeAuthScreen } from "@/runtime/auth/NativeAuthScreen";
 
@@ -194,7 +194,6 @@ function AppRoutes() {
  *  3. AuthRuntime.store drives the gate: not-restored → loading,
  *     not-authenticated → NativeAuthScreen, authenticated → AppRoutes
  *
- * AuthRuntimeOverlay is always visible for diagnostics during development.
  */
 function NativeAppShell() {
   const { isCleared } = useBootBarrier();
@@ -209,7 +208,6 @@ function NativeAppShell() {
       <>
         <ClerkRuntimeBridge />
         <div className="min-h-screen bg-background" aria-hidden />
-        <AuthRuntimeOverlay />
       </>
     );
   }
@@ -219,7 +217,6 @@ function NativeAppShell() {
       <>
         <ClerkRuntimeBridge />
         <NativeAuthScreen />
-        <AuthRuntimeOverlay />
       </>
     );
   }
@@ -228,7 +225,6 @@ function NativeAppShell() {
     <>
       <ClerkRuntimeBridge />
       <AppRoutes />
-      <AuthRuntimeOverlay />
     </>
   );
 }
