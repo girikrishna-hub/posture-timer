@@ -111,6 +111,66 @@ function saveNextVoidAt(epochMs: number | null) {
   } catch { /* ignore */ }
 }
 
+// ─── Sleep-window helpers ────────────────────────────────────────────────────
+
+const KEY_SLEEP_ENABLED = "bladder_sleep_enabled";
+const KEY_SLEEP_START   = "bladder_sleep_start";   // "HH:MM"
+const KEY_SLEEP_END     = "bladder_sleep_end";     // "HH:MM"
+const DEFAULT_SLEEP_START = "22:00";
+const DEFAULT_SLEEP_END   = "07:00";
+
+function loadSleepEnabled(): boolean {
+  try { return localStorage.getItem(KEY_SLEEP_ENABLED) === "true"; } catch { return false; }
+}
+function saveSleepEnabled(v: boolean) {
+  try { localStorage.setItem(KEY_SLEEP_ENABLED, v ? "true" : "false"); } catch { /* ignore */ }
+}
+function loadSleepStart(): string {
+  try { return localStorage.getItem(KEY_SLEEP_START) ?? DEFAULT_SLEEP_START; } catch { return DEFAULT_SLEEP_START; }
+}
+function saveSleepStart(v: string) {
+  try { localStorage.setItem(KEY_SLEEP_START, v); } catch { /* ignore */ }
+}
+function loadSleepEnd(): string {
+  try { return localStorage.getItem(KEY_SLEEP_END) ?? DEFAULT_SLEEP_END; } catch { return DEFAULT_SLEEP_END; }
+}
+function saveSleepEnd(v: string) {
+  try { localStorage.setItem(KEY_SLEEP_END, v); } catch { /* ignore */ }
+}
+
+/** Parse "HH:MM" into minutes-since-midnight. */
+function parseToMin(s: string): number {
+  const [hStr = "0", mStr = "0"] = s.split(":");
+  return parseInt(hStr, 10) * 60 + parseInt(mStr, 10);
+}
+
+/**
+ * Returns true when the given epoch-ms timestamp falls inside the [start, end)
+ * sleep window. The window may span midnight (e.g. 22:00 → 07:00).
+ */
+function isInSleepWindow(ms: number, start: string, end: string): boolean {
+  const minOfDay = new Date(ms).getHours() * 60 + new Date(ms).getMinutes();
+  const startMin = parseToMin(start);
+  const endMin   = parseToMin(end);
+  if (startMin >= endMin) {
+    // Spans midnight: asleep when >= start OR < end
+    return minOfDay >= startMin || minOfDay < endMin;
+  }
+  return minOfDay >= startMin && minOfDay < endMin;
+}
+
+/**
+ * Returns the epoch-ms of the next occurrence of the sleep-end (wake) time
+ * at or after `afterMs`.
+ */
+function wakeTimeMs(afterMs: number, end: string): number {
+  const { 0: hStr = "0", 1: mStr = "0" } = end.split(":");
+  const d = new Date(afterMs);
+  d.setHours(parseInt(hStr, 10), parseInt(mStr, 10), 0, 0);
+  if (d.getTime() <= afterMs) d.setDate(d.getDate() + 1);
+  return d.getTime();
+}
+
 // ─── SW helpers ─────────────────────────────────────────────────────────────
 
 function scheduleSWBladder(delayMs: number, logId: string) {
@@ -364,6 +424,13 @@ interface BladderContextValue {
   /** Record a void that happened ahead of schedule and restart the cycle from now. */
   recordUnscheduledVoid: () => void;
   applyIntervalSuggestion: () => void;
+  // Sleep / quiet-hours window
+  sleepEnabled: boolean;
+  sleepStart: string;   // "HH:MM"
+  sleepEnd: string;     // "HH:MM"
+  setSleepEnabled: (v: boolean) => void;
+  setSleepStart: (v: string) => void;
+  setSleepEnd: (v: string) => void;
 }
 
 const BladderContext = createContext<BladderContextValue | null>(null);
@@ -383,6 +450,18 @@ export function BladderProvider({ children }: { children: React.ReactNode }) {
   const timerRef       = useRef<ReturnType<typeof setTimeout> | null>(null);
   const intervalRef    = useRef(intervalMinutes);
   const enabledRef     = useRef(enabled);
+
+  // ── Sleep window state ─────────────────────────────────────────────────────
+  const [sleepEnabled, setSleepEnabledState] = useState(loadSleepEnabled);
+  const [sleepStart,   setSleepStartState]   = useState(loadSleepStart);
+  const [sleepEnd,     setSleepEndState]     = useState(loadSleepEnd);
+  const sleepEnabledRef = useRef(sleepEnabled);
+  const sleepStartRef   = useRef(sleepStart);
+  const sleepEndRef     = useRef(sleepEnd);
+  useEffect(() => { sleepEnabledRef.current = sleepEnabled; }, [sleepEnabled]);
+  useEffect(() => { sleepStartRef.current   = sleepStart;   }, [sleepStart]);
+  useEffect(() => { sleepEndRef.current     = sleepEnd;     }, [sleepEnd]);
+
   const wasSleepingRef = useRef(false);
 
   useEffect(() => { intervalRef.current = intervalMinutes; }, [intervalMinutes]);
@@ -424,12 +503,42 @@ export function BladderProvider({ children }: { children: React.ReactNode }) {
       timerRef.current = null;
     }
 
-    const remaining = nextVoidAtMs - Date.now();
+    // ── Sleep-window adjustment ────────────────────────────────────────────
+    // If the target time falls inside the sleep window, push it to the wake
+    // time so the alarm never fires during the night.
+    let targetMs = nextVoidAtMs;
+    if (sleepEnabledRef.current) {
+      if (isInSleepWindow(targetMs, sleepStartRef.current, sleepEndRef.current)) {
+        targetMs = wakeTimeMs(targetMs, sleepEndRef.current);
+        saveNextVoidAt(targetMs); // persist adjusted deadline
+      }
+    }
+
+    const remaining = targetMs - Date.now();
 
     if (remaining <= 0) {
-      // Past due — fire now, but only if there is no unanswered pending log
-      // (a pending log means fireCycle already ran; we just need to wait for
-      // the user to respond and then the next scheduled timer will be active).
+      // Past due — but also check if we are currently inside the sleep window.
+      if (sleepEnabledRef.current &&
+          isInSleepWindow(Date.now(), sleepStartRef.current, sleepEndRef.current)) {
+        // Currently sleeping — delay silently until wake time.
+        const wake    = wakeTimeMs(Date.now(), sleepEndRef.current);
+        const wakeRem = wake - Date.now();
+        saveNextVoidAt(wake);
+        setNextVoidAt(new Date(wake));
+        timerRef.current = setTimeout(() => {
+          timerRef.current = null;
+          fireCycleRef.current?.();
+        }, wakeRem);
+        if (isNativePlatform()) {
+          void scheduleNativeBladderAlarm(wakeRem, intervalRef.current);
+        } else {
+          scheduleSWBladder(wakeRem, "");
+          void scheduleBladderPush({ delayMs: wakeRem, logId: crypto.randomUUID() }).catch(() => {});
+        }
+        return;
+      }
+
+      // Not sleeping — fire now if no pending response is awaiting.
       const currentPending = loadPending();
       if (!currentPending) {
         fireCycleRef.current?.();
@@ -437,7 +546,7 @@ export function BladderProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    setNextVoidAt(new Date(nextVoidAtMs));
+    setNextVoidAt(new Date(targetMs));
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
       // Auto-resolve any unanswered pending log as "delayed" before firing
@@ -517,19 +626,23 @@ export function BladderProvider({ children }: { children: React.ReactNode }) {
     if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
     cancelSWBladder();
     void cancelBladderPush().catch(() => { /* best-effort */ });
+    // Native: cancel the AlarmManager alarm so it does not fire after toggle-off
+    if (isNativePlatform()) void cancelNativeBladderAlarm().catch(() => { /* best-effort */ });
     saveNextVoidAt(null);
     setNextVoidAt(null);
   }, []);
 
   // ── pauseSchedule — suspend timer without losing the stored deadline ───────
   //
-  // Used when the user enters sleep mode. The next-void deadline is kept in
-  // localStorage so that when sleep ends we can resume from the exact moment
+  // Used when the user enters rest/sleep mode. The next-void deadline is kept in
+  // localStorage so that when rest ends we can resume from the exact moment
   // that was left rather than restarting the full interval.
   const pauseSchedule = useCallback(() => {
     if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
     cancelSWBladder();
     void cancelBladderPush().catch(() => { /* best-effort */ });
+    // Native: cancel the AlarmManager alarm so it does not fire during rest/sleep
+    if (isNativePlatform()) void cancelNativeBladderAlarm().catch(() => { /* best-effort */ });
     setNextVoidAt(null); // clear visual countdown; stored deadline is preserved
   }, []);
 
@@ -591,6 +704,25 @@ export function BladderProvider({ children }: { children: React.ReactNode }) {
     // Reset the cycle clock from right now
     startSchedule();
   }, [commitLogs, startSchedule]);
+
+  // ── sleep window setters ───────────────────────────────────────────────────
+  const setSleepEnabled = useCallback((v: boolean) => {
+    saveSleepEnabled(v);
+    sleepEnabledRef.current = v;
+    setSleepEnabledState(v);
+  }, []);
+
+  const setSleepStart = useCallback((v: string) => {
+    saveSleepStart(v);
+    sleepStartRef.current = v;
+    setSleepStartState(v);
+  }, []);
+
+  const setSleepEnd = useCallback((v: string) => {
+    saveSleepEnd(v);
+    sleepEndRef.current = v;
+    setSleepEndState(v);
+  }, []);
 
   // ── setIntervalMinutes ─────────────────────────────────────────────────────
   const setIntervalMinutes = useCallback(
@@ -726,6 +858,12 @@ export function BladderProvider({ children }: { children: React.ReactNode }) {
         respond,
         recordUnscheduledVoid,
         applyIntervalSuggestion,
+        sleepEnabled,
+        sleepStart,
+        sleepEnd,
+        setSleepEnabled,
+        setSleepStart,
+        setSleepEnd,
       }}
     >
       {children}

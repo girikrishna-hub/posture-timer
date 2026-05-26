@@ -204,6 +204,12 @@ export default function BladderPage() {
     respond,
     recordUnscheduledVoid,
     applyIntervalSuggestion,
+    sleepEnabled,
+    sleepStart,
+    sleepEnd,
+    setSleepEnabled,
+    setSleepStart,
+    setSleepEnd,
   } = useBladder();
 
   const countdown = useCountdown(enabled && !pendingLog ? nextVoidAt : null);
@@ -313,6 +319,67 @@ export default function BladderPage() {
             <span>{MIN_INTERVAL} min</span>
             <span>{MAX_INTERVAL} min</span>
           </div>
+        </div>
+
+        {/* Quiet hours */}
+        <div className="rounded-2xl border border-border bg-card px-4 py-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-foreground">Quiet hours</p>
+              <p className="text-xs text-muted-foreground">Pause reminders while you sleep</p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={sleepEnabled}
+              onClick={() => setSleepEnabled(!sleepEnabled)}
+              className={[
+                "relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent",
+                "transition-colors duration-200 ease-in-out focus-visible:outline-none",
+                "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                sleepEnabled ? "bg-indigo-500" : "bg-muted",
+              ].join(" ")}
+            >
+              <span
+                className={[
+                  "pointer-events-none inline-block h-6 w-6 rounded-full bg-white shadow-md",
+                  "ring-0 transition-transform duration-200 ease-in-out",
+                  sleepEnabled ? "translate-x-5" : "translate-x-0",
+                ].join(" ")}
+              />
+            </button>
+          </div>
+          {sleepEnabled && (
+            <div className="flex items-center gap-3">
+              <div className="flex-1">
+                <p className="text-xs text-muted-foreground mb-1.5">Bedtime</p>
+                <input
+                  type="time"
+                  value={sleepStart}
+                  onChange={(e) => setSleepStart(e.target.value)}
+                  className={[
+                    "w-full rounded-xl border border-border bg-muted/40 px-3 py-2",
+                    "text-sm font-medium text-foreground tabular-nums",
+                    "focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1",
+                  ].join(" ")}
+                />
+              </div>
+              <div className="pt-5 text-muted-foreground text-sm font-medium">→</div>
+              <div className="flex-1">
+                <p className="text-xs text-muted-foreground mb-1.5">Wake time</p>
+                <input
+                  type="time"
+                  value={sleepEnd}
+                  onChange={(e) => setSleepEnd(e.target.value)}
+                  className={[
+                    "w-full rounded-xl border border-border bg-muted/40 px-3 py-2",
+                    "text-sm font-medium text-foreground tabular-nums",
+                    "focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1",
+                  ].join(" ")}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Countdown / pending response */}
