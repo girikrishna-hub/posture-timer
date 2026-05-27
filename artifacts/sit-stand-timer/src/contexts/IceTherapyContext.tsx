@@ -34,6 +34,7 @@ import {
   scheduleSWNotification,
   cancelSWNotification,
 } from "@/lib/protocol/utils";
+import { playStandTone, playSitTone } from "@/utils/audio";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -101,6 +102,13 @@ export interface IceTherapyContextValue {
 // ─── Notification helpers ────────────────────────────────────────────────────
 
 function notifyPhaseStart(nextPhase: "cool" | "rest", durationMin: number): void {
+  // In-app audio tone (respects the global sound-enabled setting)
+  if (nextPhase === "cool") {
+    playStandTone();   // ascending — time to take action, apply the pack
+  } else {
+    playSitTone();     // descending — relax, remove the pack
+  }
+
   const [title, body] = nextPhase === "cool"
     ? ["🧊 Apply ice pack", `Ice On phase — keep the pack on for ${durationMin} minute${durationMin === 1 ? "" : "s"}.`]
     : ["♻️ Remove ice pack", `Rest phase — let your skin warm for ${durationMin} minute${durationMin === 1 ? "" : "s"}.`];
