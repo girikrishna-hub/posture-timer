@@ -198,6 +198,40 @@ export async function scheduleNativeBladderAlarm(
   } catch { /* silent */ }
 }
 
+// ─── Ice Therapy alarm (ID range 5000) ──────────────────────────────────────
+
+const ICE_THERAPY_ALARM_ID = 5000;
+
+export async function cancelNativeIceTherapyAlarm(): Promise<void> {
+  if (!isNativePlatform()) return;
+  try {
+    await AlarmManager.cancelAlarms({ ids: [ICE_THERAPY_ALARM_ID] });
+  } catch { /* silent */ }
+}
+
+/**
+ * Schedule the ice-therapy phase-transition alarm.
+ * `nextPhase` is the phase that will START when the alarm fires.
+ */
+export async function scheduleNativeIceTherapyAlarm(
+  delayMs: number,
+  nextPhase: "cool" | "rest",
+): Promise<void> {
+  if (!isNativePlatform()) return;
+  try {
+    const title = nextPhase === "cool" ? "🧊 Apply ice pack" : "♻️ Remove ice pack";
+    const body  = nextPhase === "cool"
+      ? "Ice On phase — keep the pack on for 20 minutes."
+      : "Rest phase — let your skin warm for 20 minutes.";
+    await AlarmManager.scheduleAlarm({
+      id:      ICE_THERAPY_ALARM_ID,
+      title,
+      body,
+      delayMs,
+    });
+  } catch { /* silent */ }
+}
+
 // ─── Schedule sitting reminders ─────────────────────────────────────────────
 
 interface SittingSettings {

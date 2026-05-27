@@ -1,0 +1,164 @@
+Build and activate the Ice Therapy feature using the protocol extension architecture already created.
+
+CRITICAL CONSTRAINTS
+
+1. Reuse the protocol framework already added
+- Use existing files in src/lib/protocol/
+- Use the existing IceTherapyContext scaffold
+- Follow the protocol extension pattern documented in ADDING_PROTOCOLS.md
+
+2. Do NOT refactor TimerContext
+- No changes to TimerContext
+- No changes to sit-stand behavior
+- No changes to BladderContext behavior
+- No changes to existing reminder logic
+
+3. Keep implementation minimal and production-usable
+This is a real recovery-use feature for immediate use over the next 2–3 days.
+
+OBJECTIVE
+
+Activate a fully working Ice Therapy timer based on the existing protocol extension architecture.
+
+Protocol:
+
+ICE ON → 20 minutes  
+REST → 20 minutes  
+Repeat until stopped
+
+FEATURE REQUIREMENTS
+
+Create a simple Ice Therapy screen.
+
+Display:
+
+- Current phase:
+  - ICE ON
+  - REST
+
+- Countdown timer
+
+- Cycle count
+
+- Next transition time
+
+Controls:
+
+- Start
+- Pause
+- Resume
+- Skip to next phase
+- Stop
+
+No settings screen.
+
+No configurable durations.
+
+No history.
+
+No analytics.
+
+No protocol customization.
+
+Hardcode all durations for now.
+
+IMPLEMENTATION REQUIREMENTS
+
+1. Activate existing IceTherapyContext
+- Wire provider into app
+- Ensure proper mounting/unmounting
+- Ensure state restore works after app restart
+
+2. Add app route/screen
+Create a clean minimal screen consistent with current app UI.
+
+Match existing visual patterns.
+
+No redesign.
+
+3. Background notification support
+
+Notifications must fire for:
+
+ICE ON transition:
+"Apply ice now"
+
+REST transition:
+"Remove ice and rest"
+
+Notifications must work when:
+
+- app is backgrounded
+- screen is locked
+- app is resumed
+
+4. Alarm lifecycle correctness
+
+Ensure alarms are:
+
+- scheduled on start
+- cancelled on pause
+- rescheduled on resume
+- cancelled on stop
+- replaced cleanly on skip
+
+Follow the alarm cancellation lessons documented in ADDING_PROTOCOLS.md.
+
+5. Persistence
+
+Persist:
+
+- current phase
+- transition deadline
+- cycle count
+- paused/running state
+
+Restore accurately after app restart.
+
+If app is reopened after missing transitions:
+reconcile to correct current state.
+
+TESTING CHECKLIST
+
+Explicitly test and report:
+
+1. Start → ICE countdown works
+
+2. Auto transition to REST
+
+3. Notification fires on transition
+
+4. Pause cancels pending alarm
+
+5. Resume restores correct remaining time
+
+6. Skip transitions immediately
+
+7. Stop clears state and alarms
+
+8. App restart restores correctly
+
+9. Background lock-screen transitions still fire
+
+DELIVERABLES
+
+Provide:
+
+A. File-by-file change summary
+
+B. Validation results for all tests
+
+C. Any edge cases found
+
+SUCCESS CRITERIA
+
+I should be able to immediately use this on Android for real RICE therapy:
+
+Start session  
+Lock phone  
+Receive reliable 20-minute alternating alerts  
+Pause/resume as needed  
+Stop cleanly when therapy is complete
+
+Prioritize reliability over feature richness.
+Ship the smallest correct implementation.

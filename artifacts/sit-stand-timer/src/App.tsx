@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { TimerProvider, useTimer, clearPersistedTimerState } from "@/contexts/TimerContext";
 import { BladderProvider } from "@/contexts/BladderContext";
+import { IceTherapyProvider } from "@/contexts/IceTherapyContext";
 import { usePushSubscription } from "@/hooks/usePushSubscription";
 
 // RuntimeCore — native-first auth subsystem
@@ -20,7 +21,8 @@ import TimerPage from "@/pages/TimerPage";
 const SettingsPage     = lazy(() => import("@/pages/SettingsPage"));
 const DashboardPage    = lazy(() => import("@/pages/DashboardPage"));
 const BladderPage      = lazy(() => import("@/pages/BladderPage"));
-const BladderStatsPage = lazy(() => import("@/pages/BladderStatsPage"));
+const BladderStatsPage  = lazy(() => import("@/pages/BladderStatsPage"));
+const IceTherapyPage    = lazy(() => import("@/pages/IceTherapyPage"));
 const SignInPage        = lazy(() => import("@/pages/SignInPage"));
 const SignUpPage        = lazy(() => import("@/pages/SignUpPage"));
 const LandingPage       = lazy(() => import("@/pages/LandingPage"));
@@ -169,17 +171,20 @@ function AppRoutes() {
     <TimerProvider>
       <PushSubscriptionRegistrar />
       <BladderProvider>
-        <Suspense fallback={<PageFallback />}>
-          <Switch>
-            <Route path="/" component={TimerPage} />
-            <Route path="/settings" component={SettingsPage} />
-            <Route path="/dashboard" component={DashboardPage} />
-            <Route path="/bladder/stats" component={BladderStatsPage} />
-            <Route path="/bladder" component={BladderPage} />
-            <Route component={NotFound} />
-          </Switch>
-        </Suspense>
-        <BottomNav />
+        <IceTherapyProvider>
+          <Suspense fallback={<PageFallback />}>
+            <Switch>
+              <Route path="/" component={TimerPage} />
+              <Route path="/settings" component={SettingsPage} />
+              <Route path="/dashboard" component={DashboardPage} />
+              <Route path="/bladder/stats" component={BladderStatsPage} />
+              <Route path="/bladder" component={BladderPage} />
+              <Route path="/ice-therapy" component={IceTherapyPage} />
+              <Route component={NotFound} />
+            </Switch>
+          </Suspense>
+          <BottomNav />
+        </IceTherapyProvider>
       </BladderProvider>
     </TimerProvider>
   );

@@ -30,13 +30,23 @@ const UserIcon = () => (
   </svg>
 );
 
+const IceIcon = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="12" y1="2" x2="12" y2="22" />
+    <line x1="2" y1="12" x2="22" y2="12" />
+    <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+    <line x1="19.07" y1="4.93" x2="4.93" y2="19.07" />
+  </svg>
+);
+
 export function BottomNav() {
-  const [onTimer]     = useRoute("/");
-  const [onDashboard] = useRoute("/dashboard");
-  const [onBladder]   = useRoute("/bladder");
-  const [onBladderStats] = useRoute("/bladder/stats");
-  const { signOut }   = useClerk();
-  const { user }      = useUser();
+  const [onTimer]       = useRoute("/");
+  const [onDashboard]   = useRoute("/dashboard");
+  const [onBladder]     = useRoute("/bladder");
+  const [onBladderStats]= useRoute("/bladder/stats");
+  const [onIceTherapy]  = useRoute("/ice-therapy");
+  const { signOut }     = useClerk();
+  const { user }        = useUser();
 
   const initials = user?.firstName?.charAt(0)?.toUpperCase() ?? user?.emailAddresses?.[0]?.emailAddress?.charAt(0)?.toUpperCase() ?? "U";
   const avatarUrl = user?.imageUrl;
@@ -69,6 +79,15 @@ export function BottomNav() {
       >
         <BladderIcon />
         <span>Bladder</span>
+      </Link>
+      <Link
+        href="/ice-therapy"
+        className={`flex-1 flex flex-col items-center justify-center py-3 gap-1 text-xs font-medium transition-colors ${
+          onIceTherapy ? "text-cyan-600 dark:text-cyan-400" : "text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        <IceIcon />
+        <span>Ice</span>
       </Link>
       <button
         onClick={() => void signOut({ redirectUrl: "/" })}
