@@ -37,9 +37,11 @@ import {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const COOL_DURATION_MS = 20 * 60 * 1000;
-const REST_DURATION_MS = 20 * 60 * 1000;
-const STORAGE_KEY = "protocol:ice-therapy:state";
+const DEFAULT_DURATION_MIN = 20;
+const MIN_DURATION_MIN     = 1;
+const MAX_DURATION_MIN     = 60;
+const STORAGE_KEY          = "protocol:ice-therapy:state";
+const DURATION_KEY         = "protocol:ice-therapy:duration";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -85,6 +87,9 @@ export interface IceTherapyContextValue {
   /** Remaining ms when paused (null unless isPaused). */
   pausedRemainingMs: number | null;
   elapsedSeconds: number;
+  /** Duration of each phase in minutes (1–60, default 20). Editable only when idle. */
+  phaseDurationMinutes: number;
+  setPhaseDurationMinutes: (minutes: number) => void;
   start: () => void;
   pause: () => void;
   resume: () => void;
@@ -95,17 +100,17 @@ export interface IceTherapyContextValue {
 
 // ─── Notification helpers ────────────────────────────────────────────────────
 
-function notifyPhaseStart(nextPhase: "cool" | "rest"): void {
+function notifyPhaseStart(nextPhase: "cool" | "rest", durationMin: number): void {
   const [title, body] = nextPhase === "cool"
-    ? ["🧊 Apply ice pack", "Ice On phase — keep the pack on for 20 minutes."]
-    : ["♻️ Remove ice pack", "Rest phase — let your skin warm for 20 minutes."];
+    ? ["🧊 Apply ice pack", `Ice On phase — keep the pack on for ${durationMin} minute${durationMin === 1 ? "" : "s"}.`]
+    : ["♻️ Remove ice pack", `Rest phase — let your skin warm for ${durationMin} minute${durationMin === 1 ? "" : "s"}.`];
   showNotificationNow(title, body, "ice-therapy");
 }
 
-function schedulePhaseEndAlert(delayMs: number, nextPhase: "cool" | "rest"): void {
+function schedulePhaseEndAlert(delayMs: number, nextPhase: "cool" | "rest", durationMin: number): void {
   const [title, body] = nextPhase === "cool"
-    ? ["🧊 Apply ice pack", "Ice On phase starting — 20 minutes."]
-    : ["♻️ Remove ice pack", "Rest phase starting — 20 minutes."];
+    ? ["🧊 Apply ice pack", `Ice On phase starting — ${durationMin} min.`]
+    : ["♻️ Remove ice pack", `Rest phase starting — ${durationMin} min.`];
   scheduleSWNotification({ delayMs, title, body, tag: "ice-therapy" });
   if (isNativePlatform()) {
     void scheduleNativeIceTherapyAlarm(delayMs, nextPhase);
@@ -123,20 +128,46 @@ function cancelAllIceAlarms(): void {
 
 const IceTherapyContext = createContext<IceTherapyContextValue | null>(null);
 
+function loadDuration(): number {
+  try {
+    const raw = localStorage.getItem(DURATION_KEY);
+    if (raw === null) return DEFAULT_DURATION_MIN;
+    const n = parseInt(raw, 10);
+    if (isNaN(n)) return DEFAULT_DURATION_MIN;
+    return Math.min(MAX_DURATION_MIN, Math.max(MIN_DURATION_MIN, n));
+  } catch { return DEFAULT_DURATION_MIN; }
+}
+
+function saveDuration(minutes: number): void {
+  try { localStorage.setItem(DURATION_KEY, String(minutes)); } catch { /* silent */ }
+}
+
 export function IceTherapyProvider({ children }: { children: React.ReactNode }) {
   const saved = store.load();
 
-  const [phase,             setPhase]             = useState<IcePhase>(saved.phase);
-  const [isRunning,         setIsRunning]          = useState(saved.isRunning);
-  const [isPaused,          setIsPaused]           = useState(saved.isPaused);
-  const [cycleCount,        setCycleCount]         = useState(saved.cycleCount);
-  const [nextTransitionAt,  setNextTransitionAt]   = useState<Date | null>(
+  const [phase,               setPhase]               = useState<IcePhase>(saved.phase);
+  const [isRunning,           setIsRunning]            = useState(saved.isRunning);
+  const [isPaused,            setIsPaused]             = useState(saved.isPaused);
+  const [cycleCount,          setCycleCount]           = useState(saved.cycleCount);
+  const [nextTransitionAt,    setNextTransitionAt]     = useState<Date | null>(
     saved.nextTransitionAt ? new Date(saved.nextTransitionAt) : null,
   );
-  const [pausedRemainingMs, setPausedRemainingMs]  = useState<number | null>(
+  const [pausedRemainingMs,   setPausedRemainingMs]    = useState<number | null>(
     saved.pausedRemainingMs,
   );
-  const [elapsedSeconds,    setElapsedSeconds]     = useState(0);
+  const [elapsedSeconds,      setElapsedSeconds]       = useState(0);
+  const [phaseDurationMinutes, setPhaseDurationState]  = useState<number>(loadDuration);
+
+  // Stable ref so transitionTo / start always see the current duration
+  const durationRef = useRef<number>(phaseDurationMinutes);
+  useEffect(() => { durationRef.current = phaseDurationMinutes; }, [phaseDurationMinutes]);
+
+  const setPhaseDurationMinutes = useCallback((minutes: number) => {
+    const clamped = Math.min(MAX_DURATION_MIN, Math.max(MIN_DURATION_MIN, minutes));
+    durationRef.current = clamped;
+    setPhaseDurationState(clamped);
+    saveDuration(clamped);
+  }, []);
 
   // Stable refs — safe to read inside setTimeout/setInterval callbacks
   const timerRef            = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -196,9 +227,9 @@ export function IceTherapyProvider({ children }: { children: React.ReactNode }) 
   const transitionTo = useCallback((next: "cool" | "rest") => {
     cancelAllIceAlarms();
 
-    const now = Date.now();
-    const duration = next === "cool" ? COOL_DURATION_MS : REST_DURATION_MS;
-    const targetMs = now + duration;
+    const now        = Date.now();
+    const durationMs = durationRef.current * 60 * 1000;
+    const targetMs   = now + durationMs;
 
     phaseStartedAtRef.current   = now;
     nextTransitionAtRef.current = targetMs;
@@ -217,16 +248,17 @@ export function IceTherapyProvider({ children }: { children: React.ReactNode }) 
       setCycleCount((c) => { cycleCountRef.current = c + 1; return c + 1; });
     }
 
-    notifyPhaseStart(next);
-    schedulePhaseEndAlert(duration, nextAfterNext);
+    notifyPhaseStart(next, durationRef.current);
+    schedulePhaseEndAlert(durationMs, nextAfterNext, durationRef.current);
     armTimer(targetMs);
   }, [armTimer]);
 
   // ── start ───────────────────────────────────────────────────────────────
   const start = useCallback(() => {
     if (isRunningRef.current || phaseRef.current !== "idle") return;
-    const now      = Date.now();
-    const targetMs = now + COOL_DURATION_MS;
+    const now        = Date.now();
+    const durationMs = durationRef.current * 60 * 1000;
+    const targetMs   = now + durationMs;
 
     phaseStartedAtRef.current   = now;
     nextTransitionAtRef.current = targetMs;
@@ -240,8 +272,8 @@ export function IceTherapyProvider({ children }: { children: React.ReactNode }) 
     pausedRemRef.current = null;
     setNextTransitionAt(new Date(targetMs));
 
-    notifyPhaseStart("cool");
-    schedulePhaseEndAlert(COOL_DURATION_MS, "rest");
+    notifyPhaseStart("cool", durationRef.current);
+    schedulePhaseEndAlert(durationMs, "rest", durationRef.current);
     armTimer(targetMs);
   }, [armTimer]);
 
@@ -269,7 +301,7 @@ export function IceTherapyProvider({ children }: { children: React.ReactNode }) 
   // ── resume ──────────────────────────────────────────────────────────────
   const resume = useCallback(() => {
     if (!isPaused && isRunningRef.current) return;
-    const remaining = pausedRemRef.current ?? (phaseRef.current === "cool" ? COOL_DURATION_MS : REST_DURATION_MS);
+    const remaining = pausedRemRef.current ?? (durationRef.current * 60 * 1000);
     const now      = Date.now();
     const targetMs = now + remaining;
     const curr     = phaseRef.current as "cool" | "rest";
@@ -284,7 +316,7 @@ export function IceTherapyProvider({ children }: { children: React.ReactNode }) 
     setPausedRemainingMs(null);
     setNextTransitionAt(new Date(targetMs));
 
-    schedulePhaseEndAlert(remaining, nextPhase);
+    schedulePhaseEndAlert(remaining, nextPhase, durationRef.current);
     armTimer(targetMs);
   }, [isPaused, armTimer]);
 
@@ -357,6 +389,8 @@ export function IceTherapyProvider({ children }: { children: React.ReactNode }) 
         nextTransitionAt,
         pausedRemainingMs,
         elapsedSeconds,
+        phaseDurationMinutes,
+        setPhaseDurationMinutes,
         start,
         pause,
         resume,

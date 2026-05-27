@@ -90,6 +90,63 @@ function Btn({
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
+function DurationStepper({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  disabled: boolean;
+}) {
+  const steps = [1, 5, 10, 15, 20];
+  return (
+    <div className="rounded-2xl border border-border bg-card px-5 py-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-foreground">Phase duration</p>
+          <p className="text-xs text-muted-foreground">Each Ice On and Rest period</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={disabled || value <= 1}
+            onClick={() => onChange(Math.max(1, value - 1))}
+            className="w-8 h-8 rounded-lg border border-border bg-muted/40 text-foreground font-bold text-base flex items-center justify-center disabled:opacity-30 active:scale-95 transition-all"
+          >−</button>
+          <span className="w-14 text-center text-lg font-bold tabular-nums text-foreground">
+            {value}<span className="text-xs font-normal text-muted-foreground ml-0.5">m</span>
+          </span>
+          <button
+            type="button"
+            disabled={disabled || value >= 60}
+            onClick={() => onChange(Math.min(60, value + 1))}
+            className="w-8 h-8 rounded-lg border border-border bg-muted/40 text-foreground font-bold text-base flex items-center justify-center disabled:opacity-30 active:scale-95 transition-all"
+          >+</button>
+        </div>
+      </div>
+      {/* Quick-pick presets */}
+      <div className="flex gap-2">
+        {steps.map((s) => (
+          <button
+            key={s}
+            type="button"
+            disabled={disabled}
+            onClick={() => onChange(s)}
+            className={`flex-1 py-1.5 rounded-lg text-xs font-semibold border transition-all active:scale-95 disabled:opacity-30 ${
+              value === s
+                ? "bg-cyan-500 text-white border-cyan-500"
+                : "border-border bg-muted/40 text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {s}m
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function IceTherapyPage() {
   const {
     phase,
@@ -98,6 +155,8 @@ export default function IceTherapyPage() {
     cycleCount,
     nextTransitionAt,
     pausedRemainingMs,
+    phaseDurationMinutes,
+    setPhaseDurationMinutes,
     start,
     pause,
     resume,
@@ -110,6 +169,7 @@ export default function IceTherapyPage() {
   const isActive = phase !== "idle";
 
   const nextPhaseLabel = phase === "cool" ? "REST" : phase === "rest" ? "ICE ON" : "";
+  const idleDisplay = `${phaseDurationMinutes}:00`;
 
   return (
     <div className="min-h-screen bg-background pb-24">
@@ -137,7 +197,7 @@ export default function IceTherapyPage() {
           </p>
 
           <p className={`text-6xl font-bold tabular-nums leading-none ${theme.timer}`}>
-            {isActive ? countdown : "20:00"}
+            {isActive ? countdown : idleDisplay}
           </p>
 
           {isActive && nextTransitionAt && isRunning && (
@@ -153,7 +213,7 @@ export default function IceTherapyPage() {
 
           {!isActive && (
             <p className="text-xs text-muted-foreground">
-              20 min Ice On · 20 min Rest · repeating
+              {phaseDurationMinutes} min Ice On · {phaseDurationMinutes} min Rest · repeating
             </p>
           )}
         </div>
@@ -167,6 +227,15 @@ export default function IceTherapyPage() {
             </div>
             <p className="text-3xl font-bold tabular-nums text-foreground">{cycleCount}</p>
           </div>
+        )}
+
+        {/* Duration stepper — shown when idle, locked when active */}
+        {!isActive && (
+          <DurationStepper
+            value={phaseDurationMinutes}
+            onChange={setPhaseDurationMinutes}
+            disabled={isActive}
+          />
         )}
 
         {/* Controls */}
@@ -207,11 +276,11 @@ export default function IceTherapyPage() {
             <div className="space-y-1.5 text-xs text-muted-foreground">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-cyan-500 shrink-0" />
-                <span>ICE ON — apply ice pack for 20 minutes</span>
+                <span>ICE ON — apply ice pack for {phaseDurationMinutes} minute{phaseDurationMinutes === 1 ? "" : "s"}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
-                <span>REST — remove pack, let skin warm for 20 minutes</span>
+                <span>REST — remove pack, let skin warm for {phaseDurationMinutes} minute{phaseDurationMinutes === 1 ? "" : "s"}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-muted shrink-0" />
