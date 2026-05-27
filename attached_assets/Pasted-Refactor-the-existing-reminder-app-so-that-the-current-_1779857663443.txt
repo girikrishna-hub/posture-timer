@@ -1,0 +1,181 @@
+Refactor the existing reminder app so that the current sit-stand timer becomes the first implementation of a generic Two-State Protocol Engine.
+
+CRITICAL CONSTRAINTS (NON-NEGOTIABLE)
+
+1. Do NOT break any existing functionality
+- Current sit-stand timer behavior must remain exactly the same
+- Existing timing logic must continue to work
+- Existing notifications must still trigger
+- Existing pause/resume behavior must remain intact
+- Existing persistence behavior must remain intact
+- Existing Android native functionality must remain intact
+
+2. Do NOT change the current UI
+- No visual layout changes
+- No styling changes
+- No navigation changes
+- No new screens exposed to users
+- The app should look identical after this refactor
+
+3. This is an internal architectural generalization only
+
+OBJECTIVE
+
+Replace the current hardcoded sit/stand logic with a reusable engine that supports any alternating two-state protocol.
+
+Examples the architecture must support later:
+- Sit ↔ Stand
+- Hold ↔ Release
+- Drink Water ↔ Wait
+- Bladder Empty ↔ Hydrate
+- Ice On ↔ Ice Off
+- Exercise ↔ Rest
+- Focus ↔ Break
+- Medication On ↔ Medication Off
+
+For now, only expose:
+Sit ↔ Stand
+
+REQUIRED ARCHITECTURE
+
+1. Define protocol model
+
+Create a protocol definition type named TwoStateProtocol with:
+
+- id
+- name
+- stateA
+- stateB
+- defaultDurationA
+- defaultDurationB
+- notificationTitleA
+- notificationTitleB
+- notificationBodyA
+- notificationBodyB
+- iconA
+- iconB
+
+2. Define runtime state model
+
+Create ProtocolSession with:
+
+- active protocol
+- current state
+- current phase start time
+- phase duration
+- paused status
+- remaining time
+- session status
+
+3. Create protocol engine
+
+Extract timer execution logic into ProtocolEngine
+
+Responsibilities:
+- start()
+- pause()
+- resume()
+- stop()
+- transition()
+- computeRemaining()
+- persist()
+- restore()
+- emit notifications
+- emit state transitions
+
+The engine must be protocol-agnostic.
+
+It must not contain sit/stand-specific logic.
+
+4. Adapter layer for backward compatibility
+
+Create SitStandProtocolAdapter
+
+This adapter maps current sit-stand UI interactions into the generic engine.
+
+This ensures all current screens continue to function unchanged.
+
+5. Preserve persistence compatibility
+
+Existing saved sit/stand session data must continue to restore correctly.
+
+If needed:
+- implement migration logic
+- detect old persisted schema
+- transform to new protocol schema
+
+No user data loss.
+
+6. Notification abstraction
+
+Generalize notifications so they are generated from protocol state definitions.
+
+Current sit/stand notifications must render exactly as before.
+
+7. Future extensibility hooks (internal only)
+
+Add infrastructure for:
+
+- registerProtocol()
+- getProtocolById()
+- listProtocols()
+
+Do NOT expose this in UI yet.
+
+DELIVERABLES
+
+A. File-by-file change summary
+
+Explain:
+- what changed
+- why it changed
+- how backward compatibility is preserved
+
+B. Architectural diagram (text form)
+
+Show:
+- UI layer
+- adapter layer
+- protocol engine
+- persistence layer
+- notification layer
+
+C. Validation checklist
+
+Explicitly verify:
+- Sit/stand works
+- Pause/resume works
+- Restore after app restart works
+- Notifications work
+- Android build succeeds
+- No visual regressions
+
+D. Example future protocol registration
+
+Show (but do not activate) an example BladderProtocol implementation to prove the abstraction works.
+
+REFACTORING APPROACH
+
+Proceed incrementally.
+
+Phase 1:
+Introduce abstractions without behavior changes
+
+Phase 2:
+Migrate sit/stand logic to engine
+
+Phase 3:
+Add compatibility adapter
+
+Phase 4:
+Validate parity
+
+Do NOT rewrite everything at once.
+
+Preserve working code throughout.
+
+SUCCESS CRITERIA
+
+The app must behave exactly as it does now.
+
+The only difference should be that internally it is powered by a reusable two-state protocol engine capable of supporting future custom protocols.
